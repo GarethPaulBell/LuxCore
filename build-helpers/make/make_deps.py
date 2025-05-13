@@ -472,6 +472,8 @@ def main(
             main_block += [
                 "--conf:all=tools.system.package_manager:sudo=true",
             ]
+        else:
+            logger.info("Sudo deactivated for package manager")
         build_types = [
             "Debug",
             "Release",
