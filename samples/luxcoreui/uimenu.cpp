@@ -39,7 +39,8 @@ static void KernelCacheFillProgressHandler(const size_t step, const size_t count
 enum fileBrowserType { open, save, save_directory };
 
 bool fileBrowser(
-    string &fileName,
+    std::string &fileNamePath,
+    std::string &filePath,
     const std::string &prompt,
     const std::vector<std::string> &filterList,
     fileBrowserType type
@@ -87,11 +88,13 @@ bool fileBrowser(
     {
       if (type != fileBrowserType::save_directory)
       {
-        fileName = fd->GetFilePathName();
+        fileNamePath = fd->GetFilePathName();
+        filePath = fd->GetCurrentPath();
       }
       else
       {
-        fileName = fd->GetCurrentPath();
+        fileNamePath = fd->GetCurrentPath();
+        filePath = fd->GetCurrentPath();
       }
     }
 
@@ -553,6 +556,7 @@ void LuxCoreApp::MainMenuBar() {
     // File Dialogs
     if (showLoadFileDialog) {
       std::string fileToLoad;
+      std::string fileToLoad_path;
       static const std::vector<std::string> filterLoad = {
         "LuxCore scenes (.cfg,.bcf,.lxs){.cfg,.bcf,.lxs}",
         "LuxCore scene - text (.cfg){.cfg}",
@@ -562,21 +566,24 @@ void LuxCoreApp::MainMenuBar() {
 
       if (fileBrowser(
             fileToLoad,
+            fileToLoad_path,
             "Select File to Load",
             filterLoad,
             fileBrowserType::open ))
       {
         showLoadFileDialog = false;
-        LoadRenderConfig(fileToLoad);
+        LoadRenderConfig(fileToLoad, fileToLoad_path);
       }
     }
 
     if (showExportFileDialog) {
       std::string fileToExport;
+      std::string fileToExport_path;
       static const std::vector<std::string> filterExport = {"All (.*){.*}"};
 
       if (fileBrowser(
             fileToExport,
+            fileToExport_path,
             "Select Directory to Export",
             filterExport,
             fileBrowserType::save_directory))
@@ -605,12 +612,14 @@ void LuxCoreApp::MainMenuBar() {
     if (showExportBinaryFileDialog)
     {
       std::string fileToExport;
+      std::string fileToExport_path;
       static const std::vector<std::string> filterExport = {
         "LuxCore exported scene (.bcf){.bcf}"
       };
 
       if (fileBrowser(
             fileToExport,
+            fileToExport_path,
             "Select File to Export",
             filterExport,
             fileBrowserType::save))
@@ -624,6 +633,7 @@ void LuxCoreApp::MainMenuBar() {
     if (showExportGltfFileDialog)
     {
       std::string fileToExport;
+      std::string fileToExport_path;
       static const std::vector<std::string> filterExport = {
         "glTF files (.glTF,.gltf){.glTF,.gltf}",
         "All files (.*){.*}",
@@ -631,6 +641,7 @@ void LuxCoreApp::MainMenuBar() {
 
       if (fileBrowser(
             fileToExport,
+            fileToExport_path,
             "Select File to Export",
             filterExport,
             fileBrowserType::save))
@@ -644,6 +655,7 @@ void LuxCoreApp::MainMenuBar() {
     if (showSaveRenderingFileDialog)
     {
       std::string fileToExport;
+      std::string fileToExport_path;
       static const std::vector<std::string> filterExport = {
         "LuxCore resume files (.rsm){.rsm}",
         "All files (.*){.*}",
@@ -651,6 +663,7 @@ void LuxCoreApp::MainMenuBar() {
 
       if (fileBrowser(
             fileToExport,
+            fileToExport_path,
             "Select File to Save",
             filterExport,
             fileBrowserType::save))
@@ -672,6 +685,7 @@ void LuxCoreApp::MainMenuBar() {
     if (showResumeRenderingFileDialog)
     {
       std::string fileToLoad;
+      std::string fileToLoad_path;
       static const std::vector<std::string> filterExport = {
         "LuxCore resume files (.rsm){.rsm}",
         "All files (.*){.*}",
@@ -679,12 +693,13 @@ void LuxCoreApp::MainMenuBar() {
 
       if (fileBrowser(
             fileToLoad,
+            fileToLoad_path,
             "Select File to Load",
             filterExport,
             fileBrowserType::open))
       {
         showResumeRenderingFileDialog = false;
-        LoadRenderConfig(fileToLoad);
+        LoadRenderConfig(fileToLoad, fileToLoad_path);
       }
     } // Resume Rendering
 
