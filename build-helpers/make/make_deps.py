@@ -467,8 +467,11 @@ def main(
             f"--output-folder={output_dir}",
             "--settings=build_type=Release",
             f"--conf:all=tools.cmake.cmaketoolchain:generator={generator}",
-            "--conf:all=tools.system.package_manager:sudo=true" if not os.getenv("CI") else "",
         ]
+        if not os.getenv("CI"):
+            main_block += [
+                "--conf:all=tools.system.package_manager:sudo=true",
+            ]
         build_types = [
             "Debug",
             "Release",
