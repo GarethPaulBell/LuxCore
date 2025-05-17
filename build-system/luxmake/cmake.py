@@ -277,7 +277,7 @@ def deps(
     make_deps.main([f"--output={BINARY_DIR}"])
 
 
-def get_glibc_version() -> str | None:
+def get_glibc_version():
     """
     Returns the version of glibc installed on the system, or None if it cannot be determined.
     """
