@@ -14,7 +14,7 @@ LUX-CMAKE = $(PYTHON) build-system/make/cmake.py
 
 build-targets = pyluxcore luxcoreui luxcoreconsole luxcore doc
 
-.PHONY: deps list-presets config luxcore pyluxcore luxcoreui luxcoreconsole install clean clear doc
+.PHONY: deps list-presets config luxcore pyluxcore luxcoreui luxcoreconsole install clean clear doc wheel-test
 
 all: luxcore pyluxcore luxcoreui luxcoreconsole
 
@@ -35,6 +35,9 @@ install:
 
 package:
 	$(LUX-CMAKE) build-and-install package
+
+wheel-test:
+	$(LUX-CMAKE) wheel-test
 
 clean:
 	$(LUX-CMAKE) clean
