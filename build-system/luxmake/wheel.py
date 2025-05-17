@@ -13,26 +13,37 @@ import shutil
 import platform
 from pathlib import Path
 
-from .constants import SOURCE_DIR, INSTALL_DIR, WHEEL_DIR, WHEEL_LIB_DIR
+from .constants import SOURCE_DIR, INSTALL_DIR
 from .utils import logger
 from .build import build_and_install
 
+_WHEEL_SNIPPET = """\
+Wheel-Version: 1.0
+Generator: fake 0.0.0
+Root-Is-Purelib: false
+Tag: {}
+"""
 
-def _get_glibc_version():
-    """
-    Returns the version of glibc installed on the system
 
-    None if it cannot be determined.
+def _compute_platform_tag():
+    """Compute tag.
+
+    This tag may not be correct. Do not use in production.
+    https://packaging.python.org/en/latest/specifications/platform-compatibility-tags
     """
-    # Run ldd --version and capture the output
-    result = subprocess.run(
-        ["ldd", "--version"], capture_output=True, text=True, check=True
-    )
-    output = result.stdout or result.stderr
-    # Look for a version number in the output
-    if (match := re.search(r"(\d+\.\d+(?:\.\d+)*)", output)):
-        return match.group(1)
-    return None
+    system = platform.system()
+    machine = platform.machine()
+    if system == "Linux":
+        return "linux_x86_64"
+    elif system == "Windows":
+        return "win_amd64"
+    elif system == "Darwin" and machine == "x86_64":
+        return "macosx_13_0"
+    elif system == "Darwin" and machine == "arm64":
+        return "macosx_14_2"
+    else:
+        logger.error("Unknown platform/system: '%s' / '%s'", platform, machine)
+        sys.exit(1)
 
 
 def make_wheel(args):
@@ -57,80 +68,61 @@ def make_wheel(args):
     vinfo = sys.version_info
     python_tag = f"cp{vinfo.major}{vinfo.minor}"
     abi_tag = python_tag
-    glibc_version = _get_glibc_version().replace(".", "_")
-    platform_tag = f"manylinux_{glibc_version}_x86_64"
-    platform_tag = "linux_x86_64"  # TODO
-    # TODO Only Linux at the moment
+    platform_tag = _compute_platform_tag()
     tag = f"{python_tag}-{abi_tag}-{platform_tag}"
 
-    # Destination folder
     logger.info("Making wheel for version '%s' and tag '%s'", version, tag)
-    with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as tmp_out:
-        tmp = Path(tmp)
-        tmp_out = Path(tmp_out)
+    with tempfile.TemporaryDirectory() as wheeltree, tempfile.TemporaryDirectory() as raw_wheel:
+        # We create an install tree, with all the wheel components, then we pack it
+        # into a raw wheel and eventually we repair it
+
+        # Destination folders
+        wheeltree = Path(wheeltree)
+        raw_wheel_dir = Path(raw_wheel)
 
         # Create dist-info
-        dist_info = tmp / f"pyluxcore-{version}.dist-info"
+        dist_info = wheeltree / f"pyluxcore-{version}.dist-info"
         dist_info.mkdir(exist_ok=True)
 
-        # Compute tag
-        # This tag is absolutely mendacious. Do not use in production.
-        # https://packaging.python.org/en/latest/specifications/platform-compatibility-tags/
         # Export WHEEL file
-        wheel_content = f"""\
-Wheel-Version: 1.0
-Generator: fake 0.0.0
-Root-Is-Purelib: false
-Tag: {tag}
-"""
         with open(dist_info / "WHEEL", "w", encoding="utf-8") as f:
-            f.write(wheel_content)
+            f.write(_WHEEL_SNIPPET.format(tag))
 
-        # Copy subfolders
+        # Copy subfolders into tree
         shutil.copytree(
             SOURCE_DIR / "python" / "pyluxcore",
-            tmp / "pyluxcore",
+            wheeltree / "pyluxcore",
             dirs_exist_ok=True,
         )
         shutil.copytree(
-            INSTALL_DIR / "pyluxcore", tmp / "pyluxcore", dirs_exist_ok=True
+            INSTALL_DIR / "pyluxcore",
+            wheeltree / "pyluxcore",
+            dirs_exist_ok=True,
         )
         shutil.copytree(
             INSTALL_DIR / "pyluxcore.libs",
-            tmp / "pyluxcore.libs",
+            wheeltree / "pyluxcore.libs",
             dirs_exist_ok=True,
         )
 
         # Pack wheel
-        pack_cmd = ["wheel", "pack", tmp, "--dest-dir", str(tmp_out)]
+        logger.info("Packing wheel")
+        pack_cmd = ["wheel", "pack", wheeltree, "--dest-dir", str(raw_wheel)]
         subprocess.run(pack_cmd, text=True, check=True)
 
         # Then repair
-        # TODO
+        WHEEL_LIB_DIR = INSTALL_DIR / "lib"  # TODO Windows, MacOS etc.
         logger.info("Repairing wheel")
-        if platform.system() != "Linux":
-            cmd = [
-                "repairwheel",
-                "-o",
-                str(WHEEL_DIR),
-                "-l",
-                str(WHEEL_LIB_DIR),
-                str(tmp_out / f"pyluxcore-{version}-{tag}.whl"),
-            ]
-        else:
-            cmd = [
-                "pipx",
-                "run",
-                "auditwheel",
-                "repair",
-                "--plat",
-                platform_tag,
-                "--wheel-dir",
-                str(INSTALL_DIR / "wheel"),
-                str(tmp_out / f"pyluxcore-{version}-{tag}.whl"),
-            ]
-        # TODO repairwheel to be installed (via pipx?) ?
-        # Or per-platform approach?
+        system = platform.system()
+        raw_wheel_path = raw_wheel_dir / f"pyluxcore-{version}-{tag}.whl"
+        cmd = [
+            "repairwheel",
+            "-o",
+            INSTALL_DIR / "wheel",
+            "-l",
+            WHEEL_LIB_DIR,
+            raw_wheel_path,
+        ]
         try:
             result = subprocess.check_output(cmd, text=True)
         except subprocess.CalledProcessError as err:
