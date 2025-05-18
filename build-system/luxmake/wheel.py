@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 
 from .constants import SOURCE_DIR, INSTALL_DIR, BINARY_DIR, WHEELHOUSE_DIR
-from .utils import logger, pack
+from .utils import logger, pack, fail
 from .build import build_and_install
 from .windows import win_recompose
 
@@ -43,8 +43,7 @@ def _compute_platform_tag():
         return "macosx_14_2"
 
     # Failed:
-    logger.error("Unknown platform/system: '%s' / '%s'", platform, machine)
-    sys.exit(1)
+    return fail("Unknown platform/system: '%s' / '%s'", platform, machine)
 
 
 def _get_lib_paths():
@@ -144,8 +143,7 @@ def make_wheel(args):
         try:
             result = subprocess.check_output(cmd, text=True)
         except subprocess.CalledProcessError as err:
-            logger.error(err)
-            sys.exit(1)
+            fail(err)
         logger.info(result)
 
         # And, for Windows, recompose

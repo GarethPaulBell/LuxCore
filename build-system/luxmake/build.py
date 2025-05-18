@@ -4,9 +4,8 @@
 
 """Build and install commands."""
 
-import sys
 from .constants import INSTALL_DIR, BUILD_TYPE, BUILD_DIR
-from .utils import run_cmake, logger
+from .utils import run_cmake, fail
 from .presets import get_presets, PresetType
 
 
@@ -60,22 +59,11 @@ def _get_preset_from_build_type(
     try:
         preset = _PRESETS[build_type]
     except KeyError:
-        logger.error(
-            "Unknown build type '%s'",
+        fail(
+            "Unknown build type '%s'. Valid values (case sensitive) are: '%s'",
             build_type,
-        )
-        logger.error(
-            "Valid values (case sensitive) are: %s",
             _PRESETS.keys(),
         )
-        sys.exit(1)
     if preset not in (presets := get_presets(PresetType.BUILD)):
-        logger.error(
-            "Preset '%s' missing",
-            preset,
-        )
-        logger.error(
-            "Available presets: %s",
-            presets,
-        )
+        fail("Preset '%s' missing. Available presets: '%s'", preset, presets)
     return preset

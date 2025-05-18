@@ -7,10 +7,9 @@
 It is intended to get the same behaviour between Windows and *nix os
 """
 
-import logging
 import argparse
 
-from .utils import logger
+from .utils import set_logger_verbose
 from .deps import deps
 from .presets import list_presets
 from .config import config
@@ -22,10 +21,6 @@ from .windows import win_recompose
 
 def main():
     """Entry point."""
-    # Set-up logger
-    logger.setLevel(logging.INFO)
-    logging.basicConfig(level=logging.INFO)
-
     # Get command-line parameters
     parser = argparse.ArgumentParser(
         prog="make",
@@ -65,7 +60,7 @@ def main():
     parser_wheel = subparsers.add_parser("wheel-test")
     parser_wheel.set_defaults(func=make_wheel)
 
-    # Win wheel recomposing
+    # Windows wheel recomposing
     parser_wheel = subparsers.add_parser("win-recompose")
     parser_wheel.add_argument("wheel")
     parser_wheel.set_defaults(func=win_recompose)
@@ -80,8 +75,7 @@ def main():
 
     args = parser.parse_args()
     if args.verbose:
-        logger.setLevel(logging.DEBUG)
-        logger.debug("Verbose mode")
+        set_logger_verbose()
     args.func(args)
 
 

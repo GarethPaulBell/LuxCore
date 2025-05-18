@@ -51,6 +51,7 @@ def clear(
                 ignore_errors=True,
             )
         except FileNotFoundError:
+            # Do not fail if not found
             logger.debug(
                 "'%s' not found",
                 directory,

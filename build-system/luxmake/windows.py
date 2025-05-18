@@ -13,11 +13,11 @@ from pathlib import Path
 import argparse
 import tempfile
 import shutil
-import sys
 
 from wheel.wheelfile import WheelFile
 
-from .utils import pack, unpack, logger
+from .utils import pack, unpack, logger, fail
+
 
 def _rename(basepath, org, dest):
     """Rename wheel component."""
@@ -27,8 +27,7 @@ def _rename(basepath, org, dest):
             basepath / "pyluxcore.libs" / dest,
         )
     except FileNotFoundError:
-        logger.error("Missing file in wheel: '%s'", org)
-        sys.exit(1)
+        fail("Missing file in wheel: '%s'", org)
 
 
 def win_recompose(args):
@@ -71,6 +70,6 @@ if __name__ == "__main__":
     # Parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("wheelpath", type=Path)
-    args = parser.parse_args()
+    main_args = parser.parse_args()
 
-    recompose(args.wheelpath)
+    win_recompose(main_args)

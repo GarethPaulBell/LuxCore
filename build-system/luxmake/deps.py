@@ -6,39 +6,22 @@
 
 import os
 import tempfile
-from urllib.request import (
-    urlretrieve,
-)
-from urllib.parse import (
-    urlparse,
-)
-from pathlib import (
-    Path,
-)
-from zipfile import (
-    ZipFile,
-)
+from urllib.request import urlretrieve
+from urllib.parse import urlparse
+from pathlib import Path
+from zipfile import ZipFile
 import subprocess
-import logging
 import shutil
 import argparse
 import json
 import platform
-import sys
-from functools import (
-    cache,
-)
-from dataclasses import (
-    dataclass,
-)
+from functools import cache
 
 
 from .constants import BINARY_DIR
+from .utils import logger, fail, Colors, set_logger_verbose
 
 CONAN_ALL_PACKAGES = '"*"'
-
-
-logger = logging.getLogger("LuxCore Dependencies")
 
 CONAN_ENV = {}
 
@@ -48,21 +31,6 @@ URL_SUFFIXES = {
     "macOS-ARM64": "macos-14",
     "macOS-X64": "macos-13",
 }
-
-
-@dataclass
-class Colors:
-    """Colors for terminal output."""
-
-    HEADER = "\033[95m"
-    OKBLUE = "\033[94m"
-    OKCYAN = "\033[96m"
-    OKGREEN = "\033[92m"
-    WARNING = "\033[93m"
-    FAIL = "\033[91m"
-    ENDC = "\033[0m"
-    BOLD = "\033[1m"
-    UNDERLINE = "\033[4m"
 
 
 def find_platform():
@@ -118,8 +86,7 @@ def ensure_conan_app():
     """Ensure Conan is installed."""
     logger.info("Looking for conan")
     if not (res := shutil.which("conan")):
-        logger.error("Conan not found!")
-        sys.exit(1)
+        fail("Conan not found!")
     logger.info(
         "Conan found: '%s'",
         res,
@@ -151,10 +118,7 @@ def run_conan(
         **kwargs,
     )
     if res.returncode:
-        logger.error("Error while executing conan")
-        print(res.stdout)
-        print(res.stderr)
-        sys.exit(1)
+        fail("Error while executing conan:\n%s\n%s", res.stdout, res.stderr)
     return res
 
 
@@ -275,10 +239,7 @@ def conan_home():
         check=False,
     )
     if res.returncode:
-        logger.error("Error while executing conan")
-        print(res.stdout)
-        print(res.stderr)
-        sys.exit(1)
+        fail("Error while executing conan:\n%s\n%s", res.stdout, res.stderr)
     return Path(res.stdout.strip())
 
 
@@ -309,8 +270,6 @@ def main(
     )
 
     # Set-up logger
-    logger.setLevel(logging.INFO)
-    logging.basicConfig(level=logging.INFO)
     msg = f"{Colors.OKBLUE}BEGIN{Colors.ENDC}"
     logger.info(msg)
 
@@ -358,7 +317,7 @@ def main(
     else:
         args = parser.parse_args(call_args)
     if args.verbose:
-        logger.setLevel(logging.DEBUG)
+        set_logger_verbose()
     if args.output:
         output_dir = args.output
 
@@ -374,7 +333,7 @@ def main(
                 "CONAN_HOME": str(_conan_home),
                 "GCC_VERSION": str(settings["Build"]["gcc"]),
                 "CXX_VERSION": str(settings["Build"]["cxx"]),
-                "BUILD_TYPE": "Release",  # TODO Command line parameter
+                "BUILD_TYPE": "Release",
             }
         )
 

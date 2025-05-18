@@ -9,9 +9,39 @@ import functools
 import logging
 import shutil
 import subprocess
+from dataclasses import dataclass
 
 # Logger
-logger = logging.getLogger("LuxCore Build")
+logger = logging.getLogger("LuxCore")
+
+
+def set_logger_verbose():
+    """Set logger in verbose mode (show debug messages)."""
+    logger.setLevel(logging.DEBUG)
+    logger.debug("Verbose mode")
+
+
+def fail(*args):
+    """Fails gracefully."""
+    print(end=Colors.FAIL, flush=True)
+    logger.error(*args)
+    print(end=Colors.ENDC, flush=True)
+    sys.exit(1)
+
+
+@dataclass
+class Colors:
+    """Colors for terminal output."""
+
+    HEADER = "\033[95m"
+    OKBLUE = "\033[94m"
+    OKCYAN = "\033[96m"
+    OKGREEN = "\033[92m"
+    WARNING = "\033[93m"
+    FAIL = "\033[91m"
+    ENDC = "\033[0m"
+    BOLD = "\033[1m"
+    UNDERLINE = "\033[4m"
 
 
 # Cmake
@@ -20,8 +50,7 @@ def ensure_cmake_app():
     """Ensure cmake is installed."""
     logger.debug("Looking for cmake")
     if not (res := shutil.which("cmake")):
-        logger.error("CMake not found!")
-        sys.exit(1)
+        fail("CMake not found!")
     logger.debug(
         "CMake found: '%s'",
         res,
@@ -44,10 +73,7 @@ def run_cmake(
         **kwargs,
     )
     if res.returncode:
-        logger.error("Error while executing cmake")
-        print(res.stdout)
-        print(res.stderr)
-        sys.exit(1)
+        fail("Error while executing cmake:\n%s\n%s", res.stdout, res.stderr)
     return res
 
 
@@ -66,8 +92,7 @@ def unpack(path, dest):
             args, text=True, stderr=subprocess.STDOUT
         )
     except subprocess.CalledProcessError as err:
-        logger.error(err.output)
-        sys.exit(1)
+        fail(err.output)
     logger.info(output)
 
 
@@ -86,6 +111,11 @@ def pack(directory, dest_dir):
             args, text=True, stderr=subprocess.STDOUT
         )
     except subprocess.CalledProcessError as err:
-        logger.error(err.output)
-        sys.exit(1)
+        fail(err.output)
     logger.info(output)
+
+
+# Initialization
+# Set-up logger
+logger.setLevel(logging.INFO)
+logging.basicConfig(level=logging.INFO)
