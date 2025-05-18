@@ -19,8 +19,9 @@ from wheel.wheelfile import WheelFile
 from .utils import pack, unpack, logger
 
 
-def recompose(wheel_path):
+def win_recompose(args):
     """Recompose Windows wheel (see module docstring)."""
+    wheel_path = Path(args.wheel)
     wheel_folder = wheel_path.parents[0]
 
     logger.info("Recomposing '%s'", wheel_path)

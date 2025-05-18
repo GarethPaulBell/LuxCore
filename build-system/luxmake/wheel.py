@@ -150,4 +150,5 @@ def make_wheel(args):
 
         # And, for Windows, recompose
         if platform.system() == "Windows":
-            recompose(WHEELHOUSE_DIR / wheelname)
+            args.wheel = WHEELHOUSE_DIR / wheelname
+            win_recompose(args)

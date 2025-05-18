@@ -17,6 +17,7 @@ from .config import config
 from .build import build_and_install, install
 from .wheel import make_wheel
 from .clear import clean, clear
+from .windows import win_recompose
 
 
 def main():
@@ -63,6 +64,11 @@ def main():
     # Wheel
     parser_wheel = subparsers.add_parser("wheel-test")
     parser_wheel.set_defaults(func=make_wheel)
+
+    # Win wheel recomposing
+    parser_wheel = subparsers.add_parser("win-recompose")
+    parser_build_and_install.add_argument("wheel")
+    parser_wheel.set_defaults(func=win_recompose)
 
     # Clear
     parser_clear = subparsers.add_parser("clear")

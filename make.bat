@@ -15,7 +15,7 @@ if "%LUX_PYTHON%" == "" (
     set LUX_PYTHON=python
 )
 
-set LUX_CMAKE="%LUX_PYTHON%" -u -m build-system.luxmake
+set LUXMAKE="%LUX_PYTHON%" -u -m build-system.luxmake
 
 if "%COMMAND%" == "" (
     call :Config
@@ -53,6 +53,8 @@ if "%COMMAND%" == "" (
     call :Clear
 ) else if "%COMMAND%" == "deps" (
     call :Deps
+) else if "%COMMAND%" == "win-recompose" (
+    call :WinRecompose %2
 ) else if "%COMMAND%" == "list-presets" (
     call :ListPresets
 ) else (
@@ -61,36 +63,41 @@ if "%COMMAND%" == "" (
 exit /B
 
 :Deps
-call %LUX_CMAKE% deps
+call %LUXMAKE% deps
 goto :EOF
 
 :ListPresets
-call %LUX_CMAKE% list-presets
+call %LUXMAKE% list-presets
 goto :EOF
 
 :Config
-call %LUX_CMAKE% config
+call %LUXMAKE% config
 goto :EOF
 
 :BuildAndInstall
-call %LUX_CMAKE% build-and-install %1
+call %LUXMAKE% build-and-install %1
 goto :EOF
 
 :Install
 IF "%~1" == "" (
-    %LUX_CMAKE% all
+    %LUXMAKE% all
 ) else (
-    %LUX_CMAKE% %1
+    %LUXMAKE% %1
 )
 goto :EOF
 
+:WinRecompose
+REM Exists only in windows make
+call %LUXMAKE% win-recompose %1
+goto :EOF
+
 :Clean
-call %LUX_CMAKE% clean
+call %LUXMAKE% clean
 goto :EOF
 
 :Clear
 REM rmdir /S /Q
-call %LUX_CMAKE% clear
+call %LUXMAKE% clear
 goto :EOF
 
 :EOF
