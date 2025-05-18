@@ -20,6 +20,7 @@ from functools import cache
 
 from .constants import BINARY_DIR
 from .utils import logger, fail, Colors, set_logger_verbose
+from .check import check_requirements
 
 CONAN_ALL_PACKAGES = '"*"'
 
@@ -320,6 +321,9 @@ def main(
         set_logger_verbose()
     if args.output:
         output_dir = args.output
+
+    # Check requirements
+    check_requirements()
 
     # Process
     with tempfile.TemporaryDirectory() as tmpdir:
