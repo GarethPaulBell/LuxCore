@@ -136,7 +136,7 @@ bool cudaKernelCache::ForcedCompilePTX(const vector<string> &kernelsParameters, 
 //------------------------------------------------------------------------------
 
 std::filesystem::path cudaKernelPersistentCache::GetCacheDir(const string &applicationName) {
-	return GetConfigDir() / "cuda_kernel_cache" / SanitizeFileName(applicationName);
+	return luxrays::GetCacheDir() / "cuda_kernel_cache" / SanitizeFileName(applicationName);
 }
 
 cudaKernelPersistentCache::cudaKernelPersistentCache(const string &applicationName) {

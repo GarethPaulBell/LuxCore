@@ -28,7 +28,9 @@
 namespace luxrays {
 	
 extern std::string SanitizeFileName(const std::string &name);
-extern std::filesystem::path GetConfigDir();
+
+extern std::filesystem::path GetCacheDir();
+
 
 }
 

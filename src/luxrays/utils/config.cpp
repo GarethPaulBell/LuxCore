@@ -40,12 +40,39 @@ string SanitizeFileName(const string &name) {
 	return sanitizedName;
 }
 
-std::filesystem::path GetConfigDir() {
+std::filesystem::path GetEnvPath(const string &name) {
+	char *path = getenv(name.c_str());
+
+	if (path && path[0]) {
+		return std::filesystem::path(path);
+	}
+
+	return "";
+}
+
+std::filesystem::path GetCacheDir() {
+
 #if defined(__linux__)
 	// std::filesystem::temp_directory_path() is usually mapped to /tmp and
 	// the content of the directory is often deleted at each reboot
-	std::filesystem::path kernelConfigDir = getenv("HOME");
-	kernelConfigDir = kernelConfigDir / ".config" / "luxcorerender.org";
+
+	// XDG standard says XDG_CACHE_HOME is unset by default.
+	std::filesystem::path xdgCacheHome = GetEnvPath("XDG_CACHE_HOME");
+
+	if (!xdgCacheHome.size()) {
+		// HOME should never be unset, but we better not want to
+		// crash if that happens.
+		std::filesystem::path home = GetEnvPath("HOME");
+
+		if (home.size()) {
+			xdgCacheHome = home / ".config";
+		}
+		else {
+			xdgCacheHome = std::filesystem::temp_directory_path();
+		}
+	}
+
+	std::filesystem::path kernelConfigDir = xdgCacheHome / "luxcorerender.org";
 #elif defined(__APPLE__)
 	// std::filesystem::temp_directory_path() is usually mapped to /tmp and
 	// the content of the directory is deleted at each reboot on MacOS
