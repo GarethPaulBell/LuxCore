@@ -73,7 +73,7 @@ def run_cmake(
         **kwargs,
     )
     if res.returncode:
-        fail("Error while executing cmake:\n%s\n%s", res.stdout, res.stderr)
+        fail("Error while executing cmake")
     return res
 
 
