@@ -59,12 +59,12 @@ std::filesystem::path GetCacheDir() {
 	// XDG standard says XDG_CACHE_HOME is unset by default.
 	std::filesystem::path xdgCacheHome = GetEnvPath("XDG_CACHE_HOME");
 
-	if (!xdgCacheHome.size()) {
+	if (xdgCacheHome.empty()) {
 		// HOME should never be unset, but we better not want to
 		// crash if that happens.
 		std::filesystem::path home = GetEnvPath("HOME");
 
-		if (home.size()) {
+		if (home.empty()) {
 			xdgCacheHome = home / ".config";
 		}
 		else {
