@@ -98,7 +98,7 @@ call %LUXMAKE% clean
 goto :EOF
 
 :WheelTest
-call %LUX_CMAKE% wheel-test
+call %LUXMAKE% wheel-test
 goto :EOF
 
 :Clear
