@@ -25,6 +25,18 @@ Root-Is-Purelib: false
 Tag: {}
 """
 
+_METADATA_SNIPPET = """\
+Metadata-Version: 2.2
+Name: pyluxcore
+Version: {}
+Summary: LuxCore Python bindings
+Keywords: raytracing,ray tracing,rendering,pbr,physical based rendering,path tracing
+Author: LuxCoreRender
+Requires-Python: >=3.9
+Requires-Dist: numpy>=2
+Requires-Dist: nvidia-cuda-nvrtc-cu12; sys_platform != "darwin"
+"""
+
 
 def _compute_platform_tag():
     """Compute tag.
@@ -101,6 +113,10 @@ def make_wheel(args):
         # Export WHEEL file
         with open(dist_info / "WHEEL", "w", encoding="utf-8") as f:
             f.write(_WHEEL_SNIPPET.format(tag))
+
+        # Export METADATA file
+        with open(dist_info / "METADATA", "w", encoding="utf-8") as f:
+            f.write(_METADATA_SNIPPET.format(version))
 
         # Copy subfolders into tree
         shutil.copytree(
