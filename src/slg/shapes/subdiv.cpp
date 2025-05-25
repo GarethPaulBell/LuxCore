@@ -173,13 +173,25 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(
 	//--------------------------------------------------------------------------
 	// https://graphics.pixar.com/opensubdiv/docs/osd_tutorial_0.html
 
+	// Set patch options. In adaptive mode, options associated with
+    // adaptive refinement should be derived from those specified for the
+    // PatchTable
+	// https://graphics.pixar.com/opensubdiv/docs/far_tutorial_5_1.html
+	Far::PatchTableFactory::Options patchOptions(maxLevel);
+    patchOptions.SetPatchPrecision<float>();
+    patchOptions.useInfSharpPatch = true;
+    patchOptions.generateVaryingTables = false;
+	patchOptions.SetEndCapType(
+			Far::PatchTableFactory::Options::ENDCAP_BSPLINE_BASIS
+	);
+
 	// Set-up refiner
 	std::unique_ptr<Far::TopologyRefiner> refiner(createFarTopologyRefiner(srcMesh));
 
 	// Refine the topology up to 'maxlevel'
 	if (adaptive) {
 		SDL_LOG("Subdiv - Refining (adaptive)");
-		Far::TopologyRefiner::AdaptiveOptions refiner_options(maxLevel);
+		Far::TopologyRefiner::AdaptiveOptions refiner_options = patchOptions.GetRefineAdaptiveOptions();
 		refiner->RefineAdaptive(refiner_options);
 	} else {
 		SDL_LOG("Subdiv - Refining (uniform)");
@@ -189,10 +201,11 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(
 	}
 
 	Far::TopologyLevel const& refFirstLevel = refiner->GetLevel(0);
-	Far::TopologyLevel const& refLastLevel = refiner->GetLevel(maxLevel);
+	//Far::TopologyLevel const& refLastLevel = refiner->GetLevel(maxLevel);  TODO
+	Far::TopologyLevel const& refLastLevel = refiner->GetLevel(refiner->GetMaxLevel());
 
 	// Check validity
-	if (refiner->GetMaxLevel() < maxLevel) {
+	if (refiner->GetMaxLevel() < maxLevel && !adaptive) {
 		SDL_LOG("WARNING - SUBDIVISION FAILURE");
 		SDL_LOG("'maxlevel' may be too high, please check. Continuing with input mesh...");
 		return srcMesh;
@@ -221,16 +234,17 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(
 		Far::StencilTableFactory::Options stencilOptions;
 		stencilOptions.generateOffsets = true;
 		stencilOptions.generateIntermediateLevels = false;
+		stencilOptions.maxLevel = maxLevel;
 
 		stencilTable = StencilTablePtr(
 			Far::StencilTableFactory::Create(*refiner, stencilOptions)
 		);
 
 		// Create patch table
-		Far::PatchTableFactory::Options patchOptions;
-		patchOptions.SetEndCapType(
-				Far::PatchTableFactory::Options::ENDCAP_BSPLINE_BASIS
-		);
+		//Far::PatchTableFactory::Options patchOptions;
+		//patchOptions.SetEndCapType(
+				//Far::PatchTableFactory::Options::ENDCAP_BSPLINE_BASIS
+		//);
 
 		patchTable = PatchTablePtr(Far::PatchTableFactory::Create(*refiner, patchOptions));
 
