@@ -25,12 +25,14 @@
 #include <opensubdiv/far/patchTableFactory.h>
 #include <opensubdiv/far/stencilTableFactory.h>
 #include <opensubdiv/far/topologyRefinerFactory.h>
+#include <opensubdiv/far/primvarRefiner.h>
 #include <opensubdiv/osd/cpuPatchTable.h>
 #include <opensubdiv/osd/cpuVertexBuffer.h>
-
-#include <omp.h>
+#include <opensubdiv/far/ptexIndices.h>
 #include <opensubdiv/osd/tbbEvaluator.h>
 #define OSD_EVALUATOR Osd::TbbEvaluator
+
+#include <omp.h>
 
 #include "luxrays/core/exttrianglemesh.h"
 #include "slg/shapes/subdiv.h"
@@ -45,6 +47,8 @@ using namespace OpenSubdiv;
 using BufferPtr = std::unique_ptr<Osd::CpuVertexBuffer>;
 using StencilTablePtr = std::unique_ptr<const Far::StencilTable>;
 using PatchTablePtr = std::unique_ptr<Far::PatchTable>;
+using PatchMapPtr = std::unique_ptr<Far::PatchMap>;
+using TopologyRefinerPtr = std::unique_ptr<Far::TopologyRefiner>;
 
 struct Edge {
 	Edge(const u_int v0Index, const u_int v1Index) {
@@ -64,6 +68,8 @@ struct Edge {
 	u_int vIndex[2];
 };
 
+
+
 class EdgeHashFunction {
 public:
 	size_t operator()(const Edge &edge) const {
@@ -73,11 +79,11 @@ public:
 
 template <int DIMENSIONS> static BufferPtr
 BuildBuffer(
-		StencilTablePtr& stencilTable,  // Stencil table
-		const float *data,  // Primvar data
-		const int nCoarse,  // Coarse vertex count
-		const int nRefined  // Refined vertex count
-	)
+	StencilTablePtr& stencilTable,  // Stencil table
+	const float *data,  // Primvar data
+	const int nCoarse,  // Coarse vertex count
+	const int nRefined  // Refined vertex count
+)
 {
     BufferPtr buffer(
 		Osd::CpuVertexBuffer::Create(DIMENSIONS, nCoarse + nRefined)
@@ -155,10 +161,26 @@ float SubdivShape::MaxEdgeScreenSize(const Camera *camera, ExtTriangleMesh *srcM
 }
 
 static Far::TopologyRefiner * createFarTopologyRefiner(const ExtTriangleMesh*);
+static ExtTriangleMesh *ApplySubdivAdaptive(
+	ExtTriangleMesh *srcMesh,
+	const u_int maxLevel
+);
 
 ExtTriangleMesh *SubdivShape::ApplySubdiv(
 	ExtTriangleMesh *srcMesh, const u_int maxLevel, const bool adaptive
 ) {
+
+	if (adaptive) {
+		SDL_LOG("Subdiv - Refining (adaptive)");
+		ExtTriangleMesh* dstMesh = nullptr;
+		for (level = 0; level < maxLevel; ++level) {
+			auto tmpMesh = ApplySubdivAdaptive(srcMesh, 2);
+			delete outMesh
+			outMesh = tmpMesh;
+		}
+		return outMesh;
+	}
+
 	//--------------------------------------------------------------------------
 	// Check data
 	//--------------------------------------------------------------------------
@@ -173,36 +195,17 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(
 	//--------------------------------------------------------------------------
 	// https://graphics.pixar.com/opensubdiv/docs/osd_tutorial_0.html
 
-	// Set patch options. In adaptive mode, options associated with
-    // adaptive refinement should be derived from those specified for the
-    // PatchTable
-	// https://graphics.pixar.com/opensubdiv/docs/far_tutorial_5_1.html
-	Far::PatchTableFactory::Options patchOptions(maxLevel);
-    patchOptions.SetPatchPrecision<float>();
-    patchOptions.useInfSharpPatch = true;
-    patchOptions.generateVaryingTables = false;
-	patchOptions.SetEndCapType(
-			Far::PatchTableFactory::Options::ENDCAP_BSPLINE_BASIS
-	);
-
 	// Set-up refiner
 	std::unique_ptr<Far::TopologyRefiner> refiner(createFarTopologyRefiner(srcMesh));
 
 	// Refine the topology up to 'maxlevel'
-	if (adaptive) {
-		SDL_LOG("Subdiv - Refining (adaptive)");
-		Far::TopologyRefiner::AdaptiveOptions refiner_options = patchOptions.GetRefineAdaptiveOptions();
-		refiner->RefineAdaptive(refiner_options);
-	} else {
-		SDL_LOG("Subdiv - Refining (uniform)");
-		Far::TopologyRefiner::UniformOptions refiner_options(maxLevel);
-		refiner_options.fullTopologyInLastLevel = true;
-		refiner->RefineUniform(refiner_options);
-	}
+	SDL_LOG("Subdiv - Refining (uniform)");
+	Far::TopologyRefiner::UniformOptions refiner_options(maxLevel);
+	refiner_options.fullTopologyInLastLevel = true;
+	refiner->RefineUniform(refiner_options);
 
 	Far::TopologyLevel const& refFirstLevel = refiner->GetLevel(0);
-	//Far::TopologyLevel const& refLastLevel = refiner->GetLevel(maxLevel);  TODO
-	Far::TopologyLevel const& refLastLevel = refiner->GetLevel(refiner->GetMaxLevel());
+	Far::TopologyLevel const& refLastLevel = refiner->GetLevel(maxLevel);
 
 	// Check validity
 	if (refiner->GetMaxLevel() < maxLevel && !adaptive) {
@@ -241,25 +244,32 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(
 		);
 
 		// Create patch table
-		//Far::PatchTableFactory::Options patchOptions;
-		//patchOptions.SetEndCapType(
-				//Far::PatchTableFactory::Options::ENDCAP_BSPLINE_BASIS
-		//);
+		Far::PatchTableFactory::Options patchOptions;
+		patchOptions.SetEndCapType(
+				Far::PatchTableFactory::Options::ENDCAP_BSPLINE_BASIS
+		);
 
 		patchTable = PatchTablePtr(Far::PatchTableFactory::Create(*refiner, patchOptions));
 
 		// Append local point stencils
 		const auto *localPointStencilTable = patchTable->GetLocalPointStencilTable();
 		if (localPointStencilTable) {
-			const auto *combinedTable =
+			SDL_LOG("Subdiv - Handling local points");
+			StencilTablePtr combinedTable(
 				Far::StencilTableFactory::AppendLocalPointStencilTable(
 					*refiner, stencilTable.get(), localPointStencilTable
-				);
+				)
+			);
 			if (combinedTable) {
-				stencilTable.reset(combinedTable);
+				std::swap(stencilTable, combinedTable);
 			}
 		}
 	}
+
+	// TODO
+	//const int nRefinedVerts = stencilTable->GetNumStencils();
+	//const int nRefinedFaces = refLastLevel.GetNumFaces(); // Refined face count
+	//const int totalVertsCount = nCoarseVerts + nRefinedVerts;  // Total vertex count
 
 	SDL_LOG("Subdiv - Stencil and patch tables created");
 
@@ -295,7 +305,7 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(
 				stencilTable,
 				(const float *)srcMesh->GetUVs(i),
 				nCoarseVerts,
-				nRefinedVerts
+nRefinedVerts
 			);
 		}
 	}
@@ -335,7 +345,7 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(
 					stencilTable,
 					(const float *)srcMesh->GetVertexAOVs(i),
 					nCoarseVerts,
-					totalVertsCount
+					nRefinedVerts
 				);
 			}
 		}
@@ -350,8 +360,7 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(
 	// New triangles
 	Triangle *newTris = TriangleMesh::AllocTrianglesBuffer(nRefinedFaces);
 	for (int face = 0; face < nRefinedFaces; ++face) {
-		Vtr::ConstIndexArray faceVerts;
-		faceVerts = refLastLevel.GetFaceVertices(face);
+		Vtr::ConstIndexArray faceVerts = refLastLevel.GetFaceVertices(face);
 		for (u_int vertex = 0; vertex < 3; ++vertex) {
 			newTris[face].v[vertex] = faceVerts[vertex];
 		}
@@ -362,12 +371,10 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(
 	const float *refinedVerts = vertsBuffer->BindCpuBuffer() + 3 * nCoarseVerts;
 	copy(refinedVerts, refinedVerts + 3 * nRefinedVerts, &newVerts->x);
 
-
 	// New normals
 	Normal *newNorms = nullptr;
 	if (srcMesh->HasNormals()) {
 		newNorms = new Normal[nRefinedVerts];
-
 		const float *refinedNorms = normsBuffer->BindCpuBuffer() + 3 * nCoarseVerts;
 		copy(refinedNorms, refinedNorms + 3 * nRefinedVerts, &newNorms->x);
 	}
@@ -574,6 +581,527 @@ static Far::TopologyRefiner* createFarTopologyRefiner(const ExtTriangleMesh* src
 
 	return refiner;
 }
+
+////////////////////////////////////////////////////////////////////////////
+// Adaptive
+
+
+template <size_t DIMENSION> struct SubdivVec: std::array<float, 3> {
+	// Minimal required interface
+	SubdivVec() {}
+
+	SubdivVec(const float * src) {
+		for (size_t i = 0; i < DIMENSION; ++i) {
+			(*this)[i] = *(src + i);
+		}
+	}
+
+	void Clear(void* = nullptr) {
+		for (size_t i = 0; i < DIMENSION; ++i) {
+			(*this)[i] = 0.0f;
+		}
+	}
+
+	void AddWithWeight(const SubdivVec<DIMENSION>& src, float weight) {
+		for (size_t i = 0; i < DIMENSION; ++i) {
+			(*this)[i] += src[i] * weight;
+		}
+	}
+
+};
+
+using Pos = SubdivVec<3>;
+
+
+template<size_t DIMENSION>
+struct SubdivBuffer: std::vector< SubdivVec<DIMENSION> > {
+	SubdivBuffer() {};
+	SubdivBuffer(const float * src, size_t count) {
+		this->resize(count);
+		for (size_t i = 0; i < count; ++i) {
+			(*this)[i] = SubdivVec<3>(src + i * DIMENSION);
+		}
+	}
+	SubdivBuffer(size_t count):
+		std::vector< SubdivVec<DIMENSION> >(count)
+	{}
+	operator SubdivVec<DIMENSION>*() {
+		return &(*this)[0];
+	}
+	operator const float * () {
+		return reinterpret_cast<float *>(&(*this)[0]);
+	}
+	void pack_front(const float * src, size_t count) {
+		assert(count <= this->size());
+		for (size_t i = 0; i < count; ++i) {
+			(*this)[i] = SubdivVec<3>(src + i * DIMENSION);
+		}
+	}
+	void pack_front(const SubdivBuffer& src) {
+		for (size_t i = 0; i < src.size(); ++i) {
+			(*this)[i] = src[i];
+		}
+	}
+};
+
+using PosVector = SubdivBuffer<3>;
+
+
+struct Tri: std::array<int, 3> {
+	Tri() { }
+	Tri(int a, int b, int c) { (*this)[0] = a, (*this)[1] = b, (*this)[2] = c; }
+
+};
+typedef std::vector<Tri> TriVector;
+
+
+
+
+static void TessellateBaseFace(
+	const Far::Index face,
+	const TopologyRefinerPtr& refiner,
+	const PatchTablePtr& patchTable,
+	const PatchMapPtr& patchMap,
+	const SubdivBuffer<3>& basePositions,
+	const SubdivBuffer<3>& localPositions,
+	SubdivBuffer<3>& tessPoints,  // Output
+	TriVector& tessTris  // Output
+);
+
+
+//  The PatchGroup bundles objects used to create and evaluate a sparse set
+//  of patches.  Its construction creates a PatchTable and all other objects
+//  necessary to evaluate patches associated with the specified subset of
+//  faces provided.  A simple method to tessellate a specified face is
+//  provided.
+//
+//  Note that, since the data buffers for the base level and refined levels
+//  are separate (we want to avoid copying primvar data for the base level
+//  of a potentially large mesh), that patch evaluation needs to account
+//  for the separation when combining control points.
+//
+struct PatchGroup {
+    PatchGroup(Far::PatchTableFactory::Options patchOptions,
+               TopologyRefinerPtr const &      baseRefinerArg,
+               Far::PtexIndices const &        basePtexIndicesArg,
+               PosVector const &               basePositionsArg,
+               std::vector<Far::Index> const &      baseFacesArg);
+
+    void TessellateBaseFace(int face, PosVector & tessPoints,
+                                      TriVector & tessTris) const;
+
+    //  Const reference members:
+    TopologyRefinerPtr const &   baseRefiner;
+    Far::PtexIndices const &     basePtexIndices;
+    std::vector<Pos> const &     basePositions;
+    std::vector<Far::Index> const &   baseFaces;
+
+    //  Members constructed to evaluate patches:
+    PatchTablePtr       patchTable;
+    PatchMapPtr         patchMap;
+    int                 patchFaceSize;
+    PosVector           localPositions;
+};
+
+PatchGroup::PatchGroup(Far::PatchTableFactory::Options patchOptions,
+                       TopologyRefinerPtr const &      baseRefinerArg,
+                       Far::PtexIndices const &        basePtexIndicesArg,
+                       PosVector const &               basePositionsArg,
+                       std::vector<Far::Index> const &      baseFacesArg) :
+	baseRefiner(baseRefinerArg),
+	basePtexIndices(basePtexIndicesArg),
+	basePositions(basePositionsArg),
+	baseFaces(baseFacesArg) {
+
+
+    //  Create a local refiner (sharing the base level), apply adaptive
+    //  refinement to the given subset of base faces, and construct a patch
+    //  table (and its associated map) for the same set of faces:
+    //
+    Far::ConstIndexArray groupFaces(&baseFaces[0], (int)baseFaces.size());
+
+    TopologyRefinerPtr localRefiner(
+        Far::TopologyRefinerFactory<Far::TopologyDescriptor>::Create(*baseRefiner)
+	);
+
+    localRefiner->RefineAdaptive(
+        patchOptions.GetRefineAdaptiveOptions(), groupFaces);
+
+    patchTable.reset(
+		Far::PatchTableFactory::Create(*localRefiner, patchOptions, groupFaces)
+	);
+
+    patchMap.reset(new Far::PatchMap(*patchTable));
+
+    patchFaceSize =
+        Sdc::SchemeTypeTraits::GetRegularFaceSize(baseRefiner->GetSchemeType());
+
+    //  Compute the number of refined and local points needed to evaluate the
+    //  patches, allocate and interpolate.  This varies from tutorial_5_1 in
+    //  that the primvar buffer for the base vertices is separate from the
+    //  refined vertices and local patch points (which must also be accounted
+    //  for when evaluating the patches).
+    //
+    int nBaseVertices    = localRefiner->GetLevel(0).GetNumVertices();
+    int nRefinedVertices = localRefiner->GetNumVerticesTotal() - nBaseVertices;
+    int nLocalPoints     = patchTable->GetNumLocalPoints();
+
+    localPositions.resize(nRefinedVertices + nLocalPoints);
+
+    if (nRefinedVertices) {
+        Far::PrimvarRefiner primvarRefiner(*localRefiner);
+
+        Pos const * src = &basePositions[0];
+        Pos * dst = &localPositions[0];
+        for (int level = 1; level < localRefiner->GetNumLevels(); ++level) {
+            primvarRefiner.Interpolate(level, src, dst);
+            src = dst;
+            dst += localRefiner->GetLevel(level).GetNumVertices();
+        }
+    }
+    if (nLocalPoints) {
+        patchTable->GetLocalPointStencilTable()->UpdateValues(
+                &basePositions[0], nBaseVertices, &localPositions[0],
+                &localPositions[nRefinedVertices]);
+    }
+
+}
+
+void
+PatchGroup::TessellateBaseFace(int face, PosVector & tessPoints,
+                                         TriVector & tessTris) const {
+
+    //  Tesselate the face with points at the midpoint of the face and at
+    //  each corner, and triangles connecting the midpoint to each edge.
+    //  Irregular faces require an aribrary number of corners points, but
+    //  all are at the origin of the child face of the irregular base face:
+    //
+    float const quadPoints[5][2] = { { 0.5f, 0.5f },
+                                     { 0.0f, 0.0f },
+                                     { 1.0f, 0.0f },
+                                     { 1.0f, 1.0f },
+                                     { 0.0f, 1.0f } };
+
+    float const triPoints[4][2] = { { 0.5f, 0.5f },
+                                    { 0.0f, 0.0f },
+                                    { 1.0f, 0.0f },
+                                    { 0.0f, 1.0f } };
+
+    float const irregPoints[4][2] = { { 1.0f, 1.0f },
+                                      { 0.0f, 0.0f } };
+
+    //  Determine the topology of the given base face and the resulting
+    //  tessellation points and faces to generate:
+    //
+    int baseFace = baseFaces[face];
+    int faceSize = baseRefiner->GetLevel(0).GetFaceVertices(baseFace).size();
+
+    bool faceIsIrregular = (faceSize != patchFaceSize);
+
+    int nTessPoints = faceSize + 1;
+    int nTessFaces  = faceSize;
+
+    tessPoints.resize(nTessPoints);
+    tessTris.resize(nTessFaces);
+
+    //  Compute the mid and corner points -- remember that for an irregular
+    //  face, we must reference the individual ptex faces for each corner:
+    //
+    int ptexFace = basePtexIndices.GetFaceId(baseFace);
+
+    int numBaseVerts = (int) basePositions.size();
+
+    for (int i = 0; i < nTessPoints; ++i) {
+        //  Choose the (s,t) coordinate from the fixed tessellation:
+        float const * st = faceIsIrregular ? irregPoints[i != 0]
+                         : ((faceSize == 4) ? quadPoints[i] : triPoints[i]);
+
+        //  Locate the patch corresponding to the face ptex idx and (s,t)
+        //  and evaluate:
+        int patchFace = ptexFace;
+        if (faceIsIrregular && (i > 0)) {
+            patchFace += i - 1;
+        }
+        Far::PatchTable::PatchHandle const * handle =
+            patchMap->FindPatch(patchFace, st[0], st[1]);
+        assert(handle);
+
+        float pWeights[20];
+        patchTable->EvaluateBasis(*handle, st[0], st[1], pWeights);
+
+        //  Identify the patch cvs and combine with the evaluated weights --
+        //  remember to distinguish cvs in the base level:
+        Far::ConstIndexArray cvIndices = patchTable->GetPatchVertices(*handle);
+
+        Pos & pos = tessPoints[i];
+        pos.Clear();
+        for (int cv = 0; cv < cvIndices.size(); ++cv) {
+            int cvIndex = cvIndices[cv];
+            if (cvIndex < numBaseVerts) {
+                pos.AddWithWeight(basePositions[cvIndex],
+                    pWeights[cv]);
+            } else {
+                pos.AddWithWeight(localPositions[cvIndex - numBaseVerts],
+                    pWeights[cv]);
+            }
+        }
+    }
+
+    //  Assign triangles connecting the midpoint of the base face to the
+    //  points computed at the ends of each of its edges:
+    //
+    for (int i = 0; i < nTessFaces; ++i) {
+        tessTris[i] = Tri(0, 1 + i, 1 + ((i + 1) % faceSize));
+    }
+}
+
+
+static TopologyRefinerPtr createTopologyRefinerFromMesh(
+		const ExtTriangleMesh* srcMesh,
+		const Far::PatchTableFactory::Options& patchOptions,
+		PosVector & posVector
+) {
+
+	// Initialize corresponding options for adaptive refinement
+	Far::TopologyRefiner::AdaptiveOptions adaptiveOptions(0);  // TODO
+
+	// Be sure patch options were intialized with the desired max level
+	adaptiveOptions = patchOptions.GetRefineAdaptiveOptions();
+	assert(adaptiveOptions.useInfSharpPatch == patchOptions.useInfSharpPatch);
+
+
+	// Set topology refiner factory's type & options
+	Sdc::SchemeType scheme_type = Sdc::SCHEME_LOOP;
+
+	Sdc::Options sdc_options;
+	sdc_options.SetVtxBoundaryInterpolation(Sdc::Options::VTX_BOUNDARY_EDGE_AND_CORNER);
+
+	// Populate a topology descriptor with our raw data
+	Far::TopologyDescriptor desc;
+	desc.numVertices = srcMesh->GetTotalVertexCount();
+	desc.numFaces = srcMesh->GetTotalTriangleCount();
+	vector<int> vertPerFace(desc.numFaces, 3);
+	desc.numVertsPerFace = &vertPerFace[0];
+	desc.vertIndicesPerFace = reinterpret_cast<const int *>(srcMesh->GetTriangles());
+
+	// Look for mesh boundary edges
+	unordered_map<Edge, u_int, EdgeHashFunction> edgesMap;
+	const u_int triCount = srcMesh->GetTotalTriangleCount();
+	const Triangle *tris = srcMesh->GetTriangles();
+
+	// Count how many times an edge is shared
+	for (u_int i = 0; i < triCount; ++i) {
+		const Triangle &tri = tris[i];
+
+		const Edge edge0(tri.v[0], tri.v[1]);
+		if (edgesMap.find(edge0) != edgesMap.end())
+			edgesMap[edge0] += 1;
+		else
+			edgesMap[edge0] = 1;
+
+		const Edge edge1(tri.v[1], tri.v[2]);
+		if (edgesMap.find(edge1) != edgesMap.end())
+			edgesMap[edge1] += 1;
+		else
+		   edgesMap[edge1] = 1;
+
+		const Edge edge2(tri.v[2], tri.v[0]);
+		if (edgesMap.find(edge2) != edgesMap.end())
+		   edgesMap[edge2] += 1;
+		else
+			edgesMap[edge2] = 1;
+	}
+
+	vector<bool> isBoundaryVertex(srcMesh->GetTotalVertexCount(), false);
+	vector<Far::Index> cornerVertexIndices;
+	vector<float> cornerWeights;
+	for (auto em : edgesMap) {
+		if (em.second == 1) {
+			// It is a boundary edge
+
+			const Edge &e = em.first;
+
+			if (!isBoundaryVertex[e.vIndex[0]]) {
+				cornerVertexIndices.push_back(e.vIndex[0]);
+				cornerWeights.push_back(10.f);
+				isBoundaryVertex[e.vIndex[0]] = true;
+			}
+
+			if (!isBoundaryVertex[e.vIndex[1]]) {
+				cornerVertexIndices.push_back(e.vIndex[1]);
+				cornerWeights.push_back(10.f);
+				isBoundaryVertex[e.vIndex[1]] = true;
+			}
+		}
+	}
+
+	// Initialize TopologyDescriptor corners if I have some
+	if (cornerVertexIndices.size() > 0) {
+		desc.numCorners = cornerVertexIndices.size();
+		desc.cornerVertexIndices = &cornerVertexIndices[0];
+		desc.cornerWeights = &cornerWeights[0];
+	}
+
+	// Create refiner
+	using RefinerFactory = Far::TopologyRefinerFactory<Far::TopologyDescriptor>;
+    TopologyRefinerPtr refiner(
+		RefinerFactory::Create(
+			desc,
+			RefinerFactory::Options(scheme_type, sdc_options)
+		)
+	);
+	assert(refiner);
+
+	// Copy mesh vertices into posVector
+	int numVertices = refiner->GetNumVerticesTotal();
+	posVector.resize(numVertices);
+	auto meshVertices = srcMesh->GetVertices();
+	for (int i = 0; i < numVertices; ++i) {
+		posVector[i][0] = meshVertices[i].x;
+		posVector[i][1] = meshVertices[i].y;
+		posVector[i][2] = meshVertices[i].z;
+	}
+
+	return refiner;
+
+}
+
+
+static ExtTriangleMesh *ApplySubdivAdaptive(
+	ExtTriangleMesh *srcMesh,
+	const u_int maxLevel
+) {
+	typedef float Real;
+
+	// https://graphics.pixar.com/opensubdiv/docs/far_tutorial_5_2.html
+	PosVector basePositions;
+
+	// Initialize patch table options
+	Far::PatchTableFactory::Options patchOptions(maxLevel);
+	//patchOptions.SetPatchPrecision<Real>();
+	//patchOptions.useInfSharpPatch = true;
+	patchOptions.generateVaryingTables = false;
+	patchOptions.shareEndCapPatchPoints = true;
+	patchOptions.endCapType =
+		Far::PatchTableFactory::Options::ENDCAP_GREGORY_BASIS;
+
+	// Construct base refiner
+	TopologyRefinerPtr baseRefiner(
+		createTopologyRefinerFromMesh(srcMesh, patchOptions, basePositions)
+	);
+	Far::PtexIndices basePtexIndices(*baseRefiner);
+
+    // Construct the associated PatchTable to evaluate the limit surface:
+	PatchTablePtr patchTable(Far::PatchTableFactory::Create(*baseRefiner, patchOptions));
+	PatchMapPtr patchMap(new Far::PatchMap(*patchTable));
+
+	// Refinement output constants
+	const int nLocalPoints = patchTable->GetNumLocalPoints();
+
+    //
+    //  Determine the sizes of the patch groups specified -- there will be
+    //  two sizes that differ by one to account for unequal division:
+    //
+    int numBaseFaces = baseRefiner->GetNumFacesTotal();
+
+    int numPatchGroups = 2;
+    int lesserGroupSize = numBaseFaces / numPatchGroups;
+    int numLargerGroups = numBaseFaces - (numPatchGroups * lesserGroupSize);
+
+
+    int objVertCount = 0;
+
+    PosVector tessAllPoints;
+    TriVector tessAllFaces;
+
+    for (int i = 0; i < numPatchGroups; ++i) {
+		SDL_LOG("Subdiv - Adaptive - Starting patch group " << i);
+
+        //
+        //  Initialize a vector with a group of base faces from which to
+        //  create and evaluate patches:
+        //
+		Far::Index minFace = i * lesserGroupSize + std::min(i, numLargerGroups);
+		Far::Index maxFace = minFace + lesserGroupSize + (i < numLargerGroups);
+
+        std::vector<Far::Index> baseFaces(maxFace - minFace);
+        for (int face = minFace; face < maxFace; ++face) {
+            baseFaces[face - minFace] = face;
+        }
+
+        //
+        //  Declare a PatchGroup and tessellate its base faces -- generating
+        //  vertices and faces in Obj format to standard output:
+        //
+        PatchGroup patchGroup(
+			patchOptions,
+            baseRefiner,
+			basePtexIndices,
+			basePositions,
+			baseFaces
+		);
+
+		PosVector tessPoints;
+		TriVector tessFaces;
+
+		for (int j = 0; j < (int) baseFaces.size(); ++j) {
+			// Tessellate
+			patchGroup.TessellateBaseFace(j, tessPoints, tessFaces);
+
+
+			// Append vertices
+			tessAllPoints.insert(
+				tessAllPoints.end(), tessPoints.begin(), tessPoints.end()
+			);
+
+			// Append faces
+			int nFaces = (int) tessFaces.size();
+			int nVerts = (int) tessPoints.size();
+			size_t vBase = objVertCount;
+			for (int k = 0; k < nFaces; ++k) {
+				auto v = tessFaces[k];
+				tessAllFaces.push_back(Tri(vBase + v[0], vBase + v[1], vBase + v[2]));
+			}
+			objVertCount += nVerts;
+		}
+
+    }
+
+	SDL_LOG("Subdiv - Adaptive - Building new mesh");
+
+	// New vertices and triangles
+	size_t pointCount = tessAllPoints.size();
+	SDL_LOG("Subdiv - Adaptive - " << pointCount << " points");
+	Point *newVerts = TriangleMesh::AllocVerticesBuffer(pointCount);
+	for (size_t i = 0; i < pointCount; ++i) {
+		Point* vert = newVerts + i;
+		vert->x = tessAllPoints[i][0];
+		vert->y = tessAllPoints[i][1];
+		vert->z = tessAllPoints[i][2];
+	}
+
+	// New triangles
+	size_t triCount = tessAllFaces.size();
+	SDL_LOG("Subdiv - Adaptive - " << triCount << " triangles");
+	Triangle *newTris = TriangleMesh::AllocTrianglesBuffer(triCount);
+	for (size_t face = 0; face < triCount; ++face) {
+		auto tri = tessAllFaces[face];
+		for (u_int vertex = 0; vertex < 3; ++vertex) {
+			newTris[face].v[vertex] = tri[vertex];
+			assert(tri[vertex] <= pointCount);
+			assert(tri[vertex] >= 0);
+		}
+	}
+
+	// Allocate the new mesh
+	ExtTriangleMesh *newMesh =  new ExtTriangleMesh(
+		pointCount, triCount, newVerts, newTris
+	);
+
+	return newMesh;
+
+}
+
 
 
 // vim: autoindent noexpandtab tabstop=4 shiftwidth=4
