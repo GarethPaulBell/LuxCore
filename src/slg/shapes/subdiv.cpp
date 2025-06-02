@@ -166,14 +166,20 @@ static ExtTriangleMesh *ApplySubdivAdaptive(
 	const u_int maxLevel
 );
 
+static ExtTriangleMesh *ApplyAdaptiveSubdiv(
+	ExtTriangleMesh *srcMesh,
+	const u_int maxLevel
+);
+
+
 ExtTriangleMesh *SubdivShape::ApplySubdiv(
 	ExtTriangleMesh *srcMesh, const u_int maxLevel, const bool adaptive
 ) {
-
+	// TODO
 	if (adaptive) {
 		SDL_LOG("Subdiv - Refining (adaptive)");
 
-		return ApplySubdivAdaptive(srcMesh, maxLevel);
+		return ApplyAdaptiveSubdiv(srcMesh, maxLevel);
 
 	}
 
@@ -670,7 +676,7 @@ typedef std::vector<Tri> TriVector;
 
 
 
-void tessellate(
+void Tessellate(
 	const TopologyRefinerPtr& refiner,
 	const PatchTablePtr& patchTable,
 	const PosVector& basePositions,
@@ -829,7 +835,8 @@ void tessellate(
 
 
 static TopologyRefinerPtr createTopologyAdaptiveRefiner(
-		const ExtTriangleMesh* srcMesh,
+		const PosVector& positions,
+		const TriVector& triangles,
 		const Far::PatchTableFactory::Options& patchOptions
 ) {
 
@@ -845,11 +852,11 @@ static TopologyRefinerPtr createTopologyAdaptiveRefiner(
 
 	// Populate a topology descriptor with our raw data
 	Far::TopologyDescriptor desc;
-	desc.numVertices = srcMesh->GetTotalVertexCount();
-	desc.numFaces = srcMesh->GetTotalTriangleCount();
+	desc.numVertices = positions.size(); // srcMesh->GetTotalVertexCount();
+	desc.numFaces = triangles.size(); // srcMesh->GetTotalTriangleCount();
 	vector<int> vertPerFace(desc.numFaces, 3);
 	desc.numVertsPerFace = &vertPerFace[0];
-	desc.vertIndicesPerFace = reinterpret_cast<const int *>(srcMesh->GetTriangles());
+	desc.vertIndicesPerFace = reinterpret_cast<const int *>(&triangles[0]);
 
 	// Create refiner
 	using RefinerFactory = Far::TopologyRefinerFactory<Far::TopologyDescriptor>;
@@ -867,9 +874,13 @@ static TopologyRefinerPtr createTopologyAdaptiveRefiner(
 }
 
 
-static ExtTriangleMesh *ApplySubdivAdaptive(
-	ExtTriangleMesh *srcMesh,
-	const u_int maxLevel
+void AdaptiveSubdivImpl(
+	const PosVector& basePositions,
+	const TriVector& baseTriangles,
+	u_int maxLevel,
+	PosVector& tessPositions,
+	PosVector& tessNormals,
+	TriVector& tessFaces
 ) {
 
 	typedef float Real;
@@ -884,7 +895,7 @@ static ExtTriangleMesh *ApplySubdivAdaptive(
 
 	// Construct refiner and associated ptex
 	TopologyRefinerPtr refiner(
-		createTopologyAdaptiveRefiner(srcMesh, patchOptions)
+		createTopologyAdaptiveRefiner(basePositions, baseTriangles, patchOptions)
 	);
 	Far::PtexIndices basePtexIndices(*refiner);
 
@@ -894,22 +905,6 @@ static ExtTriangleMesh *ApplySubdivAdaptive(
 
     // Construct the associated PatchTable to evaluate the limit surface:
 	PatchTablePtr patchTable(Far::PatchTableFactory::Create(*refiner, patchOptions));
-
-	// Record base positions
-	PosVector basePositions;
-	int numVertices = srcMesh->GetTotalVertexCount();
-	basePositions.resize(numVertices);
-	auto meshVertices = srcMesh->GetVertices();
-	for (int i = 0; i < numVertices; ++i) {
-		basePositions[i][0] = meshVertices[i].x;
-		basePositions[i][1] = meshVertices[i].y;
-		basePositions[i][2] = meshVertices[i].z;
-	}
-
-	// Declare output structures
-    PosVector tessAllPoints;
-    PosVector tessAllNormals;
-    TriVector tessAllFaces;
 
 	SDL_LOG("Subdiv - Adaptive - Starting");
 
@@ -939,40 +934,83 @@ static ExtTriangleMesh *ApplySubdivAdaptive(
     }
 
 
-	// Tessellate!
-	tessellate(refiner, patchTable, basePositions, localPositions, tessAllPoints, tessAllFaces, tessAllNormals);
+	// Tessellate
+	Tessellate(refiner, patchTable, basePositions, localPositions, tessPositions, tessFaces, tessNormals);
+
+
+}
+
+
+static ExtTriangleMesh *ApplyAdaptiveSubdiv(
+	ExtTriangleMesh *srcMesh,
+	const u_int maxLevel
+) {
+
+
+	// Initialize internal structures
+	TriVector baseTriangles(srcMesh->GetTotalTriangleCount());
+	Triangle* luxTriangles = srcMesh->GetTriangles();
+	for (size_t t = 0; t < srcMesh->GetTotalTriangleCount(); ++t) {
+		for (size_t v = 0; v < 3; ++v) {
+			baseTriangles[t][v] = luxTriangles[t].v[v];
+		}
+	}
+
+	PosVector basePositions;
+	int numVertices = srcMesh->GetTotalVertexCount();
+	basePositions.resize(numVertices);
+	auto meshVertices = srcMesh->GetVertices();
+	for (int i = 0; i < numVertices; ++i) {
+		basePositions[i][0] = meshVertices[i].x;
+		basePositions[i][1] = meshVertices[i].y;
+		basePositions[i][2] = meshVertices[i].z;
+	}
+
+
+	PosVector tessPositions;
+	PosVector tessNormals;
+	TriVector tessTriangles;
+
+	AdaptiveSubdivImpl(
+		basePositions,
+		baseTriangles,
+		maxLevel,
+		tessPositions,
+		tessNormals,
+		tessTriangles
+	);
 
 	SDL_LOG("Subdiv - Adaptive - Building new mesh");
 
 	// New vertices
-	size_t pointCount = tessAllPoints.size();
+	size_t pointCount = tessPositions.size();
 	SDL_LOG("Subdiv - Adaptive - " << pointCount << " points");
 	Point *newVerts = TriangleMesh::AllocVerticesBuffer(pointCount);
 	for (size_t i = 0; i < pointCount; ++i) {
 		Point* vert = newVerts + i;
-		vert->x = tessAllPoints[i][0];
-		vert->y = tessAllPoints[i][1];
-		vert->z = tessAllPoints[i][2];
+		vert->x = tessPositions[i][0];
+		vert->y = tessPositions[i][1];
+		vert->z = tessPositions[i][2];
 	}
 
 	// New normals
-	size_t normCount = tessAllNormals.size();
+	size_t normCount = tessNormals.size();
 	SDL_LOG("Subdiv - Adaptive - " << normCount << " normals");
 	Normal *newNormals = new Normal[pointCount];
 	for (size_t i = 0; i < normCount; ++i) {
 		Normal* norm = newNormals + i;
-		norm->x = tessAllNormals[i][0];
-		norm->y = tessAllNormals[i][1];
-		norm->z = tessAllNormals[i][2];
+		norm->x = tessNormals[i][0];
+		norm->y = tessNormals[i][1];
+		norm->z = tessNormals[i][2];
 		*norm = Normalize(*norm);
 	}
 
 	// New triangles
-	size_t triCount = tessAllFaces.size();
+	size_t triCount = tessTriangles.size();
 	SDL_LOG("Subdiv - Adaptive - " << triCount << " triangles");
 	Triangle *newTris = TriangleMesh::AllocTrianglesBuffer(triCount);
 	for (size_t face = 0; face < triCount; ++face) {
-		auto tri = tessAllFaces[face];
+		auto tri = tessTriangles[face];
 		for (u_int vertex = 0; vertex < 3; ++vertex) {
 			newTris[face].v[vertex] = tri[vertex];
 			assert(tri[vertex] <= pointCount);
