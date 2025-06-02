@@ -686,7 +686,7 @@ void Tessellate(
 	PosVector & tessNormals) {
 
 	// This tessellation splits edges at their midpoints
-	// and generates 4 resulting triangles per input triangle.
+	// and generates 4 resulting triangles by input triangle.
 	//
 	// Input:
 	//           V2
@@ -739,11 +739,19 @@ void Tessellate(
 
 	// Offset
 	int offset = topology.GetNumVertices();
+	int tessPosCount = offset + topology.GetNumEdges();
 
 	// Resize tessPos and tessTris
 	tessTris.clear();
-	tessPos.resize(offset + topology.GetNumEdges());
-	tessNormals.resize(offset + topology.GetNumEdges());
+	tessPos.resize(tessPosCount);
+	tessNormals.resize(tessPosCount);
+
+	// To avoid redundancy...
+	std::vector<bool> done(tessPosCount, false);
+
+	// Create mutexes
+	std::mutex tessPosMtx;
+	std::mutex tessTrianglesMtx;
 
 	// Set mappers
 	Far::PtexIndices ptexIndices(*refiner);
@@ -752,7 +760,9 @@ void Tessellate(
 
     int numBaseVerts = (int) basePositions.size();
 
+
 	// Tessellate faces
+	#pragma omp parallel for
 	for (int f = 0; f < FACE_COUNT; ++f) {  // for each face
 		const auto faceVertices = topology.GetFaceVertices(f);
 
@@ -783,46 +793,60 @@ void Tessellate(
 				topotriangle[p] = vertex;
 
 				// Coordinates
-				std::array<float, 2> st(stMap[sname]);
-				//  Locate the patch corresponding to the face ptex idx and (s,t)
-				//  and evaluate:
-				Far::PatchTable::PatchHandle const * handle =
-					patchMap->FindPatch(ptexFace, st[0], st[1]);
-				assert(handle);
+				bool is_done;
+				{
+					std::scoped_lock lock(tessPosMtx);
+					is_done = done[vertex];
+				}
+				if (!is_done) {
+					std::array<float, 2> st(stMap[sname]);
+					//  Locate the patch corresponding to the face ptex idx and (s,t)
+					//  and evaluate:
+					Far::PatchTable::PatchHandle const * handle =
+						patchMap->FindPatch(ptexFace, st[0], st[1]);
+					assert(handle);
 
-				float pWeights[20];
-				float duWeights[20];
-				float dvWeights[20];
-				patchTable->EvaluateBasis(*handle, st[0], st[1], pWeights, duWeights, dvWeights);
+					float pWeights[20];
+					float duWeights[20];
+					float dvWeights[20];
+					patchTable->EvaluateBasis(*handle, st[0], st[1], pWeights, duWeights, dvWeights);
 
-				//  Identify the patch cvs and combine with the evaluated weights --
-				//  remember to distinguish cvs in the base level:
-				Far::ConstIndexArray cvIndices = patchTable->GetPatchVertices(*handle);
+					//  Identify the patch cvs and combine with the evaluated weights --
+					//  remember to distinguish cvs in the base level:
+					Far::ConstIndexArray cvIndices = patchTable->GetPatchVertices(*handle);
 
-				// Evaluate position and derivatives
-				Pos pos{0.0f, 0.0f, 0.0f};
-				Pos du{0.0f, 0.0f, 0.0f};
-				Pos dv{0.0f, 0.0f, 0.0f};
-				for (int cv = 0; cv < cvIndices.size(); ++cv) {
-					int cvIndex = cvIndices[cv];
-					if (cvIndex < numBaseVerts) {
-						pos.AddWithWeight(basePositions[cvIndex], pWeights[cv]);
-						du.AddWithWeight(basePositions[cvIndex], duWeights[cv]);
-						dv.AddWithWeight(basePositions[cvIndex], dvWeights[cv]);
-					} else {
-						pos.AddWithWeight(localPositions[cvIndex - numBaseVerts], pWeights[cv]);
-						du.AddWithWeight(localPositions[cvIndex - numBaseVerts], duWeights[cv]);
-						dv.AddWithWeight(localPositions[cvIndex - numBaseVerts], dvWeights[cv]);
+					// Evaluate position and derivatives
+					Pos pos{0.0f, 0.0f, 0.0f};
+					Pos du{0.0f, 0.0f, 0.0f};
+					Pos dv{0.0f, 0.0f, 0.0f};
+					for (int cv = 0; cv < cvIndices.size(); ++cv) {
+						int cvIndex = cvIndices[cv];
+						if (cvIndex < numBaseVerts) {
+							pos.AddWithWeight(basePositions[cvIndex], pWeights[cv]);
+							du.AddWithWeight(basePositions[cvIndex], duWeights[cv]);
+							dv.AddWithWeight(basePositions[cvIndex], dvWeights[cv]);
+						} else {
+							pos.AddWithWeight(localPositions[cvIndex - numBaseVerts], pWeights[cv]);
+							du.AddWithWeight(localPositions[cvIndex - numBaseVerts], duWeights[cv]);
+							dv.AddWithWeight(localPositions[cvIndex - numBaseVerts], dvWeights[cv]);
+						}
+					}
+
+					// Update output (position and normal)
+					{
+						std::scoped_lock lock(tessPosMtx);
+						tessPos[vertex] = pos;
+						tessNormals[vertex] = du * dv;
+						done[vertex] = true;
 					}
 				}
 
-				// Update output (position and normal)
-				tessPos[vertex] = pos;
-				tessNormals[vertex] = du * dv;
-
 			} // ~points
 
-			tessTris.push_back(topotriangle);
+			{
+				std::scoped_lock lock(tessTrianglesMtx);
+				tessTris.push_back(topotriangle);
+			}
 
 		}  // ~triangles
 
