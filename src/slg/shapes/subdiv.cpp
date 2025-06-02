@@ -880,10 +880,16 @@ void AdaptiveSubdivImpl(
 	u_int maxLevel,
 	PosVector& tessPositions,
 	PosVector& tessNormals,
-	TriVector& tessFaces
+	TriVector& tessTriangles
 ) {
 
 	typedef float Real;
+
+	// Clear output structures
+	tessPositions.clear();
+	tessNormals.clear();
+	tessTriangles.clear();
+
 
 	// Initialize patch table options
 	Far::PatchTableFactory::Options patchOptions(maxLevel);
@@ -935,7 +941,7 @@ void AdaptiveSubdivImpl(
 
 
 	// Tessellate
-	Tessellate(refiner, patchTable, basePositions, localPositions, tessPositions, tessFaces, tessNormals);
+	Tessellate(refiner, patchTable, basePositions, localPositions, tessPositions, tessTriangles, tessNormals);
 
 
 }
@@ -971,14 +977,18 @@ static ExtTriangleMesh *ApplyAdaptiveSubdiv(
 	PosVector tessNormals;
 	TriVector tessTriangles;
 
-	AdaptiveSubdivImpl(
-		basePositions,
-		baseTriangles,
-		maxLevel,
-		tessPositions,
-		tessNormals,
-		tessTriangles
-	);
+	for (int i = 0; i < maxLevel ; ++i) {
+		AdaptiveSubdivImpl(
+			basePositions,
+			baseTriangles,
+			maxLevel,
+			tessPositions,
+			tessNormals,
+			tessTriangles
+		);
+		basePositions = tessPositions;
+		baseTriangles = tessTriangles;
+	}
 
 	SDL_LOG("Subdiv - Adaptive - Building new mesh");
 
