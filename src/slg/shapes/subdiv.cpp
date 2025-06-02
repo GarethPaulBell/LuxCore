@@ -172,7 +172,13 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(
 
 	if (adaptive) {
 		SDL_LOG("Subdiv - Refining (adaptive)");
-		return ApplySubdivAdaptive(srcMesh, 2);
+
+		auto dstMesh = ApplySubdivAdaptive(srcMesh, maxLevel);
+		for (i=0;i<3;i++) {
+			dstMesh= ApplySubdivAdaptive(srcMesh, maxLevel);
+		}
+		return dstMesh;
+
 	}
 
 	//--------------------------------------------------------------------------
@@ -612,6 +618,18 @@ template <size_t DIMENSION> struct SubdivVec: std::array<float, DIMENSION> {
 
 using Pos = SubdivVec<3>;
 
+// Vector product
+Pos operator * (Pos u, Pos v) {
+	Pos r;
+	r[0] = u[1] * v[2] - u[2] * v[1];
+	r[1] = u[2] * v[0] - u[0] * v[2];
+	r[2] = u[0] * v[1] - u[1] * v[0];
+
+	return r;
+}
+
+
+
 
 template<size_t DIMENSION>
 struct SubdivBuffer: std::vector< SubdivVec<DIMENSION> > {
@@ -689,7 +707,8 @@ struct PatchGroup {
 
     void Tessellate(
 		PosVector & tessPoints,
-        TriVector & tessTris
+        TriVector & tessTris,
+		PosVector & tessNormals
 	) const;
 
     //  Const reference members:
@@ -907,7 +926,8 @@ PatchGroup::TessellateBaseFace(int face, PosVector & tessPoints,
 
 void PatchGroup::Tessellate(
 	PosVector & tessPos,
-	TriVector & tessTris) const {
+	TriVector & tessTris,
+	PosVector & tessNormals) const {
 
 	// This tessellation splits edges at their midpoints
 	// and generates 4 resulting triangles per input triangle.
@@ -967,6 +987,7 @@ void PatchGroup::Tessellate(
 	// Resize tessPos and tessTris
 	tessTris.clear();
 	tessPos.resize(offset + topology.GetNumEdges());
+	tessNormals.resize(offset + topology.GetNumEdges());
 
 	const auto& ptex = basePtexIndices;
     int numBaseVerts = (int) basePositions.size();
@@ -1010,7 +1031,9 @@ void PatchGroup::Tessellate(
 				assert(handle);
 
 				float pWeights[20];
-				patchTable->EvaluateBasis(*handle, st[0], st[1], pWeights);
+				float duWeights[20];
+				float dvWeights[20];
+				patchTable->EvaluateBasis(*handle, st[0], st[1], pWeights, duWeights, dvWeights);
 
 				//  Identify the patch cvs and combine with the evaluated weights --
 				//  remember to distinguish cvs in the base level:
@@ -1018,19 +1041,24 @@ void PatchGroup::Tessellate(
 
 				// Evaluate position
 				Pos pos{0.0f, 0.0f, 0.0f};
+				Pos du{0.0f, 0.0f, 0.0f};
+				Pos dv{0.0f, 0.0f, 0.0f};
 				for (int cv = 0; cv < cvIndices.size(); ++cv) {
 					int cvIndex = cvIndices[cv];
 					if (cvIndex < numBaseVerts) {
-						pos.AddWithWeight(basePositions[cvIndex],
-							pWeights[cv]);
+						pos.AddWithWeight(basePositions[cvIndex], pWeights[cv]);
+						du.AddWithWeight(basePositions[cvIndex], duWeights[cv]);
+						dv.AddWithWeight(basePositions[cvIndex], dvWeights[cv]);
 					} else {
-						pos.AddWithWeight(localPositions[cvIndex - numBaseVerts],
-							pWeights[cv]);
+						pos.AddWithWeight(localPositions[cvIndex - numBaseVerts], pWeights[cv]);
+						du.AddWithWeight(localPositions[cvIndex - numBaseVerts], duWeights[cv]);
+						dv.AddWithWeight(localPositions[cvIndex - numBaseVerts], dvWeights[cv]);
 					}
 				}
 
-				// Update output
+				// Update output (position and normal)
 				tessPos[vertex] = pos;
+				tessNormals[vertex] = du * dv;
 
 			} // ~points
 
@@ -1103,7 +1131,6 @@ static TopologyRefinerPtr createTopologyRefinerFromMesh(
 	vector<int> vertPerFace(desc.numFaces, 3);
 	desc.numVertsPerFace = &vertPerFace[0];
 	desc.vertIndicesPerFace = reinterpret_cast<const int *>(srcMesh->GetTriangles());
-	//desc.isLeftHanded = true;
 
 #if 0
 	// Look for mesh boundary edges
@@ -1239,6 +1266,7 @@ static ExtTriangleMesh *ApplySubdivAdaptive(
     int objVertCount = 0;
 
     PosVector tessAllPoints;
+    PosVector tessAllNormals;
     TriVector tessAllFaces;
 
     for (int i = 0; i < numPatchGroups; ++i) {
@@ -1271,7 +1299,7 @@ static ExtTriangleMesh *ApplySubdivAdaptive(
 		PosVector tessPoints;
 		TriVector tessFaces;
 
-		patchGroup.Tessellate(tessAllPoints, tessAllFaces);
+		patchGroup.Tessellate(tessAllPoints, tessAllFaces, tessAllNormals);
 
 		for (auto t: tessAllFaces) {
 			SDL_LOG("Tris: " << t[0] << " " << t[1] << " " << t[2]);
@@ -1307,7 +1335,7 @@ static ExtTriangleMesh *ApplySubdivAdaptive(
 	std::ofstream objfile; // TODO
 	objfile.open("test.obj");
 
-	// New vertices and triangles
+	// New vertices
 	size_t pointCount = tessAllPoints.size();
 	SDL_LOG("Subdiv - Adaptive - " << pointCount << " points");
 	Point *newVerts = TriangleMesh::AllocVerticesBuffer(pointCount);
@@ -1317,6 +1345,19 @@ static ExtTriangleMesh *ApplySubdivAdaptive(
 		vert->y = tessAllPoints[i][1];
 		vert->z = tessAllPoints[i][2];
 		objfile << "v " << vert->x << " " << vert->y << " " << vert->z << "\n";
+	}
+
+	// New normals
+	size_t normCount = tessAllNormals.size();
+	SDL_LOG("Subdiv - Adaptive - " << normCount << " normals");
+	Normal *newNormals = new Normal[pointCount];
+	for (size_t i = 0; i < normCount; ++i) {
+		Normal* norm = newNormals + i;
+		norm->x = tessAllNormals[i][0];
+		norm->y = tessAllNormals[i][1];
+		norm->z = tessAllNormals[i][2];
+		*norm = Normalize(*norm);
+		objfile << "vn " << norm->x << " " << norm->y << " " << norm->z << "\n";
 	}
 
 	// New triangles
@@ -1331,13 +1372,14 @@ static ExtTriangleMesh *ApplySubdivAdaptive(
 			assert(tri[vertex] >= 0);
 		}
 		// Debug
-		objfile << "f " << tri[0] + 1 << " " << tri[1] + 1 << " " << tri[2] + 1 << "\n";
+		int t1 = tri[0] + 1, t2 = tri[1] + 1, t3 = tri[2] + 1;
+		objfile << "f " << t1 << "//" << t1 << " " << t2 << "//" << t2 << " " << t3 << "//" << t3 << "\n";
 		// SDL_LOG("Triangle: " << tri[0] << " " << tri[1] << " " << tri[2]);
 	}
 
 	// Allocate the new mesh
 	ExtTriangleMesh *newMesh =  new ExtTriangleMesh(
-		pointCount, triCount, newVerts, newTris
+		pointCount, triCount, newVerts, newTris, newNormals
 	);
 
 	return newMesh;
