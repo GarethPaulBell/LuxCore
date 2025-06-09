@@ -106,7 +106,7 @@ public:
 	PropertyValue(const unsigned long long val);
 	PropertyValue(const std::string &val);
 	PropertyValue(const Blob &val);
-	~PropertyValue();
+	~PropertyValue() noexcept(false);
 
 	template<class T> T Get() const;
 

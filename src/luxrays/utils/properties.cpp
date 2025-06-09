@@ -164,7 +164,7 @@ PropertyValue::PropertyValue(const Blob &val) : dataType(BLOB_VAL) {
 	data.blobVal = new Blob(val);
 }
 
-PropertyValue::~PropertyValue() {
+PropertyValue::~PropertyValue() noexcept(false) {
 	switch (dataType) {
 		case NONE_VAL:
 		case BOOL_VAL:
