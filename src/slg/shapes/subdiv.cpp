@@ -55,6 +55,7 @@ using StencilTablePtr = std::unique_ptr<const Far::StencilTable>;
 using PatchTablePtr = std::unique_ptr<Far::PatchTable>;
 using PatchMapPtr = std::unique_ptr<Far::PatchMap>;
 using TopologyRefinerPtr = std::unique_ptr<Far::TopologyRefiner>;
+using PtexIndicesPtr = std::unique_ptr<Far::PtexIndices>;
 
 //////////////////////////
 //  Simple subdivision  //
@@ -565,6 +566,44 @@ struct Tri: std::array<int, 3> {
 typedef std::vector<Tri> TriVector;
 
 
+TopologyRefinerPtr createTopologyAdaptiveRefiner(
+		const PosVector& positions,
+		const TriVector& triangles,
+		const Far::PatchTableFactory::Options& patchOptions
+) {
+
+	// Be sure patch options were intialized with the desired max level
+	auto adaptiveOptions(patchOptions.GetRefineAdaptiveOptions());
+	assert(adaptiveOptions.useInfSharpPatch == patchOptions.useInfSharpPatch);
+
+	// Set topology refiner factory's type & options
+	Sdc::SchemeType scheme_type = Sdc::SCHEME_LOOP;
+
+	Sdc::Options sdc_options;
+	sdc_options.SetVtxBoundaryInterpolation(Sdc::Options::VTX_BOUNDARY_EDGE_AND_CORNER);
+
+	// Populate a topology descriptor with our raw data
+	Far::TopologyDescriptor desc;
+	desc.numVertices = positions.size(); // srcMesh->GetTotalVertexCount();
+	desc.numFaces = triangles.size(); // srcMesh->GetTotalTriangleCount();
+	std::vector<int> vertPerFace(desc.numFaces, 3);
+	desc.numVertsPerFace = &vertPerFace[0];
+	desc.vertIndicesPerFace = reinterpret_cast<const int *>(&triangles[0]);
+
+	// Create refiner
+	using RefinerFactory = Far::TopologyRefinerFactory<Far::TopologyDescriptor>;
+    TopologyRefinerPtr refiner(
+		RefinerFactory::Create(
+			desc,
+			RefinerFactory::Options(scheme_type, sdc_options)
+		)
+	);
+	assert(refiner);
+
+
+	return refiner;
+
+}
 void Tessellate (
 	const TopologyRefinerPtr& refiner,
 	const PatchTablePtr& patchTable,
@@ -863,46 +902,7 @@ void Tessellate (
 
 
 
-static TopologyRefinerPtr createTopologyAdaptiveRefiner(
-		const PosVector& positions,
-		const TriVector& triangles,
-		const Far::PatchTableFactory::Options& patchOptions
-) {
-
-	// Be sure patch options were intialized with the desired max level
-	auto adaptiveOptions(patchOptions.GetRefineAdaptiveOptions());
-	assert(adaptiveOptions.useInfSharpPatch == patchOptions.useInfSharpPatch);
-
-	// Set topology refiner factory's type & options
-	Sdc::SchemeType scheme_type = Sdc::SCHEME_LOOP;
-
-	Sdc::Options sdc_options;
-	sdc_options.SetVtxBoundaryInterpolation(Sdc::Options::VTX_BOUNDARY_EDGE_AND_CORNER);
-
-	// Populate a topology descriptor with our raw data
-	Far::TopologyDescriptor desc;
-	desc.numVertices = positions.size(); // srcMesh->GetTotalVertexCount();
-	desc.numFaces = triangles.size(); // srcMesh->GetTotalTriangleCount();
-	std::vector<int> vertPerFace(desc.numFaces, 3);
-	desc.numVertsPerFace = &vertPerFace[0];
-	desc.vertIndicesPerFace = reinterpret_cast<const int *>(&triangles[0]);
-
-	// Create refiner
-	using RefinerFactory = Far::TopologyRefinerFactory<Far::TopologyDescriptor>;
-    TopologyRefinerPtr refiner(
-		RefinerFactory::Create(
-			desc,
-			RefinerFactory::Options(scheme_type, sdc_options)
-		)
-	);
-	assert(refiner);
-
-
-	return refiner;
-
-}
-
-
+// TODO Merge with ApplySubdiv
 void AdaptiveSubdivImpl(
 	const PosVector& basePositions,
 	const TriVector& baseTriangles,
@@ -981,8 +981,6 @@ ExtTriangleMesh *ApplySubdiv(
 	ExtTriangleMesh *srcMesh,
 	const u_int maxLevel
 ) {
-
-
 	// Initialize internal structures
 	TriVector baseTriangles(srcMesh->GetTotalTriangleCount());
 	Triangle* luxTriangles = srcMesh->GetTriangles();
