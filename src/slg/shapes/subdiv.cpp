@@ -721,9 +721,8 @@ struct Surface {
 void Tessellate (
 	const Surface& surface,
 	const size_t N,
-	PosVector & tessPos,
-	TriVector & tessTris,
-	PosVector & tessNormals
+	std::vector<LocalCoords>& localCoords,
+	TriVector & tessTris
 	) {
 	// This is triforce tessellation.
 	// This tessellation splits edges in N segments,
@@ -773,10 +772,6 @@ void Tessellate (
 	// Resize tessPos and tessTris
 	tessTris.clear();
 	tessTris.resize(FACE_COUNT * N * N);
-	tessPos.clear();
-	tessNormals.clear();
-	tessPos.resize(tessPosCount);
-	tessNormals.resize(tessPosCount);
 
 	// Get vertex local coordinates in given face
 	auto getVertexLocalCoords = [N, &topology](int vertex, int face) {
@@ -792,7 +787,6 @@ void Tessellate (
 		throw std::runtime_error("Error in getVertexLocalCoords");
 	};
 
-	std::vector<LocalCoords> localCoords;  // We temporarily store new positions as (face, i, j)
 
 	// Step #1 - Initialize with initial (coarse) vertices
 	for (int vertex = 0; vertex < topology.GetNumVertices(); ++vertex) {
@@ -910,8 +904,28 @@ void Tessellate (
 
 	}  // ~for face
 
+}  // ~Tessellate
 
+
+void Evaluate(
+	const Surface& surface,
+	const size_t N,  // TODO Rename more explicitly
+	const std::vector<LocalCoords>& localCoords,
+	PosVector& tessPos,
+	PosVector& tessNormals
+) {
 	SDL_LOG("Subdiv - Adaptive - Evaluate");
+
+	// Some constants
+	const auto& topology = surface.refiner->GetLevel(0);
+
+	// Offset  TODO
+	int offset = topology.GetNumVertices();
+	int tessPosCount = offset + topology.GetNumEdges();
+	tessPos.clear();
+	tessNormals.clear();
+	tessPos.resize(tessPosCount);
+	tessNormals.resize(tessPosCount);
 
 	tessPos.resize(localCoords.size());
 	tessNormals.resize(localCoords.size());
@@ -991,7 +1005,12 @@ void AdaptiveSubdivImpl(
 	Surface surface(basePositions, baseTriangles, maxLevel);
 
 	// Tessellate
-	Tessellate(surface, 2 << maxLevel, tessPositions, tessTriangles, tessNormals);
+	std::vector<LocalCoords> localCoords;  // We temporarily store new positions as (face, i, j)
+	size_t tessellationRate = 1 << maxLevel;
+	Tessellate(surface, tessellationRate, localCoords, tessTriangles);
+
+	// Evaluate
+	Evaluate(surface, tessellationRate, localCoords, tessPositions, tessNormals);
 
 }
 
