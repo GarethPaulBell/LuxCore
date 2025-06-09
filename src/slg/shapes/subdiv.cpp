@@ -642,6 +642,82 @@ TopologyRefinerPtr createTopologyAdaptiveRefiner(
 	return refiner;
 
 }
+
+
+// Subdivision limit surface
+struct Surface {
+	TopologyRefinerPtr refiner;
+	PtexIndicesPtr ptexIndices;
+	PatchTablePtr patchTable;
+	PatchMapPtr patchMap;
+	const PosVector& basePositions;
+	const TriVector& baseTriangles;
+	PosVector localPositions;
+	int maxLevel;
+
+	Surface(
+		const PosVector& p_basePositions,
+		const TriVector& p_baseTriangles,
+		int p_maxLevel
+	):
+		basePositions(p_basePositions),
+		baseTriangles(p_baseTriangles),
+		maxLevel(p_maxLevel)
+	{
+
+		// Initialize patch table options
+		Far::PatchTableFactory::Options patchOptions(maxLevel);
+		//patchOptions.useInfSharpPatch = true;
+		patchOptions.generateVaryingTables = false;
+		patchOptions.shareEndCapPatchPoints = true;
+		patchOptions.endCapType =
+			Far::PatchTableFactory::Options::ENDCAP_GREGORY_BASIS;
+
+		// Construct refiner and associated ptex
+		TopologyRefinerPtr refiner(
+			createTopologyAdaptiveRefiner(basePositions, baseTriangles, patchOptions)
+		);
+		ptexIndices.reset(new Far::PtexIndices(*refiner));
+
+		// Apply adaptive refinement and construct the associated PatchTable to
+		// evaluate the limit surface:
+		refiner->RefineAdaptive(patchOptions.GetRefineAdaptiveOptions());
+
+		// Construct the associated PatchTable to evaluate the limit surface:
+		patchTable.reset(Far::PatchTableFactory::Create(*refiner, patchOptions));
+
+		// Construct patch map
+		PatchMapPtr patchMap(new Far::PatchMap(*patchTable));
+
+		SDL_LOG("Subdiv - Adaptive - Starting");
+
+		// Set localPositions
+		int nBaseVertices    = refiner->GetLevel(0).GetNumVertices();
+		int nRefinedVertices = refiner->GetNumVerticesTotal() - nBaseVertices;
+		int nLocalPoints     = patchTable->GetNumLocalPoints();
+
+		localPositions.resize(nRefinedVertices + nLocalPoints);
+
+		if (nRefinedVertices) {
+			Far::PrimvarRefiner primvarRefiner(*refiner);
+
+			Pos const * src = &basePositions[0];
+			Pos * dst = &localPositions[0];
+			for (int level = 1; level < refiner->GetNumLevels(); ++level) {
+				primvarRefiner.Interpolate(level, src, dst);
+				src = dst;
+				dst += refiner->GetLevel(level).GetNumVertices();
+			}
+		}
+		if (nLocalPoints) {
+			patchTable->GetLocalPointStencilTable()->UpdateValues(
+					&basePositions[0], nBaseVertices, &localPositions[0],
+					&localPositions[nRefinedVertices]);
+		}
+	}
+};
+
+
 void Tessellate (
 	const TopologyRefinerPtr& refiner,
 	const PatchTablePtr& patchTable,
@@ -972,6 +1048,8 @@ void AdaptiveSubdivImpl(
                 &localPositions[nRefinedVertices]);
     }
 
+	// Create limit surface (subdivided) from base geometry
+	Surface surface(basePositions, baseTriangles, maxLevel);
 
 	// Tessellate
 	Tessellate(refiner, patchTable, basePositions, localPositions, 2 << maxLevel, tessPositions, tessTriangles, tessNormals);
