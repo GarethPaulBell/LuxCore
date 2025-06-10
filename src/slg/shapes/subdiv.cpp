@@ -776,13 +776,29 @@ void Tessellate (
 		throw std::runtime_error("FACE_COUNT * N * N > numeric limit (" + ToString(std::numeric_limits<int>::max()) + ")");
 	}
 
-	// Offset
-	int offset = topology.GetNumVertices();
-	int tessPosCount = offset + topology.GetNumEdges();
+	// Useful variables and constants
+	int offset;
+	const int tessPosCount = topology.GetNumVertices() + topology.GetNumEdges();  // TODO
 
-	// Resize tessPos and tessTris
-	tessTris.clear();
+	// Number of coarse vertices
+	const int numCoarseVertices = topology.GetNumVertices();
+
+	// Number of interior points in an edge
+	const int numEdgeInteriorPoints = N - 1;
+
+	// Number of interior points in a triangle
+	const int numTriangleInteriorPoints = (N - 1) * (N - 2) / 2;
+
+	// Number of coords to be computed
+	const int numCoords =
+		topology.GetNumVertices()
+		+ numEdgeInteriorPoints * topology.GetNumEdges()
+		+ numTriangleInteriorPoints * topology.GetNumFaces();
+	SDL_LOG("Number of coords: " << numCoords);
+
+	// Resize tessTris and tessCoords
 	tessTris.resize(FACE_COUNT * N * N);
+	tessCoords.resize(numCoords);
 
 	// Get vertex local coordinates in given face
 	auto getVertexLocalCoords = [N, &topology](int vertex, int face) {
@@ -800,13 +816,13 @@ void Tessellate (
 
 
 	// Step #1 - Initialize with initial (coarse) vertices
-	for (int vertex = 0; vertex < topology.GetNumVertices(); ++vertex) {
+	for (int vertex = 0; vertex < numCoarseVertices; ++vertex) {
 		int face = topology.GetVertexFaces(vertex)[0];  // Choose first face (arbitrary)
 		auto faceVertices = topology.GetFaceVertices(face);
 		LocalCoords coords = getVertexLocalCoords(vertex, face);
-		tessCoords.push_back(coords);
+		tessCoords[vertex] = coords;
 	}
-	int edge_offset = tessCoords.size();
+	offset = numCoarseVertices;
 
 	// Step #2 - Add edge vertices
 	for (int edge = 0; edge < topology.GetNumEdges(); ++edge) {
@@ -823,9 +839,10 @@ void Tessellate (
 		for (int i = 1; i < N; ++i) {  // Only edge interior vertices, not extremities
 			// TODO Refactor constructor
 			auto coords = LocalCoords::interpolate(c0, c1, i, N);
-			tessCoords.push_back(coords);
+			tessCoords[offset + edge * numEdgeInteriorPoints + i - 1 ] = coords;
 		}
 	}
+	offset = numCoarseVertices + numEdgeInteriorPoints * topology.GetNumEdges();
 
 	// Step #3 - Add interior points
 	#pragma omp parallel for
@@ -877,14 +894,17 @@ void Tessellate (
 						pos = N - pos;
 						std::swap(v0, v1);
 					}
-					vertex = edge_offset + edge * (N - 1) + (pos - 1);
-				} else
-				#pragma omp critical (LocalCoords)
-				{  // Interior point
+					vertex = numCoarseVertices + edge * numEdgeInteriorPoints + (pos - 1);
+
+				} else { // Interior point
+					int idx = offset
+						+ numTriangleInteriorPoints * f
+						+ numTriangleInteriorPoints - (N - j) * (N - j - 1) / 2
+						+ i - 1;
 					// Create position
-					tessCoords.emplace_back(f, i, j);
+					tessCoords[idx] = LocalCoords(f, i, j);
 					// Record point in map
-					vertex = tessCoords.size() - 1;
+					vertex = idx;
 				}
 
 				pointMap.push_back(vertex);
