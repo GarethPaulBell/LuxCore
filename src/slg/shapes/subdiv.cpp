@@ -664,6 +664,7 @@ struct Surface {
 		baseTriangles(p_baseTriangles),
 		maxLevel(p_maxLevel)
 	{
+		SDL_LOG("Subdiv - Adaptive - Computing limit surface");
 
 		// Initialize patch table options
 		Far::PatchTableFactory::Options patchOptions(maxLevel);
@@ -689,7 +690,6 @@ struct Surface {
 		// Construct patch map
 		patchMap.reset(new Far::PatchMap(*patchTable));
 
-		SDL_LOG("Subdiv - Adaptive - Starting");
 
 		// Set localPositions
 		int nBaseVertices    = refiner->GetLevel(0).GetNumVertices();
@@ -914,7 +914,7 @@ void Evaluate(
 	PosVector& tessPos,
 	PosVector& tessNormals
 ) {
-	SDL_LOG("Subdiv - Adaptive - Evaluate");
+	SDL_LOG("Subdiv - Adaptive - Evaluating");
 
 	const auto& topology = surface.refiner->GetLevel(0);
 
@@ -979,9 +979,12 @@ ExtTriangleMesh *ApplySubdiv(
 	ExtTriangleMesh *srcMesh,
 	const u_int maxLevel
 ) {
+	SDL_LOG("Subdiv - Adaptive - Starting");
+
 	// Initialize internal structures
 	TriVector baseTriangles(srcMesh->GetTotalTriangleCount());
 	Triangle* luxTriangles = srcMesh->GetTriangles();
+	#pragma omp parallel for
 	for (size_t t = 0; t < srcMesh->GetTotalTriangleCount(); ++t) {
 		for (size_t v = 0; v < 3; ++v) {
 			baseTriangles[t][v] = luxTriangles[t].v[v];
@@ -992,6 +995,7 @@ ExtTriangleMesh *ApplySubdiv(
 	int numVertices = srcMesh->GetTotalVertexCount();
 	basePositions.resize(numVertices);
 	auto meshVertices = srcMesh->GetVertices();
+	#pragma omp parallel for
 	for (int i = 0; i < numVertices; ++i) {
 		basePositions[i][0] = meshVertices[i].x;
 		basePositions[i][1] = meshVertices[i].y;
@@ -1023,6 +1027,7 @@ ExtTriangleMesh *ApplySubdiv(
 	size_t pointCount = tessPositions.size();
 	SDL_LOG("Subdiv - Adaptive - " << pointCount << " points");
 	Point *newVerts = TriangleMesh::AllocVerticesBuffer(pointCount);
+	#pragma omp parallel for
 	for (size_t i = 0; i < pointCount; ++i) {
 		Point* vert = newVerts + i;
 		vert->x = tessPositions[i][0];
@@ -1034,6 +1039,7 @@ ExtTriangleMesh *ApplySubdiv(
 	size_t normCount = tessNormals.size();
 	SDL_LOG("Subdiv - Adaptive - " << normCount << " normals");
 	Normal *newNormals = new Normal[pointCount];
+	#pragma omp parallel for
 	for (size_t i = 0; i < normCount; ++i) {
 		Normal* norm = newNormals + i;
 		norm->x = tessNormals[i][0];
@@ -1046,6 +1052,7 @@ ExtTriangleMesh *ApplySubdiv(
 	size_t triCount = tessTriangles.size();
 	SDL_LOG("Subdiv - Adaptive - " << triCount << " triangles");
 	Triangle *newTris = TriangleMesh::AllocTrianglesBuffer(triCount);
+	#pragma omp parallel for
 	for (size_t face = 0; face < triCount; ++face) {
 		auto tri = tessTriangles[face];
 		for (u_int vertex = 0; vertex < 3; ++vertex) {
