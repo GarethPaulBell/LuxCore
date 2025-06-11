@@ -579,26 +579,41 @@ typedef std::vector<Tri> TriVector;
 
 // Storage of local coordinates (coordinates in a given face) during
 // tessellation.
-// We temporarily store new positions as (face, i, j), with
-// i <= N and j <= N (N being tessellation rate)
 
 struct LocalCoords {
-	int face;
-	int i;
-	int j;
-	LocalCoords(int p_face=0, int p_i=0, int p_j=0):
-		face(p_face), i(p_i), j(p_j)
+	int face = -1;
+	float x = 0.f;
+	float y = 0.f;
+
+	LocalCoords() {}
+
+	LocalCoords(int p_face, float p_x, float p_y):
+		face(p_face),
+		x(p_x),
+		y(p_y)
 	{ }
 
-	static LocalCoords interpolate(LocalCoords p0, LocalCoords p1, u_int weight, u_int total) {
+	LocalCoords(int p_face, int p_i, int p_j, int N):
+		face(p_face),
+		x(float(p_i) / float(N)),
+		y(float(p_j) / float(N))
+	{ }
+
+	// Avoid unexpected use of LocalCoords(int, float, float)
+	// with implicit conversion
+	LocalCoords(int, int, int) = delete;
+
+	// Interpolating constructor
+	LocalCoords(LocalCoords p0, LocalCoords p1, u_int weight, u_int total) {
 		assert(p0.face == p1.face);
 		assert(weight <= total);
 
-		LocalCoords res;
-		res.face = p0.face;
-		res.i = (weight * p1.i + (total - weight) * p0.i) / total;
-		res.j = (weight * p1.j + (total - weight) * p0.j) / total;
-		return res;
+		face = p0.face;
+
+		float weight_f = float(weight);
+		float total_f = float(total);
+		x = (weight_f * p1.x + (total_f - weight_f) * p0.x) / total_f;
+		y = (weight_f * p1.y + (total_f - weight_f) * p0.y) / total_f;
 	}
 };
 
@@ -800,15 +815,16 @@ void Tessellate (
 	tessTris.resize(FACE_COUNT * N * N);
 	tessCoords.resize(numCoords);
 
+	// TODO Simplify
 	// Get vertex local coordinates in given face
-	auto getVertexLocalCoords = [N, &topology](int vertex, int face) {
+	auto getVertexLocalCoords = [&topology](int vertex, int face) {
 		auto faceVertices = topology.GetFaceVertices(face);
 		if (vertex == faceVertices[0]) {
-			return LocalCoords(face, 0, 0);
+			return LocalCoords(face, 0.f, 0.f);
 		} else if (vertex == faceVertices[1]) {
-			return LocalCoords(face, N, 0);
+			return LocalCoords(face, 1.f, 0.f);
 		} else if (vertex == faceVertices[2]) {
-			return LocalCoords(face, 0, N);
+			return LocalCoords(face, 0.f, 1.f);
 		}
 
 		throw std::runtime_error("Error in getVertexLocalCoords");
@@ -837,8 +853,7 @@ void Tessellate (
 		LocalCoords c1 = getVertexLocalCoords(v1, face);
 
 		for (int i = 1; i < N; ++i) {  // Only edge interior vertices, not extremities
-			// TODO Refactor constructor
-			auto coords = LocalCoords::interpolate(c0, c1, i, N);
+			LocalCoords coords(c0, c1, i, N);  // Interpolate from c0 and c1
 			tessCoords[offset + edge * numEdgeInteriorPoints + i - 1 ] = coords;
 		}
 	}
@@ -860,7 +875,6 @@ void Tessellate (
 		// Some of them will be shared with other faces, we'll have to deal
 		// with that.
 
-		const int pointCount = (N + 1) * (N + 2) / 2;
 		std::vector<int> pointMap;  // Map points between local numeration and global one
 
 		for (int j = 0; j <= N ; ++j) {
@@ -902,7 +916,7 @@ void Tessellate (
 						+ numTriangleInteriorPoints - (N - j) * (N - j - 1) / 2
 						+ i - 1;
 					// Create position
-					tessCoords[idx] = LocalCoords(f, i, j);
+					tessCoords[idx] = LocalCoords(f, i, j, N);
 					// Record point in map
 					vertex = idx;
 				}
@@ -940,7 +954,6 @@ void Tessellate (
 
 void Evaluate(
 	const Surface& surface,
-	const size_t N,  // TODO Rename more explicitly
 	const CoordVector& tessCoords,
 	PosVector& tessPos,
 	PosVector& tessNormals
@@ -961,21 +974,20 @@ void Evaluate(
 		auto coords = tessCoords[vertex];
 
 		// Translate local coords in global ones
-		std::array<float, 2> st;
-		st[0] = float(coords.i) / float(N);
-		st[1] = float(coords.j) / float(N);
 		int ptexFace = surface.ptexIndices->GetFaceId(coords.face);
 
 		//  Locate the patch corresponding to the face ptex idx and (s,t)
 		//  and evaluate:
 		Far::PatchTable::PatchHandle const * handle =
-			surface.patchMap->FindPatch(ptexFace, st[0], st[1]);
+			surface.patchMap->FindPatch(ptexFace, coords.x, coords.y);
 		assert(handle);
 
 		float pWeights[20];
 		float duWeights[20];
 		float dvWeights[20];
-		surface.patchTable->EvaluateBasis(*handle, st[0], st[1], pWeights, duWeights, dvWeights);
+		surface.patchTable->EvaluateBasis(
+			*handle, coords.x, coords.y, pWeights, duWeights, dvWeights
+		);
 
 		//  Identify the patch cvs and combine with the evaluated weights --
 		//  remember to distinguish cvs in the base level:
@@ -1047,8 +1059,9 @@ ExtTriangleMesh *ApplySubdiv(
 	Tessellate(surface, tessellationRate, tessCoords, tessTriangles);
 
 	// Evaluate
-	Evaluate(surface, tessellationRate, tessCoords, tessPositions, tessNormals);
+	Evaluate(surface, tessCoords, tessPositions, tessNormals);
 
+	// TODO
 	basePositions = tessPositions;
 	baseTriangles = tessTriangles;
 
