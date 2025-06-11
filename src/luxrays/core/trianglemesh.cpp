@@ -63,6 +63,8 @@ TriangleMesh::TriangleMesh(const u_int meshVertCount,
 void TriangleMesh::Preprocess() {
 	// Compute mesh area
 	area = 0.f;
+
+	#pragma omp parallel for reduction(+:area)
 	for (u_int i = 0; i < triCount; ++i)
 		area += tris[i].Area(vertices);
 

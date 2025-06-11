@@ -1096,6 +1096,8 @@ ExtTriangleMesh *ApplySubdiv(
 		}
 	}
 
+	SDL_LOG("Subdivision (enhanced) - Allocating");
+
 	// Allocate the new mesh
 	ExtTriangleMesh *newMesh =  new ExtTriangleMesh(
 		pointCount, triCount, newVerts, newTris, newNormals

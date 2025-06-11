@@ -19,6 +19,7 @@
 #include <iostream>
 #include <fstream>
 #include <cstring>
+#include <execution>
 
 #include <boost/format.hpp>
 #include <filesystem>
@@ -129,28 +130,28 @@ ExtTriangleMesh::ExtTriangleMesh(const u_int meshVertCount, const u_int meshTriC
 	bevelBoundingCylinders = nullptr;
 	bevelBVHArrayNodes = nullptr;
 
-	fill(uvs.begin(), uvs.end(), nullptr);
-	fill(cols.begin(), cols.end(), nullptr);
-	fill(alphas.begin(), alphas.end(), nullptr);
-	fill(vertAOV.begin(), vertAOV.end(), nullptr);
-	fill(triAOV.begin(), triAOV.end(), nullptr);
+	fill(std::execution::par, uvs.begin(), uvs.end(), nullptr);
+	fill(std::execution::par, cols.begin(), cols.end(), nullptr);
+	fill(std::execution::par, alphas.begin(), alphas.end(), nullptr);
+	fill(std::execution::par, vertAOV.begin(), vertAOV.end(), nullptr);
+	fill(std::execution::par, triAOV.begin(), triAOV.end(), nullptr);
 
 	array<UV *, EXTMESH_MAX_DATA_COUNT> meshUVs;
-	fill(meshUVs.begin(), meshUVs.end(), nullptr);
+	fill(std::execution::par, meshUVs.begin(), meshUVs.end(), nullptr);
 	if (mUVs)
 		meshUVs[0] = mUVs;
 
 	array<Spectrum *, EXTMESH_MAX_DATA_COUNT> meshCols;
-	fill(meshCols.begin(), meshCols.end(), nullptr);
+	fill(std::execution::par, meshCols.begin(), meshCols.end(), nullptr);
 	if (mCols)
 		meshCols[0] = mCols;
 
 	array<float *, EXTMESH_MAX_DATA_COUNT> meshAlphas;
-	fill(meshAlphas.begin(), meshAlphas.end(), nullptr);
+	fill(std::execution::par, meshAlphas.begin(), meshAlphas.end(), nullptr);
 	if (mAlphas)
 		meshAlphas[0] = mAlphas;
 
-	Init(meshNormals, &meshUVs, &meshCols, &meshAlphas);	
+	Init(meshNormals, &meshUVs, &meshCols, &meshAlphas);
 }
 
 ExtTriangleMesh::ExtTriangleMesh(const u_int meshVertCount, const u_int meshTriCount,
@@ -165,11 +166,11 @@ ExtTriangleMesh::ExtTriangleMesh(const u_int meshVertCount, const u_int meshTriC
 	bevelBoundingCylinders = nullptr;
 	bevelBVHArrayNodes = nullptr;
 
-	fill(uvs.begin(), uvs.end(), nullptr);
-	fill(cols.begin(), cols.end(), nullptr);
-	fill(alphas.begin(), alphas.end(), nullptr);
-	fill(vertAOV.begin(), vertAOV.end(), nullptr);
-	fill(triAOV.begin(), triAOV.end(), nullptr);
+	fill(std::execution::par, uvs.begin(), uvs.end(), nullptr);
+	fill(std::execution::par, cols.begin(), cols.end(), nullptr);
+	fill(std::execution::par, alphas.begin(), alphas.end(), nullptr);
+	fill(std::execution::par, vertAOV.begin(), vertAOV.end(), nullptr);
+	fill(std::execution::par, triAOV.begin(), triAOV.end(), nullptr);
 
 	Init(meshNormals, meshUVs, meshCols, meshAlphas);
 }
@@ -206,9 +207,9 @@ void ExtTriangleMesh::Init(Normal *meshNormals,
 
 void ExtTriangleMesh::Preprocess() {
 	// Compute all triangle normals
+	#pragma omp parallel for
 	for (u_int i = 0; i < triCount; ++i)
 		triNormals[i] = tris[i].GetGeometryNormal(vertices);
-	
 	PreprocessBevel();
 }
 
