@@ -1159,7 +1159,8 @@ SubdivShape::SubdivShape(
 		}
 	} else {
 		// Nothing to do, just make a copy
-		srcMesh = srcMesh->Copy();
+		SDL_LOG("Subdivision: level=0 - Skipping");
+		mesh = srcMesh->Copy();
 	}
 
 	if (maxLevel > 0) {
@@ -1240,11 +1241,6 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(
 	// OSD topology is indexed by int whereas Lux's one is indexed by uint...
 	assert(srcMesh->GetTotalVertexCount() <= std::numeric_limits<int>::max());
 	assert(srcMesh->GetTotalTriangleCount() <= std::numeric_limits<int>::max());
-
-	if (maxLevel <= 0) {
-		SDL_LOG("Subdivision: level <= 0 - Skipping");
-		return srcMesh;
-	}
 
 	std::string upper_mode = mode;
 	std::transform(
