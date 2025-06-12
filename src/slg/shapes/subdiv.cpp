@@ -511,9 +511,9 @@ template <size_t DIMENSION> struct SubdivVec: std::array<float, DIMENSION> {
 		}
 	}
 
-	void AddWithWeight(const SubdivVec<DIMENSION>& src, float weight) {
-		for (size_t i = 0; i < DIMENSION; ++i) {
-			(*this)[i] += src[i] * weight;
+	inline void AddWithWeight(const SubdivVec<DIMENSION>& src, const float& weight) {
+		for (auto i = this->begin(), j = src.begin(); i != this->end() ; ++i, ++j) {
+			*i += *j * weight;
 		}
 	}
 
