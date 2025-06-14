@@ -902,6 +902,8 @@ void Evaluate(
 	SDL_LOG("Subdivision (enhanced) - Evaluating");
 
 	const auto& topology = surface.refiner->GetLevel(0);
+	const auto& patchTable = *surface.patchTable;
+	const auto& ptexIndices = *surface.ptexIndices;
 
     int numBaseVerts = surface.numBasePositions;
 
@@ -923,14 +925,14 @@ void Evaluate(
 		float pWeights[20];
 		float duWeights[20];
 		float dvWeights[20];
-		surface.patchTable->EvaluateBasis(
+		patchTable.EvaluateBasis(
 			*handle, coords.x, coords.y,
 			pWeights, duWeights, dvWeights
 		);
 
 		//  Identify the patch cvs and combine with the evaluated weights --
 		//  remember to distinguish cvs in the base level:
-		Far::ConstIndexArray cvIndices = surface.patchTable->GetPatchVertices(*handle);
+		Far::ConstIndexArray cvIndices = patchTable.GetPatchVertices(*handle);
 
 		// Evaluate position and derivatives
 		Point& pos = tessPoints[vertex];
