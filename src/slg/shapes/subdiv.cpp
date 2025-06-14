@@ -527,6 +527,7 @@ namespace enhanced {
 
 //};
 
+// TODO Extend Point rather
 struct Vec3: Point {
 
 	// Minimal required interface
@@ -545,7 +546,7 @@ struct Vec3: Point {
 		x = y = z = 0.f;
 	}
 
-	inline void AddWithWeight(const Vec3& src, const float weight) {
+	inline void AddWithWeight(const Point& src, const float weight) {
 		x += src.x * weight;
 		y += src.y * weight;
 		z += src.z * weight;
@@ -653,7 +654,7 @@ struct LocalCoords {
 typedef std::vector<LocalCoords> CoordVector;
 
 TopologyRefinerPtr createTopologyAdaptiveRefiner(
-		const PosVector& positions,
+		//const PosVector& positions,  // TODO
 		//const Triangle * triangles,  // TODO
 		const ExtTriangleMesh * srcMesh,
 		const Far::PatchTableFactory::Options& patchOptions
@@ -671,7 +672,7 @@ TopologyRefinerPtr createTopologyAdaptiveRefiner(
 
 	// Populate a topology descriptor with our raw data
 	Far::TopologyDescriptor desc;
-	desc.numVertices = positions.size(); // srcMesh->GetTotalVertexCount();
+	desc.numVertices = srcMesh->GetTotalVertexCount();
 	desc.numFaces = srcMesh->GetTotalTriangleCount();
 	std::vector<int> vertPerFace(desc.numFaces, 3);
 	desc.numVertsPerFace = &vertPerFace[0];
@@ -699,18 +700,20 @@ struct Surface {
 	PtexIndicesPtr ptexIndices;
 	PatchTablePtr patchTable;
 	PatchMapPtr patchMap;
-	const PosVector& basePositions;  // TODO
-	//const Triangle* baseTriangles;
+	const Point* basePositions;  // TODO
+	const int numBasePositions;
+	//const Triangle* baseTriangles; // TODO
 	PosVector localPositions;
 	int maxLevel;
 
 	Surface(
-		const PosVector& p_basePositions,
+		//const PosVector& p_basePositions,
 		//const Triangle* p_baseTriangles,
 		const ExtTriangleMesh * p_srcMesh,
 		int p_maxLevel
 	):
-		basePositions(p_basePositions),
+		basePositions(p_srcMesh->GetVertices()),
+		numBasePositions(p_srcMesh->GetTotalVertexCount()),
 		//baseTriangles(p_baseTriangles),
 		maxLevel(p_maxLevel)
 	{
@@ -730,7 +733,8 @@ struct Surface {
 		// Construct refiner
 		refiner = std::move(
 			createTopologyAdaptiveRefiner(
-				basePositions,
+				// TODO
+				//basePositions,
 				//baseTriangles,
 				p_srcMesh,
 				patchTableOptions
@@ -760,7 +764,7 @@ struct Surface {
 		if (nRefinedVertices) {
 			Far::PrimvarRefiner primvarRefiner(*refiner);
 
-			Vec3 const * src = &basePositions[0];
+			Vec3 const * src = static_cast<Vec3 const *>(basePositions);
 			Vec3 * dst = &localPositions[0];
 			for (int level = 1; level < refiner->GetNumLevels(); ++level) {
 				primvarRefiner.Interpolate(level, src, dst);
@@ -770,7 +774,7 @@ struct Surface {
 		}
 		if (nLocalPoints) {
 			patchTable->GetLocalPointStencilTable()->UpdateValues(
-				&basePositions[0],
+				basePositions,
 				nBaseVertices,
 				&localPositions[0],
 				&localPositions[nRefinedVertices]
@@ -1033,7 +1037,7 @@ void Evaluate(
 	//tessPos.resize(tessCoords.size()); TODO
 	//tessNormals.resize(tessCoords.size()); TODO
 
-    int numBaseVerts = (int) surface.basePositions.size();
+    int numBaseVerts = surface.numBasePositions;
 
 	// Evaluate positions and derivatives
 	#pragma omp parallel for
@@ -1117,6 +1121,7 @@ ExtTriangleMesh *ApplySubdiv(
 		//}
 	//}
 
+	// TODO
 	PosVector basePositions;
 	int numVertices = srcMesh->GetTotalVertexCount();
 	basePositions.resize(numVertices);
@@ -1129,7 +1134,7 @@ ExtTriangleMesh *ApplySubdiv(
 	}
 
 	// Create limit surface (subdivided) from base geometry
-	Surface surface(basePositions, srcMesh, maxLevel);
+	Surface surface(srcMesh, maxLevel);
 
 	// Compute dimensions
 	size_t tessellationRate = 1 << maxLevel;
