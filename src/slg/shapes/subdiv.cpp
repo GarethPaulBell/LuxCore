@@ -601,12 +601,13 @@ using PosVector = std::vector<Vec3>;
 //using PosVector = std::vector<Vec3>;
 
 
-struct Tri: std::array<int, 3> {
-	Tri() { }
-	Tri(int a, int b, int c) { (*this)[0] = a, (*this)[1] = b, (*this)[2] = c; }
+// TODO
+//struct Tri: std::array<int, 3> {
+	//Tri() { }
+	//Tri(int a, int b, int c) { (*this)[0] = a, (*this)[1] = b, (*this)[2] = c; }
 
-};
-typedef std::vector<Tri> TriVector;
+//};
+typedef std::vector<Triangle> TriVector;
 
 
 // Storage of local coordinates (coordinates in a given face) during
@@ -653,7 +654,8 @@ typedef std::vector<LocalCoords> CoordVector;
 
 TopologyRefinerPtr createTopologyAdaptiveRefiner(
 		const PosVector& positions,
-		const TriVector& triangles,
+		const Triangle * triangles,  // TODO
+		const ExtTriangleMesh * srcMesh,
 		const Far::PatchTableFactory::Options& patchOptions
 ) {
 
@@ -670,10 +672,10 @@ TopologyRefinerPtr createTopologyAdaptiveRefiner(
 	// Populate a topology descriptor with our raw data
 	Far::TopologyDescriptor desc;
 	desc.numVertices = positions.size(); // srcMesh->GetTotalVertexCount();
-	desc.numFaces = triangles.size(); // srcMesh->GetTotalTriangleCount();
+	desc.numFaces = srcMesh->GetTotalTriangleCount();
 	std::vector<int> vertPerFace(desc.numFaces, 3);
 	desc.numVertsPerFace = &vertPerFace[0];
-	desc.vertIndicesPerFace = reinterpret_cast<const int *>(&triangles[0]);
+	desc.vertIndicesPerFace = reinterpret_cast<const int *>(triangles);
 
 	// Create refiner
 	using RefinerFactory = Far::TopologyRefinerFactory<Far::TopologyDescriptor>;
@@ -697,14 +699,15 @@ struct Surface {
 	PtexIndicesPtr ptexIndices;
 	PatchTablePtr patchTable;
 	PatchMapPtr patchMap;
-	const PosVector& basePositions;
-	const TriVector& baseTriangles;
+	const PosVector& basePositions;  // TODO
+	const Triangle* baseTriangles;
 	PosVector localPositions;
 	int maxLevel;
 
 	Surface(
 		const PosVector& p_basePositions,
-		const TriVector& p_baseTriangles,
+		const Triangle* p_baseTriangles,
+		const ExtTriangleMesh * p_srcMesh,
 		int p_maxLevel
 	):
 		basePositions(p_basePositions),
@@ -729,6 +732,7 @@ struct Surface {
 			createTopologyAdaptiveRefiner(
 				basePositions,
 				baseTriangles,
+				p_srcMesh,
 				patchTableOptions
 			)
 		);
@@ -805,7 +809,7 @@ void Tessellate (
 	const Surface& surface,
 	const size_t N,
 	CoordVector& tessCoords,
-	TriVector & tessTris
+	Triangle * tessTris
 	) {
 	// This is triforce tessellation.
 	// This tessellation splits edges in N segments,
@@ -876,8 +880,8 @@ void Tessellate (
 		+ numEdgeInteriorPoints * topology.GetNumEdges()
 		+ numTriangleInteriorPoints * topology.GetNumFaces();
 
-	// Size tessTris and tessCoords
-	tessTris.resize(FACE_COUNT * N * N);
+	// Size tessCoords
+	//tessTris.resize(FACE_COUNT * N * N);  TODO
 	tessCoords.resize(numCoords);
 
 	// Get vertex local coordinates in given face
@@ -1001,13 +1005,13 @@ void Tessellate (
 		// Up triangles
 		for (int j = 0; j < N; ++j) {
 			for (int i = 0; i < N - j; ++i, ++idxTri) {
-				tessTris[idxTri] = Tri(pnt(i, j), pnt(i + 1, j), pnt(i, j + 1));
+				tessTris[idxTri] = Triangle(pnt(i, j), pnt(i + 1, j), pnt(i, j + 1));
 			}
 		}
 		// Down triangles
 		for (int j = 0; j < N; ++j) {
 			for (int i = 0; i < N - j - 1; ++i, ++idxTri) {
-				tessTris[idxTri] = Tri(pnt(i, j + 1), pnt(i + 1, j + 1), pnt(i + 1, j));
+				tessTris[idxTri] = Triangle(pnt(i, j + 1), pnt(i + 1, j + 1), pnt(i + 1, j));
 			}
 		}
 
@@ -1100,14 +1104,18 @@ ExtTriangleMesh *ApplySubdiv(
 ) {
 
 	// Initialize internal structures
-	TriVector baseTriangles(srcMesh->GetTotalTriangleCount());
-	Triangle* luxTriangles = srcMesh->GetTriangles();
-	#pragma omp parallel for
-	for (int t = 0; t < srcMesh->GetTotalTriangleCount(); ++t) {
-		for (size_t v = 0; v < 3; ++v) {
-			baseTriangles[t][v] = luxTriangles[t].v[v];
-		}
-	}
+	//TriVector baseTriangles(srcMesh->GetTotalTriangleCount());
+	Triangle* baseTriangles = srcMesh->GetTriangles();
+	//#pragma omp parallel for
+	//for (int t = 0; t < srcMesh->GetTotalTriangleCount(); ++t) {
+		//baseTriangles[t][0] = luxTriangles[t].v[0];
+		//baseTriangles[t][1] = luxTriangles[t].v[1];
+		//baseTriangles[t][2] = luxTriangles[t].v[2];
+		////TODO
+		////for (size_t v = 0; v < 3; ++v) {
+			////baseTriangles[t][v] = luxTriangles[t].v[v];
+		//}
+	//}
 
 	PosVector basePositions;
 	int numVertices = srcMesh->GetTotalVertexCount();
@@ -1121,7 +1129,7 @@ ExtTriangleMesh *ApplySubdiv(
 	}
 
 	// Create limit surface (subdivided) from base geometry
-	Surface surface(basePositions, baseTriangles, maxLevel);
+	Surface surface(basePositions, baseTriangles, srcMesh, maxLevel);
 
 	// Compute dimensions
 	size_t tessellationRate = 1 << maxLevel;
@@ -1132,12 +1140,13 @@ ExtTriangleMesh *ApplySubdiv(
 	// Output structures
 	auto tessPositions = TriangleMesh::AllocVerticesBuffer(pointCount);
 	auto tessNormals = new Normal[normCount];
+	auto tessTriangles = TriangleMesh::AllocTrianglesBuffer(triCount);
 	//PosVector tessPositions;  TODO
 	//PosVector tessNormals;  TODO
-	TriVector tessTriangles;
+	//TriVector tessTriangles;  TODO
 
 	// Tessellate
-	CoordVector tessCoords;  // We temporarily store new positions as (face, i, j)
+	CoordVector tessCoords;  // We temporarily store new positions as (face, x, y)
 	Tessellate(surface, tessellationRate, tessCoords, tessTriangles);
 
 	// Evaluate
@@ -1149,23 +1158,25 @@ ExtTriangleMesh *ApplySubdiv(
 		<< triCount << " triangles"
 	);
 
-	// New triangles
-	Triangle *newTris = TriangleMesh::AllocTrianglesBuffer(triCount);
-	#pragma omp parallel for
-	for (int face = 0; face < triCount; ++face) {
-		auto tri = tessTriangles[face];
-		for (u_int vertex = 0; vertex < 3; ++vertex) {
-			newTris[face].v[vertex] = tri[vertex];
-			assert(tri[vertex] <= pointCount);
-			assert(tri[vertex] >= 0);
-		}
-	}
+	/// TODO
+	//// New triangles
+	//Triangle *newTris = TriangleMesh::AllocTrianglesBuffer(triCount);
+	//#pragma omp parallel for
+	//for (int face = 0; face < triCount; ++face) {
+		//auto tri = tessTriangles[face];
+		//newTris[face].v[0] = 
+		//for (u_int vertex = 0; vertex < 3; ++vertex) {
+			//newTris[face].v[vertex] = tri[vertex];
+			//assert(tri[vertex] <= pointCount);
+			//assert(tri[vertex] >= 0);
+		//}
+	//}
 
 	SDL_LOG("Subdivision (enhanced) - Allocating");
 
 	// Allocate the new mesh
 	ExtTriangleMesh *newMesh =  new ExtTriangleMesh(
-		pointCount, triCount, tessPositions, newTris, tessNormals
+		pointCount, triCount, tessPositions, tessTriangles, tessNormals
 	);
 
 	return newMesh;
