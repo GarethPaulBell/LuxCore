@@ -537,8 +537,44 @@ struct LocalCoords {
 
 typedef std::vector<LocalCoords> CoordVector;
 
+template <typename T>
+struct BufferAdapter {
+    BufferAdapter(T *p, int length, int stride=1) :
+        _p(p), _length(length), _stride(stride) { }
+    void Clear() {
+        for (int i = 0; i < _length; ++i) _p[i] = 0;
+    }
+    void AddWithWeight(T const *src, float w) {
+        if (_p) {
+            for (int i = 0; i < _length; ++i) {
+                _p[i] += src[i] * w;
+            }
+        }
+    }
+    const T *operator[] (int index) const {
+        return *(_p + _stride * index);
+    }
+    BufferAdapter<T> & operator ++() {
+        if (_p) {
+            _p += _stride;
+        }
+        return *this;
+    }
+	T * ptr(void) {
+		return _p;
+	}
+	int length() const {
+		return _length;
+	}
+
+    T *_p;  // TODO shared_ptr?
+    int _length;
+    int _stride;
+};
+
+
 TopologyRefinerPtr createTopologyAdaptiveRefiner(
-		const ExtTriangleMesh * srcMesh,
+		const ExtTriangleMesh * srcMesh,  // TODO Only topology is needed
 		const Far::PatchTableFactory::Options& patchOptions
 ) {
 
@@ -579,35 +615,30 @@ TopologyRefinerPtr createTopologyAdaptiveRefiner(
 // Subdivision limit surface
 struct Surface {
 
+	// TODO move at the end
 	TopologyRefinerPtr refiner;
 	PtexIndicesPtr ptexIndices;
 	PatchTablePtr patchTable;
 	PatchMapPtr patchMap;
-	const Point* basePositions;  // TODO
-	const int numBasePositions;
-	Point* localPositions;
-	int numLocalPositions;
 	int maxLevel;
 
 	Surface(const ExtTriangleMesh * p_srcMesh, int p_maxLevel):
-		basePositions(p_srcMesh->GetVertices()),
-		numBasePositions(p_srcMesh->GetTotalVertexCount()),
 		maxLevel(p_maxLevel)
 	{
 		SDL_LOG("Subdivision (enhanced) - Computing patches");
 
 		// Initialize patch table options
-		Far::PatchTableFactory::Options patchTableOptions(maxLevel);
-		patchTableOptions.useInfSharpPatch = true;
-		patchTableOptions.generateVaryingTables = false;
-
+		//
 		// Note: ENDCAP_GREGORY_BASIS can generate null normals
 		// (try with Suzanne, level=3...):
 		// please avoid...
+		Far::PatchTableFactory::Options patchTableOptions(maxLevel);
+		patchTableOptions.useInfSharpPatch = true;
+		patchTableOptions.generateVaryingTables = false;
 		patchTableOptions.endCapType =
 			Far::PatchTableFactory::Options::ENDCAP_BSPLINE_BASIS;
 
-		// Construct refiner
+		// Construct refiner  TODO
 		refiner = std::move(createTopologyAdaptiveRefiner(p_srcMesh, patchTableOptions));
 
 		// Apply adaptive refinement and construct the associated PatchTable to
@@ -622,34 +653,91 @@ struct Surface {
 
 		// Construct patch map
 		patchMap.reset(new Far::PatchMap(*patchTable));
+	}
 
-		// Set localPositions
-		int nBaseVertices    = refiner->GetLevel(0).GetNumVertices();
-		int nRefinedVertices = refiner->GetNumVerticesTotal() - nBaseVertices;
-		int nLocalPoints     = patchTable->GetNumLocalPoints();
+	struct InterpolatedValues {
+		// Designed to contain:
+		// - Base values
+		// - Refined values, ie values at refined vertices and local vertices
+		const float * baseValues;
+		const int numBaseValues;
+		const float * refinedValues;
+		const int numRefinedValues;
+		const int stride;
 
-		numLocalPositions = nRefinedVertices + nLocalPoints;
-		localPositions = TriangleMesh::AllocVerticesBuffer(numLocalPositions);
+		InterpolatedValues(
+			const float * p_baseValues,
+			int p_numBaseValues,
+			const float * p_refinedValues,
+			int p_numRefinedValues,
+			int p_stride
+		):
+			baseValues(p_baseValues),
+			numBaseValues(p_numBaseValues),
+			refinedValues(p_refinedValues),
+			numRefinedValues(p_numRefinedValues),
+			stride(p_stride)
+		{}
+	};
 
-		if (nRefinedVertices) {
+
+	template <typename T>
+	InterpolatedValues Interpolate(const T* baseValues, int numBaseValues) {
+
+		assert(numBaseValues == refiner->GetLevel(0).GetNumVertices());
+
+		// Set dimensions
+		int stride = sizeof(T) / sizeof(float);
+		int numRegularRefinedValues = refiner->GetNumVerticesTotal();
+		int numLocalRefinedValues   = patchTable->GetNumLocalPoints();
+		int numAllRefinedValues = numRegularRefinedValues + numLocalRefinedValues;
+
+		// Allocate output
+		T * refinedValues = new T[numAllRefinedValues]; // TODO smart pointer
+
+		// Copy base values in refined values
+		std::memcpy(&refinedValues[0], &baseValues[0], numBaseValues * sizeof(T));
+
+		// Interpolate on refined vertices and local points
+		// TODO which scheme for refiner?
+		// TODO
+		//if (nRefinedVertices) {
+			//Far::PrimvarRefiner primvarRefiner(*refiner);
+
+			//Point const * srcPos = basePositions;
+			//Point * dstPos = &localPositions[0];
+			//for (int level = 1; level < refiner->GetNumLevels(); ++level) {
+				//primvarRefiner.Interpolate(level, srcPos, dstPos);
+				//srcPos = dstPos;
+				//dstPos += refiner->GetLevel(level).GetNumVertices();
+			//}
+		//}
+
+		// Tutorial 5_1
+		if (numRegularRefinedValues) {
 			Far::PrimvarRefiner primvarRefiner(*refiner);
 
-			Point const * srcPos = basePositions;
-			Point * dstPos = &localPositions[0];
+			T * srcValues = refinedValues;
 			for (int level = 1; level < refiner->GetNumLevels(); ++level) {
-				primvarRefiner.Interpolate(level, srcPos, dstPos);
-				srcPos = dstPos;
-				dstPos += refiner->GetLevel(level).GetNumVertices();
+				T * dstValues = srcValues + refiner->GetLevel(level - 1).GetNumVertices();
+				primvarRefiner.Interpolate(level, srcValues, dstValues);
+				srcValues = dstValues;
 			}
 		}
-		if (nLocalPoints) {
+		if (numLocalRefinedValues) {
 			patchTable->GetLocalPointStencilTable()->UpdateValues(
-				basePositions,
-				nBaseVertices,
-				&localPositions[0],
-				&localPositions[nRefinedVertices]
+				&refinedValues[0],
+				&refinedValues[numRegularRefinedValues]
 			);
 		}
+
+		return InterpolatedValues(
+			(float *) baseValues,
+			numBaseValues,
+			(float *) refinedValues,
+			numAllRefinedValues,
+			stride
+		);
 	}
 
 	// Get number of positions after N-tessellation
@@ -892,20 +980,27 @@ void Tessellate (
 
 }  // ~Tessellate
 
-
-void Evaluate(
+// TODO method of surface
+std::tuple<Point*, Normal*>
+EvaluatePositions(
 	const Surface& surface,
-	const CoordVector& tessCoords,
-	Point* tessPoints,
-	Normal* tessNormals
+	const Surface::InterpolatedValues& subdivPositions,
+	const CoordVector& tessCoords
 ) {
 	SDL_LOG("Subdivision (enhanced) - Evaluating");
+
+	int numCoords = tessCoords.size();
+
+	// Allocate output structure
+	// TODO unique_ptr
+	auto tessPositions = TriangleMesh::AllocVerticesBuffer(numCoords);
+	auto tessNormals = new Normal[numCoords];
 
 	const auto& topology = surface.refiner->GetLevel(0);
 	const auto& patchTable = *surface.patchTable;
 	const auto& ptexIndices = *surface.ptexIndices;
 
-    int numBaseVerts = surface.numBasePositions;
+    //int numBaseVerts = surface.numBasePositions; TODO
 
 	// Evaluate positions and derivatives
 	#pragma omp parallel for
@@ -935,7 +1030,7 @@ void Evaluate(
 		Far::ConstIndexArray cvIndices = patchTable.GetPatchVertices(*handle);
 
 		// Evaluate position and derivatives
-		Point& pos = tessPoints[vertex];
+		Point& pos = tessPositions[vertex];
 		pos.Clear();
 
 		Vector du;
@@ -944,13 +1039,14 @@ void Evaluate(
 		Vector dv;
 		dv.Clear();
 
+		auto positions = (const Point *) subdivPositions.refinedValues;
+
 		for (int cv = 0; cv < cvIndices.size(); ++cv) {
 			int cvIndex = cvIndices[cv];
 
-			const Point& position =
-				(cvIndex < numBaseVerts) ?
-				surface.basePositions[cvIndex] :
-				surface.localPositions[cvIndex - numBaseVerts];
+			// TODO Merge base and local
+
+			const Point& position = positions[cvIndex];
 
 			pos.AddWithWeight(position, pWeights[cv]);
 			du.AddWithWeight(position, duWeights[cv]);
@@ -969,9 +1065,11 @@ void Evaluate(
 				<< "du = (" << du[0] << ", " << du[1] << ", " << du[2] << "), "
 				<< "dv = (" << dv[0] << ", " << dv[1] << ", " << dv[2] << ")"
 			);
-			throw std::runtime_error("Null normal (vect(du, dv) == 0)");
+			SDL_LOG("Subdivision (enhanced) - WARNING - Null normal (vect(du, dv) == 0)");
 		}
 	}  // ~for vertex
+
+	return std::tuple<Point*, Normal*>(tessPositions, tessNormals);
 }
 
 
@@ -988,17 +1086,26 @@ ExtTriangleMesh *ApplySubdiv(
 	int normCount = surface.getTesselPosCount(tessellationRate);
 	int triCount = surface.getTesselTriangleCount(tessellationRate);
 
-	// Output structures
-	auto tessPositions = TriangleMesh::AllocVerticesBuffer(pointCount);
-	auto tessNormals = new Normal[normCount];
-	auto tessTriangles = TriangleMesh::AllocTrianglesBuffer(triCount);
-
 	// Tessellate
+	// TODO Replace CoordVector by osd equivalent
+	// TODO Output as a struct
 	CoordVector tessCoords;  // We temporarily store new positions as (face, x, y)
+	auto tessTriangles = TriangleMesh::AllocTrianglesBuffer(triCount);
 	Tessellate(surface, tessellationRate, tessCoords, tessTriangles);
 
-	// Evaluate
-	Evaluate(surface, tessCoords, tessPositions, tessNormals);
+	// Interpolate positions on subdivided surface
+	const Point * basePositions = srcMesh->GetVertices();
+	int numBasePositions = srcMesh->GetTotalVertexCount();
+
+	auto subdivPositions = surface.Interpolate(basePositions, numBasePositions);
+
+	// Evaluate positions on tessellation
+	auto tessPositions = EvaluatePositions(surface, subdivPositions, tessCoords);
+
+	// Break down positions
+	auto tessPoints = std::get<Point *>(tessPositions);
+	auto tessNormals = std::get<Normal *>(tessPositions);
+
 
 	SDL_LOG(
 		"Subdivision (enhanced) - Building new mesh: "
@@ -1010,7 +1117,7 @@ ExtTriangleMesh *ApplySubdiv(
 
 	// Allocate the new mesh
 	ExtTriangleMesh *newMesh =  new ExtTriangleMesh(
-		pointCount, triCount, tessPositions, tessTriangles, tessNormals
+		pointCount, triCount, tessPoints, tessTriangles, tessNormals
 	);
 
 	return newMesh;
@@ -1175,4 +1282,4 @@ ExtTriangleMesh *SubdivShape::RefineImpl(const Scene *scene) {
 }
 
 
-// vim: autoindent noexpandtab tabstop=4 shiftwidth=4
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4 foldmethod=syntax
