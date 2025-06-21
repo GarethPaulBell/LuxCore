@@ -999,7 +999,7 @@ struct Surface {
 			}
 
 			// Update output (position and normal)
-			tessNormals[vertex] = Normal(Cross(du, dv));
+			tessNormals[vertex] = Normalize(Normal(Cross(du, dv)));
 
 			// Check validity of normal
 			auto t = tessNormals[vertex];
