@@ -982,6 +982,10 @@ struct Surface {
 
 		auto positions = (const Point *) subdivPositions.refinedValues.get();
 
+		float pWeights[20];
+		float duWeights[20];
+		float dvWeights[20];
+
 		// Evaluate positions and derivatives
 		#pragma omp parallel for
 		for (int vertex = 0; vertex < tessCoords.size(); ++vertex) {
@@ -997,9 +1001,6 @@ struct Surface {
 				patchMap->FindPatch(ptexFace, coords.x, coords.y);
 			assert(handle);
 
-			float pWeights[20];
-			float duWeights[20];
-			float dvWeights[20];
 			patchTable->EvaluateBasis(
 				*handle, coords.x, coords.y,
 				pWeights, duWeights, dvWeights
@@ -1070,6 +1071,8 @@ struct Surface {
 
 		auto inputValues = (const T *) subdivValues.refinedValues.get();
 
+		float pWeights[20];
+
 		// Evaluate
 		#pragma omp parallel for
 		for (int vertex = 0; vertex < tessCoords.size(); ++vertex) {
@@ -1085,7 +1088,6 @@ struct Surface {
 				patchMap->FindPatch(ptexFace, coords.x, coords.y);
 			assert(handle);
 
-			float pWeights[20];
 			patchTable->EvaluateBasis(*handle, coords.x, coords.y, pWeights);
 
 			//  Identify the patch cvs and combine with the evaluated weights --
