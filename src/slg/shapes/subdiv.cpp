@@ -56,6 +56,10 @@ using PatchTablePtr = std::unique_ptr<Far::PatchTable>;
 using PatchMapPtr = std::unique_ptr<Far::PatchMap>;
 using TopologyRefinerPtr = std::unique_ptr<Far::TopologyRefiner>;
 using PtexIndicesPtr = std::unique_ptr<Far::PtexIndices>;
+using PointArrayPtr = std::unique_ptr<Point[]>;
+using NormalArrayPtr = std::unique_ptr<Normal[]>;
+using TriangleArrayPtr = std::unique_ptr<Triangle[]>;
+
 
 //////////////////////////
 //  Simple subdivision  //
@@ -365,6 +369,7 @@ nRefinedVerts
 	std::array<float *, EXTMESH_MAX_DATA_COUNT> newVertAOVs;
 	for (u_int i = 0; i < EXTMESH_MAX_DATA_COUNT; i++) {
 		if (srcMesh->HasVertexAOV(i)) {
+			SDL_LOG("Subdivision (enhanced) - Evaluating AOV layer #" << i);
 			newVertAOVs[i] = new float[nRefinedVerts];
 
 			const float *refinedVertAOVs = alphasBuffers[i]->BindCpuBuffer() + 1 * nCoarseVerts;
@@ -496,8 +501,7 @@ namespace enhanced {
 
 
 // Storage of local coordinates (coordinates in a given face) during
-// tessellation.
-
+// tessellation, in the form (face, x, y).
 struct LocalCoords {
 	int face = -1;
 	float x = 0.f;
@@ -535,11 +539,54 @@ struct LocalCoords {
 	}
 };
 
+
 typedef std::vector<LocalCoords> CoordVector;
 
+// Adapter for float values in subdiv buffer The main adaptation consists in
+// addition of Clear and AddWithWeight methods
+struct FloatAdapter {
+	FloatAdapter() : x(0.f) {}
+	FloatAdapter(float p_x): x(p_x) {}
+	void Clear() { x = 0.f; }
+	void AddWithWeight(float value, float weight) { x += value * weight; }
+	operator float() const { return x; }
+	operator float*() { return &x; }
+
+	float x;
+};
+
+// Output object for interpolation process
+struct InterpolatedValues {
+	// Intended to contain:
+	// - Refined values, ie values at refined vertices and local vertices
+
+	InterpolatedValues(
+		float* p_values,
+		int p_numValues,
+		int p_stride
+	):
+		values(p_values),
+		numValues(p_numValues),
+		stride(p_stride)
+	{}
+
+	template <typename T>
+	const T* Get() const {
+		return reinterpret_cast<const T*>(values.get());
+	}
+
+	// Property members
+	const std::unique_ptr<float[]> values;
+	const int numValues;
+	const int stride;
+};
+
+// Adaptive topology refiner factory function
 TopologyRefinerPtr createTopologyAdaptiveRefiner(
-		const ExtTriangleMesh * srcMesh,
-		const Far::PatchTableFactory::Options& patchOptions
+	const int * vertIndicesPerFace,
+	int numVertices,
+	int numFaces,
+	const Far::PatchTableFactory::Options& patchOptions
 ) {
 
 	// Be sure patch options were intialized with the desired max level
@@ -554,11 +601,11 @@ TopologyRefinerPtr createTopologyAdaptiveRefiner(
 
 	// Populate a topology descriptor with our raw data
 	Far::TopologyDescriptor desc;
-	desc.numVertices = srcMesh->GetTotalVertexCount();
-	desc.numFaces = srcMesh->GetTotalTriangleCount();
-	std::vector<int> vertPerFace(desc.numFaces, 3);
-	desc.numVertsPerFace = &vertPerFace[0];
-	desc.vertIndicesPerFace = reinterpret_cast<const int *>(srcMesh->GetTriangles());
+	desc.numVertices = numVertices;
+	desc.numFaces = numFaces;
+	std::vector<int> vertsPerFace(numFaces, 3);  // We only support triangle meshes
+	desc.numVertsPerFace = vertsPerFace.data();
+	desc.vertIndicesPerFace = vertIndicesPerFace;
 
 	// Create refiner
 	using RefinerFactory = Far::TopologyRefinerFactory<Far::TopologyDescriptor>;
@@ -570,48 +617,64 @@ TopologyRefinerPtr createTopologyAdaptiveRefiner(
 	);
 	assert(refiner);
 
-
 	return refiner;
 
 }
 
 
-// Subdivision limit surface
+/// Subdivision surface
+///
+/// This is the central object of enhanced subdivision. It implements the following steps:
+/// - Construction
+/// - Subdivision
+/// - Tessellation
+/// - Interpolation
+/// - Evaluation
+///
+/// Please note Subdivision and Tessellation are 2 distinct things:
+/// https://graphics.pixar.com/opensubdiv/docs/subdivision_surfaces.html#subdivision-versus-tessellation
 struct Surface {
 
-	TopologyRefinerPtr refiner;
-	PtexIndicesPtr ptexIndices;
-	PatchTablePtr patchTable;
-	PatchMapPtr patchMap;
-	const Point* basePositions;  // TODO
-	const int numBasePositions;
-	Point* localPositions;
-	int numLocalPositions;
-	int maxLevel;
-
-	Surface(const ExtTriangleMesh * p_srcMesh, int p_maxLevel):
-		basePositions(p_srcMesh->GetVertices()),
-		numBasePositions(p_srcMesh->GetTotalVertexCount()),
-		maxLevel(p_maxLevel)
+	/// Constructor
+	///
+	/// @param srcMesh The mesh to be subdivided
+	Surface(const ExtTriangleMesh * srcMesh)
 	{
 		SDL_LOG("Subdivision (enhanced) - Computing patches");
 
 		// Initialize patch table options
-		Far::PatchTableFactory::Options patchTableOptions(maxLevel);
-		patchTableOptions.useInfSharpPatch = true;
-		patchTableOptions.generateVaryingTables = false;
-
+		//
 		// Note: ENDCAP_GREGORY_BASIS can generate null normals
 		// (try with Suzanne, level=3...):
 		// please avoid...
+		patchTableOptions.useInfSharpPatch = true;
+		patchTableOptions.generateVaryingTables = false;
 		patchTableOptions.endCapType =
 			Far::PatchTableFactory::Options::ENDCAP_BSPLINE_BASIS;
 
 		// Construct refiner
-		refiner = std::move(createTopologyAdaptiveRefiner(p_srcMesh, patchTableOptions));
+		refiner = std::move(
+			createTopologyAdaptiveRefiner(
+				reinterpret_cast<const int *>(srcMesh->GetTriangles()),
+				srcMesh->GetTotalVertexCount(),
+				srcMesh->GetTotalTriangleCount(),
+				patchTableOptions
+			)
+		);
+	}
 
-		// Apply adaptive refinement and construct the associated PatchTable to
-		// evaluate the limit surface:
+	/// Subdivide parametric surface
+	///
+	///	This method applies a refinement on the topology of the control surface.
+	///	The refinement is adaptive (in the sense of OpenSubdiv).
+	///
+	/// @param maxLevel The maximum isolation level
+	/// 
+	void Subdivide(int maxLevel) {
+		// Set refinement level
+		patchTableOptions.maxIsolationLevel = maxLevel;
+
+		// Apply adaptive refinement
 		refiner->RefineAdaptive(patchTableOptions.GetRefineAdaptiveOptions());
 
 		// Construct the associated PatchTable to evaluate the limit surface:
@@ -622,38 +685,278 @@ struct Surface {
 
 		// Construct patch map
 		patchMap.reset(new Far::PatchMap(*patchTable));
+	}
 
-		// Set localPositions
-		int nBaseVertices    = refiner->GetLevel(0).GetNumVertices();
-		int nRefinedVertices = refiner->GetNumVerticesTotal() - nBaseVertices;
-		int nLocalPoints     = patchTable->GetNumLocalPoints();
+	/// Tessellate input mesh
+	///
+	/// Apply a triforce tessellation to input mesh.
+	///
+	/// This tessellation splits edges in N segments,
+	/// and generates N² resulting triangles by input triangle.
+	/// It's been reimplemented here in order to use multithreading (osd
+	/// implementation is monothreaded...).
+	///
+	/// Input:
+	///           V2
+	///          / \
+	///		   /  \
+	///        /   \
+	///      V0----V1
+	///
+	///
+	///	Output (N=4):
+	///
+	///          V2
+	///         / \
+	///        E7-E8
+	///       / \/ \
+	///      E5-I3-E6
+	///     / \/ \/ \
+	///    E3-I0-I1-E4
+	///   / \/ \/ \/ \
+	///	V0-E0-E1-E2-V1
+	///
+	///	Nota:
+	///	Vx - initial vertex (to be kept)
+	///	Ex - edge vertex (to be created)
+	///	Ix - internal vertex (to be created)
+	///
+	/// @param N Tessellation rate: each edge will be subdivided into N
+	/// sub-edges
+	///
+	std::tuple<CoordVector, TriangleArrayPtr, int, int>
+	Tessellate (const size_t N) {
+		// This is triforce tessellation.
 
-		numLocalPositions = nRefinedVertices + nLocalPoints;
-		localPositions = TriangleMesh::AllocVerticesBuffer(numLocalPositions);
+		// Allocate outputs
+		CoordVector tessCoords;
+		int numTriangles = getTesselTriangleCount(N);
+		int numPoints = getTesselPosCount(N);
+		auto tessTris = TriangleArrayPtr(TriangleMesh::AllocTrianglesBuffer(numTriangles));
 
-		if (nRefinedVertices) {
-			Far::PrimvarRefiner primvarRefiner(*refiner);
+		// Some constants
+		const auto& topology = refiner->GetLevel(0);
+		const size_t FACE_COUNT = topology.GetNumFaces();
+		const int FACE_SIZE = 3;  // Of course (triangles)...
 
-			Point const * srcPos = basePositions;
-			Point * dstPos = &localPositions[0];
-			for (int level = 1; level < refiner->GetNumLevels(); ++level) {
-				primvarRefiner.Interpolate(level, srcPos, dstPos);
-				srcPos = dstPos;
-				dstPos += refiner->GetLevel(level).GetNumVertices();
-			}
-		}
-		if (nLocalPoints) {
-			patchTable->GetLocalPointStencilTable()->UpdateValues(
-				basePositions,
-				nBaseVertices,
-				&localPositions[0],
-				&localPositions[nRefinedVertices]
+		// Check
+		SDL_LOG(
+			"Subdivision (enhanced) - Tessellating with factor N = "
+			<< N
+		);
+		if (FACE_COUNT * N * N >= std::numeric_limits<int>::max()) {
+			throw std::runtime_error(
+				"FACE_COUNT * N * N > numeric limit ("
+				+ ToString(std::numeric_limits<int>::max())
+				+ ")"
 			);
 		}
+
+		// Useful variables and constants
+		int offset;
+
+		// Number of coarse vertices
+		const int numCoarseVertices = topology.GetNumVertices();
+
+		// Number of interior points in an edge
+		const int numEdgeInteriorPoints = N - 1;
+
+		// Number of interior points in a triangle
+		const int numTriangleInteriorPoints = (N - 1) * (N - 2) / 2;
+
+		// Number of coords to be computed
+		const int numCoords =
+			topology.GetNumVertices()
+			+ numEdgeInteriorPoints * topology.GetNumEdges()
+			+ numTriangleInteriorPoints * topology.GetNumFaces();
+
+		// Size tessCoords
+		tessCoords.resize(numCoords);
+
+		// Get vertex local coordinates in given face
+		auto getVertexLocalCoords = [&topology](int face, int vertex) {
+			auto faceVertices = topology.GetFaceVertices(face);
+			if (vertex == faceVertices[0]) {
+				return LocalCoords(face, 0.f, 0.f);
+			} else if (vertex == faceVertices[1]) {
+				return LocalCoords(face, 1.f, 0.f);
+			} else if (vertex == faceVertices[2]) {
+				return LocalCoords(face, 0.f, 1.f);
+			}
+
+			throw std::runtime_error("Error in getVertexLocalCoords");
+		};
+
+		// Step #1 - Initialize with initial (coarse) vertices
+		#pragma omp parallel for
+		for (int vertex = 0; vertex < numCoarseVertices; ++vertex) {
+			int face = topology.GetVertexFaces(vertex)[0];  // Choose first face (arbitrary)
+			tessCoords[vertex] = getVertexLocalCoords(face, vertex);
+		}
+		offset = numCoarseVertices;
+
+		// Step #2 - Add edge vertices
+		#pragma omp parallel for
+		for (int edge = 0; edge < topology.GetNumEdges(); ++edge) {
+			// Find face
+			int face = topology.GetEdgeFaces(edge)[0];
+			// Find edge vertices.
+			auto edgeVerts = topology.GetEdgeVertices(edge);
+			int v0 = edgeVerts[0];
+			int v1 = edgeVerts[1];
+
+			LocalCoords c0 = getVertexLocalCoords(face, v0);
+			LocalCoords c1 = getVertexLocalCoords(face, v1);
+
+			for (int i = 1; i < N; ++i) {  // Only edge interior vertices, not extremities
+				LocalCoords coords(c0, c1, i, N);  // Interpolate from c0 and c1
+				tessCoords[offset + edge * numEdgeInteriorPoints + i - 1 ] = coords;
+			}
+		}
+		offset = numCoarseVertices + numEdgeInteriorPoints * topology.GetNumEdges();
+
+		// Step #3 - Add interior points
+		#pragma omp parallel for
+		for (int f = 0; f < FACE_COUNT; ++f) {  // for each face
+			const auto faceVertices = topology.GetFaceVertices(f);
+			const auto faceEdges = topology.GetFaceEdges(f);
+			assert(faceVertices.size() == 3);
+
+			// If (i,j) are local coordinates, and edge length is N,
+			// we have in the triangle: i >= 0, j >= 0, i + j <= N
+			// We then consider k so that i + j + k = N.
+			// If we are on an edge, i * j * k == 0.
+			// If we are on a vertex, i == N or j == N or k == N.
+			// In the face (triangle), after tessellation, we'll have N² points.
+			// Some of them will be shared with other faces, we'll have to deal
+			// with that.
+
+			std::vector<int> pointMap;  // Map points between local numeration and global one
+
+			for (int j = 0; j <= N ; ++j) {
+				for (int i = 0; i <= N - j; ++i) {
+					int k = N - i - j;
+					int vertex;  // Output
+					// Find point type: vertex, edge point, interior point
+					if (i == N || j == N || k == N) {  // Vertex
+						// Vertex point in initial triangle
+						vertex = faceVertices[(i + 2 * j) / N];
+					} else if (i == 0 || j == 0 || k == 0) {  // Edge
+						// Find edge vertices
+						int v0, v1, pos;
+						// Find edge
+						if (i == 0) {
+							v0 = faceVertices[0];
+							v1 = faceVertices[2];
+							pos = j;
+						} else if (j == 0) {
+							v0 = faceVertices[0];
+							v1 = faceVertices[1];
+							pos = i;
+						} else if (k == 0) {
+							v0 = faceVertices[1];
+							v1 = faceVertices[2];
+							pos = j;
+						}
+						int edge = topology.FindEdge(v0, v1);
+						auto edgeVertices = topology.GetEdgeVertices(edge);
+						if (v0 != edgeVertices[0]) {
+							pos = N - pos;
+							std::swap(v0, v1);
+						}
+						vertex = numCoarseVertices + edge * numEdgeInteriorPoints + (pos - 1);
+
+					} else { // Interior point
+						int idx = offset
+							+ numTriangleInteriorPoints * f
+							+ numTriangleInteriorPoints - (N - j) * (N - j - 1) / 2
+							+ i - 1;
+						// Create position
+						tessCoords[idx] = LocalCoords(f, i, j, N);
+						// Record point in map
+						vertex = idx;
+					}
+
+					pointMap.push_back(vertex);
+				}  // ~for j
+			}  // ~for i
+
+			// Create triangles
+
+			// Lambda to get a point in the pointMap, given (i, j)
+			auto pnt = [N, &pointMap](int i, int j) {
+				int idx = (2 * N + 3 - j) * j / 2 + i;
+				return pointMap[idx];
+			};
+
+			int idxTri = f * N * N;
+
+			// Up triangles
+			for (int j = 0; j < N; ++j) {
+				for (int i = 0; i < N - j; ++i, ++idxTri) {
+					//tessTris[idxTri] = Triangle(pnt(i, j), pnt(i + 1, j), pnt(i, j + 1));
+					tessTris[idxTri] = Triangle(pnt(i, j), pnt(i, j +1), pnt(i+1, j));
+				}
+			}
+			// Down triangles
+			for (int j = 0; j < N; ++j) {
+				for (int i = 0; i < N - j - 1; ++i, ++idxTri) {
+					tessTris[idxTri] = Triangle(pnt(i, j + 1), pnt(i + 1, j + 1), pnt(i + 1, j));
+					//tessTris[idxTri] = Triangle(pnt(i, j + 1), pnt(i + 1, j), pnt(i + 1, j + 1));
+				}
+			}
+
+		}  // ~for face
+
+		return std::make_tuple(tessCoords, std::move(tessTris), numPoints, numTriangles);
+
+	}  // ~Tessellate
+
+
+	template <typename T>
+	InterpolatedValues Interpolate(const T* baseValues, int numBaseValues) const {
+
+		assert(numBaseValues == refiner->GetLevel(0).GetNumVertices());
+
+		// Set dimensions
+		int stride = sizeof(T) / sizeof(float);
+		int numRegularRefinedValues = refiner->GetNumVerticesTotal();
+		int numLocalRefinedValues   = patchTable->GetNumLocalPoints();
+		int numAllRefinedValues = numRegularRefinedValues + numLocalRefinedValues;
+
+		// Allocate output
+		std::unique_ptr<T[]> refinedValues(new T[numAllRefinedValues]);
+
+		// Copy base values in refined values
+		std::memcpy(&refinedValues.get()[0], &baseValues[0], numBaseValues * sizeof(T));
+
+		// Interpolate on refined vertices and local points (Tutorial 5_1)
+		if (numRegularRefinedValues) {
+			Far::PrimvarRefiner primvarRefiner(*refiner);  // TODO select refiner
+
+			T * srcValues = refinedValues.get();
+			for (int level = 1; level < refiner->GetNumLevels(); ++level) {
+				T * dstValues = srcValues + refiner->GetLevel(level - 1).GetNumVertices();
+				primvarRefiner.Interpolate(level, srcValues, dstValues);
+				srcValues = dstValues;
+			}
+		}
+		if (numLocalRefinedValues) {
+			patchTable->GetLocalPointStencilTable()->UpdateValues(
+				&refinedValues[0],
+				&refinedValues[numRegularRefinedValues]
+			);
+		}
+
+		return InterpolatedValues(
+			(float*) refinedValues.release(),
+			numAllRefinedValues,
+			stride
+		);
 	}
 
 	// Get number of positions after N-tessellation
-	int getTesselPosCount(int N) {
+	int getTesselPosCount(int N) const {
 		const auto& topology = refiner->GetLevel(0);
 
 		// Number of interior points in an edge
@@ -672,346 +975,355 @@ struct Surface {
 	}
 
 	// Get number of triangles after N-tessellation
-	int getTesselTriangleCount(int N) {
+	int getTesselTriangleCount(int N) const {
 		const auto& topology = refiner->GetLevel(0);
 		return topology.GetNumFaces() * N * N;
 	}
+
+	///
+	/// Evaluate positions and normals at tessellated mesh coordinates
+	///
+	/// @param interpolatedValues Values of the positions at the vertices
+	///							  of the limit surface
+	///
+	///	@param tessCoords Coordinates on the tessellated mesh where to evaluate Positions
+	///
+	///	@return A smart pointer to a buffer containing the evaluated positions
+	///	and a smart pointer to a buffer containing the evaluated normals
+	///
+	std::tuple<PointArrayPtr, NormalArrayPtr>
+	EvaluatePositions(
+		const InterpolatedValues& interpolatedPositions,
+		const CoordVector& tessCoords
+	) const {
+
+		int numCoords = tessCoords.size();
+
+		// Allocate output structure
+		auto tessPositions = PointArrayPtr(TriangleMesh::AllocVerticesBuffer(numCoords));
+		auto tessNormals = NormalArrayPtr(new Normal[numCoords]);
+
+		const auto& topology = refiner->GetLevel(0);
+
+		const Point* positions = interpolatedPositions.Get<Point>();
+
+		// Evaluate positions and derivatives
+		#pragma omp parallel for
+		for (int vertex = 0; vertex < tessCoords.size(); ++vertex) {
+			// Init
+			auto& coords = tessCoords[vertex];
+
+			// Translate in ptex face
+			int ptexFace = ptexIndices->GetFaceId(coords.face);
+
+			//  Locate the patch corresponding to the face ptex idx and (s,t)
+			//  and evaluate:
+			Far::PatchTable::PatchHandle const * handle =
+				patchMap->FindPatch(ptexFace, coords.x, coords.y);
+			assert(handle);
+
+			float pWeights[20];
+			float duWeights[20];
+			float dvWeights[20];
+			patchTable->EvaluateBasis(
+				*handle, coords.x, coords.y,
+				pWeights, duWeights, dvWeights
+			);
+
+			//  Identify the patch cvs and combine with the evaluated weights --
+			//  remember to distinguish cvs in the base level:
+			Far::ConstIndexArray cvIndices = patchTable->GetPatchVertices(*handle);
+
+			// Evaluate position and derivatives
+			Point& pos = tessPositions[vertex];
+			pos.Clear();
+
+			Vector du;
+			du.Clear();
+
+			Vector dv;
+			dv.Clear();
+
+			for (int cv = 0; cv < cvIndices.size(); ++cv) {
+				int cvIndex = cvIndices[cv];
+
+				const Point& position = positions[cvIndex];
+
+				pos.AddWithWeight(position, pWeights[cv]);
+				du.AddWithWeight(position, duWeights[cv]);
+				dv.AddWithWeight(position, dvWeights[cv]);
+			}
+
+			// Update output (position and normal)
+			tessNormals[vertex] = Normal(Cross(du, dv));
+
+			// Check validity of normal and normalize if ok
+			auto& t = tessNormals[vertex];
+			float length = t.Length();
+
+			if (length != 0.f) {
+				t /= length;
+			} else {
+				SDL_LOG(
+					"Subdivision (enhanced) - Vertex #" << vertex << ", "
+					<< "uv = (" << coords.x << ", " << coords.y << "), "
+					<< "du = (" << du[0] << ", " << du[1] << ", " << du[2] << "), "
+					<< "dv = (" << dv[0] << ", " << dv[1] << ", " << dv[2] << ")"
+				);
+				SDL_LOG("Subdivision (enhanced) - WARNING - "
+					<< "Null normal (vect(du, dv) == 0)"
+				);
+			}
+
+
+		}  // ~for vertex
+
+		return std::make_tuple(std::move(tessPositions), std::move(tessNormals));
+	}
+
+	///
+	/// Evaluate primvar data at tessellated mesh coordinates
+	///
+	/// @param interpolatedValues Values of the data to be evaluated at the vertices
+	///							  of the control surface
+	///
+	///	@param tessCoords Coordinates on the tessellated mesh where to evaluate data
+	///
+	///	@return A smart pointer to a buffer containing the evaluated data
+	///
+	template<typename T>
+	std::unique_ptr<T[]> Evaluate(
+		const InterpolatedValues& interpolatedValues,
+		const CoordVector& tessCoords
+	) const {
+
+		int numCoords = tessCoords.size();
+
+		// Allocate output structure
+		auto tessValues = std::unique_ptr<T[]>(new T[numCoords]);
+
+		const auto& topology = refiner->GetLevel(0);
+
+		auto inputValues = interpolatedValues.Get<T>();
+
+		// Evaluate
+		#pragma omp parallel for
+		for (int vertex = 0; vertex < tessCoords.size(); ++vertex) {
+			// Init
+			auto& coords = tessCoords[vertex];
+
+			// Translate in ptex face
+			int ptexFace = ptexIndices->GetFaceId(coords.face);
+
+			//  Locate the patch corresponding to the face ptex idx and (s,t)
+			//  and evaluate:
+			Far::PatchTable::PatchHandle const * handle =
+				patchMap->FindPatch(ptexFace, coords.x, coords.y);
+			assert(handle);
+
+			float pWeights[20];
+			patchTable->EvaluateBasis(*handle, coords.x, coords.y, pWeights);
+
+			//  Identify the patch cvs and combine with the evaluated weights --
+			//  remember to distinguish cvs in the base level:
+			Far::ConstIndexArray cvIndices = patchTable->GetPatchVertices(*handle);
+
+			// Evaluate
+			T& val = tessValues[vertex];
+
+			val.Clear();
+
+			for (int cv = 0; cv < cvIndices.size(); ++cv) {
+				int cvIndex = cvIndices[cv];
+
+				val.AddWithWeight(inputValues[cvIndex], pWeights[cv]);
+			}
+
+		}  // ~for vertex
+
+		return tessValues;
+	}
+
+
+	// Property members
+	// "We're all consenting adults here", so those members will be left public
+	TopologyRefinerPtr refiner;
+	PtexIndicesPtr ptexIndices;
+	Far::PatchTableFactory::Options patchTableOptions;
+	PatchTablePtr patchTable;
+	PatchMapPtr patchMap;
+
+};
+
+// Helper to evaluate multi-layers data, like UV, Colors, Gamma, AOV.
+// EXTRACTOR is a callable type providing the coarse data for a given layer.
+struct MultiLayerDataEvaluator{
+
+	// Constructor
+	MultiLayerDataEvaluator(
+		const Surface& p_surface,
+		u_int p_layerSize,
+		const CoordVector& p_coords
+	):
+		surface(p_surface),
+		layerSize(p_layerSize),
+		coords(p_coords)
+	{}
+
+	// Return type for evaluation
+	template <typename DATA_BUFFER, typename DATA_OUT>
+	struct EvaluatedLayers: std::vector<DATA_BUFFER> {
+
+		// Return-object constructor
+		EvaluatedLayers(size_t num_layers):
+			std::vector<DATA_BUFFER>(num_layers)
+		{}
+
+		// Return-object releaser
+		std::array<DATA_OUT *, EXTMESH_MAX_DATA_COUNT>* releaseLayers() {
+			for (size_t layer = 0; layer < EXTMESH_MAX_DATA_COUNT; ++layer) {
+				outBuffers[layer] = reinterpret_cast<DATA_OUT *>((*this)[layer].release());
+			}
+			return &outBuffers;
+		}
+
+		std::array<DATA_OUT *, EXTMESH_MAX_DATA_COUNT> outBuffers;
+	};
+
+
+	// Evaluator
+	template < typename EXTRACTOR >
+	auto evaluate(EXTRACTOR getLayerData) {
+
+		// Evaluated data are stored as smart pointers in a vector (one row per
+		// layer), so that they are automatically freed if anything goes wrong
+		// before the mesh is built. Each element of the vector is a buffer for a
+		// layer. Eventually, the buffers have to be passed to ExtTriangleMesh
+		// constructor, which takes ownership. In that way, they will be released.
+
+		using DATA_IN = std::remove_pointer_t<std::invoke_result_t<EXTRACTOR, u_int>>;
+		using DATA_BUFFER = std::unique_ptr<DATA_IN[]>;
+
+		// Return float* if DATA is FloatAdapter
+		// (for Alpha and AOV)
+		using DATA_OUT = std::conditional_t<
+			std::is_same_v<DATA_IN, FloatAdapter>, float, DATA_IN
+		>;
+
+		// Return object
+		EvaluatedLayers<DATA_BUFFER, DATA_OUT> res(EXTMESH_MAX_DATA_COUNT);
+
+		// Treatment
+		for (size_t layer = 0; layer < EXTMESH_MAX_DATA_COUNT; ++layer) {
+			DATA_IN* layerData = getLayerData(layer);
+			if (layerData) {
+				auto interpolatedData = surface.Interpolate(layerData, layerSize);
+				res[layer] = surface.Evaluate<DATA_IN>(interpolatedData, coords);
+			}
+		}
+		return res;
+	}
+
+	const Surface& surface;
+	const size_t layerSize;
+	const CoordVector& coords;
+
 };
 
 
-void Tessellate (
-	const Surface& surface,
-	const size_t N,
-	CoordVector& tessCoords,
-	Triangle * tessTris
-	) {
-	// This is triforce tessellation.
-	// This tessellation splits edges in N segments,
-	// and generates N² resulting triangles by input triangle.
-	//
-	// Input:
-	//           V2
-	//          / \
-	//		   /  \
-	//        /   \
-	//      V0----V1
-	//
-	//
-	//	Output (N=4):
-	//
-	//          V2
-	//         / \
-	//        E7-E8
-	//       / \/ \
-	//      E5-I3-E6
-	//     / \/ \/ \
-	//    E3-I0-I1-E4
-	//   / \/ \/ \/ \
-	//	V0-E0-E1-E2-V1
-	//
-	//	Nota:
-	//	Vx - initial vertex (to be referenced)
-	//	Ex - edge vertex (to be created)
-	//	Ix - internal vertex (to be created)
-
-	// Some constants
-	const auto& topology = surface.refiner->GetLevel(0);
-	const size_t FACE_COUNT = topology.GetNumFaces();
-	const int FACE_SIZE = 3;  // Of course (triangles)...
-
-
-	// Check
-	SDL_LOG(
-		"Subdivision (enhanced) - Tessellating "
-		<< FACE_COUNT
-		<< " faces / " << topology.GetNumVertices()
-		<< " points with factor N="
-		<< N
-	);
-	if (FACE_COUNT * N * N >= std::numeric_limits<int>::max()) {
-		throw std::runtime_error(
-			"FACE_COUNT * N * N > numeric limit ("
-			+ ToString(std::numeric_limits<int>::max())
-			+ ")"
-		);
-	}
-
-	// Useful variables and constants
-	int offset;
-
-	// Number of coarse vertices
-	const int numCoarseVertices = topology.GetNumVertices();
-
-	// Number of interior points in an edge
-	const int numEdgeInteriorPoints = N - 1;
-
-	// Number of interior points in a triangle
-	const int numTriangleInteriorPoints = (N - 1) * (N - 2) / 2;
-
-	// Number of coords to be computed
-	const int numCoords =
-		topology.GetNumVertices()
-		+ numEdgeInteriorPoints * topology.GetNumEdges()
-		+ numTriangleInteriorPoints * topology.GetNumFaces();
-
-	// Size tessCoords
-	tessCoords.resize(numCoords);
-
-	// Get vertex local coordinates in given face
-	auto getVertexLocalCoords = [&topology](int face, int vertex) {
-		auto faceVertices = topology.GetFaceVertices(face);
-		if (vertex == faceVertices[0]) {
-			return LocalCoords(face, 0.f, 0.f);
-		} else if (vertex == faceVertices[1]) {
-			return LocalCoords(face, 1.f, 0.f);
-		} else if (vertex == faceVertices[2]) {
-			return LocalCoords(face, 0.f, 1.f);
-		}
-
-		throw std::runtime_error("Error in getVertexLocalCoords");
-	};
-
-	// Step #1 - Initialize with initial (coarse) vertices
-	#pragma omp parallel for
-	for (int vertex = 0; vertex < numCoarseVertices; ++vertex) {
-		int face = topology.GetVertexFaces(vertex)[0];  // Choose first face (arbitrary)
-		tessCoords[vertex] = getVertexLocalCoords(face, vertex);
-	}
-	offset = numCoarseVertices;
-
-	// Step #2 - Add edge vertices
-	#pragma omp parallel for
-	for (int edge = 0; edge < topology.GetNumEdges(); ++edge) {
-		// Find face
-		int face = topology.GetEdgeFaces(edge)[0];
-		// Find edge vertices.
-		auto edgeVerts = topology.GetEdgeVertices(edge);
-		int v0 = edgeVerts[0];
-		int v1 = edgeVerts[1];
-
-		LocalCoords c0 = getVertexLocalCoords(face, v0);
-		LocalCoords c1 = getVertexLocalCoords(face, v1);
-
-		for (int i = 1; i < N; ++i) {  // Only edge interior vertices, not extremities
-			LocalCoords coords(c0, c1, i, N);  // Interpolate from c0 and c1
-			tessCoords[offset + edge * numEdgeInteriorPoints + i - 1 ] = coords;
-		}
-	}
-	offset = numCoarseVertices + numEdgeInteriorPoints * topology.GetNumEdges();
-
-	// Step #3 - Add interior points
-	#pragma omp parallel for
-	for (int f = 0; f < FACE_COUNT; ++f) {  // for each face
-		const auto faceVertices = topology.GetFaceVertices(f);
-		const auto faceEdges = topology.GetFaceEdges(f);
-		assert(faceVertices.size() == 3);
-
-		// If (i,j) are local coordinates, and edge length is N,
-		// we have in the triangle: i >= 0, j >= 0, i + j <= N
-		// We then consider k so that i + j + k = N.
-		// If we are on an edge, i * j * k == 0.
-		// If we are on a vertex, i == N or j == N or k == N.
-		// In the face (triangle), after tessellation, we'll have N² points.
-		// Some of them will be shared with other faces, we'll have to deal
-		// with that.
-
-		std::vector<int> pointMap;  // Map points between local numeration and global one
-
-		for (int j = 0; j <= N ; ++j) {
-			for (int i = 0; i <= N - j; ++i) {
-				int k = N - i - j;
-				int vertex;  // Output
-				// Find point type: vertex, edge point, interior point
-				if (i == N || j == N || k == N) {  // Vertex
-					// Vertex point in initial triangle
-					vertex = faceVertices[(i + 2 * j) / N];
-				} else if (i == 0 || j == 0 || k == 0) {  // Edge
-					// Find edge vertices
-					int v0, v1, pos;
-					// Find edge
-					if (i == 0) {
-						v0 = faceVertices[0];
-						v1 = faceVertices[2];
-						pos = j;
-					} else if (j == 0) {
-						v0 = faceVertices[0];
-						v1 = faceVertices[1];
-						pos = i;
-					} else if (k == 0) {
-						v0 = faceVertices[1];
-						v1 = faceVertices[2];
-						pos = j;
-					}
-					int edge = topology.FindEdge(v0, v1);
-					auto edgeVertices = topology.GetEdgeVertices(edge);
-					if (v0 != edgeVertices[0]) {
-						pos = N - pos;
-						std::swap(v0, v1);
-					}
-					vertex = numCoarseVertices + edge * numEdgeInteriorPoints + (pos - 1);
-
-				} else { // Interior point
-					int idx = offset
-						+ numTriangleInteriorPoints * f
-						+ numTriangleInteriorPoints - (N - j) * (N - j - 1) / 2
-						+ i - 1;
-					// Create position
-					tessCoords[idx] = LocalCoords(f, i, j, N);
-					// Record point in map
-					vertex = idx;
-				}
-
-				pointMap.push_back(vertex);
-			}  // ~for j
-		}  // ~for i
-
-		// Create triangles
-
-		// Lambda to get a point in the pointMap, given (i, j)
-		auto pnt = [N, &pointMap](int i, int j) {
-			int idx = (2 * N + 3 - j) * j / 2 + i;
-			return pointMap[idx];
-		};
-
-		int idxTri = f * N * N;
-
-		// Up triangles
-		for (int j = 0; j < N; ++j) {
-			for (int i = 0; i < N - j; ++i, ++idxTri) {
-				tessTris[idxTri] = Triangle(pnt(i, j), pnt(i + 1, j), pnt(i, j + 1));
-			}
-		}
-		// Down triangles
-		for (int j = 0; j < N; ++j) {
-			for (int i = 0; i < N - j - 1; ++i, ++idxTri) {
-				tessTris[idxTri] = Triangle(pnt(i, j + 1), pnt(i + 1, j + 1), pnt(i + 1, j));
-			}
-		}
-
-	}  // ~for face
-
-}  // ~Tessellate
-
-
-void Evaluate(
-	const Surface& surface,
-	const CoordVector& tessCoords,
-	Point* tessPoints,
-	Normal* tessNormals
-) {
-	SDL_LOG("Subdivision (enhanced) - Evaluating");
-
-	const auto& topology = surface.refiner->GetLevel(0);
-	const auto& patchTable = *surface.patchTable;
-	const auto& ptexIndices = *surface.ptexIndices;
-
-    int numBaseVerts = surface.numBasePositions;
-
-	// Evaluate positions and derivatives
-	#pragma omp parallel for
-	for (int vertex = 0; vertex < tessCoords.size(); ++vertex) {
-		// Init
-		auto& coords = tessCoords[vertex];
-
-		// Translate in ptex face
-		int ptexFace = surface.ptexIndices->GetFaceId(coords.face);
-
-		//  Locate the patch corresponding to the face ptex idx and (s,t)
-		//  and evaluate:
-		Far::PatchTable::PatchHandle const * handle =
-			surface.patchMap->FindPatch(ptexFace, coords.x, coords.y);
-		assert(handle);
-
-		float pWeights[20];
-		float duWeights[20];
-		float dvWeights[20];
-		patchTable.EvaluateBasis(
-			*handle, coords.x, coords.y,
-			pWeights, duWeights, dvWeights
-		);
-
-		//  Identify the patch cvs and combine with the evaluated weights --
-		//  remember to distinguish cvs in the base level:
-		Far::ConstIndexArray cvIndices = patchTable.GetPatchVertices(*handle);
-
-		// Evaluate position and derivatives
-		Point& pos = tessPoints[vertex];
-		pos.Clear();
-
-		Vector du;
-		du.Clear();
-
-		Vector dv;
-		dv.Clear();
-
-		for (int cv = 0; cv < cvIndices.size(); ++cv) {
-			int cvIndex = cvIndices[cv];
-
-			const Point& position =
-				(cvIndex < numBaseVerts) ?
-				surface.basePositions[cvIndex] :
-				surface.localPositions[cvIndex - numBaseVerts];
-
-			pos.AddWithWeight(position, pWeights[cv]);
-			du.AddWithWeight(position, duWeights[cv]);
-			dv.AddWithWeight(position, dvWeights[cv]);
-		}
-
-		// Update output (position and normal)
-		tessNormals[vertex] = Normal(Cross(du, dv));
-
-		// Check validity of normal
-		auto t = tessNormals[vertex];
-		if (t[0] == 0.f && t[1] == 0.f && t[2] == 0.f) {
-			SDL_LOG(
-				"Subdivision (enhanced) - Vertex #" << vertex << ", "
-				<< "uv = (" << coords.x << ", " << coords.y << "), "
-				<< "du = (" << du[0] << ", " << du[1] << ", " << du[2] << "), "
-				<< "dv = (" << dv[0] << ", " << dv[1] << ", " << dv[2] << ")"
-			);
-			throw std::runtime_error("Null normal (vect(du, dv) == 0)");
-		}
-	}  // ~for vertex
-}
-
-
+// Entry point for enhanced subdivision
 ExtTriangleMesh *ApplySubdiv(
 	ExtTriangleMesh *srcMesh,
 	const u_int maxLevel
 ) {
-	// Create limit surface (subdivided) from base geometry
-	Surface surface(srcMesh, maxLevel);
+	// Remarks:
+	// All buffers (triangles, points, normals...) are enclosed in smart pointers
+	// in order to guarantee that memory is released in case of exception arising
+	// during whole process: please keep it so.
+	//
+	// Outputs values are returned as tuples, instead of using byref arguments.
+	// This is for readability: arguments are inputs only, return values are output
 
-	// Compute dimensions
+	using std::tie;
+
+	// Create limit surface from base geometry
+	Surface surface(srcMesh);
+
+	// Subdivide
+	surface.Subdivide(maxLevel);
+
+	// Compute tesselletion rate, from maxLevel
 	size_t tessellationRate = 1 << maxLevel;
-	int pointCount = surface.getTesselPosCount(tessellationRate);
-	int normCount = surface.getTesselPosCount(tessellationRate);
-	int triCount = surface.getTesselTriangleCount(tessellationRate);
-
-	// Output structures
-	auto tessPositions = TriangleMesh::AllocVerticesBuffer(pointCount);
-	auto tessNormals = new Normal[normCount];
-	auto tessTriangles = TriangleMesh::AllocTrianglesBuffer(triCount);
 
 	// Tessellate
-	CoordVector tessCoords;  // We temporarily store new positions as (face, x, y)
-	Tessellate(surface, tessellationRate, tessCoords, tessTriangles);
+	CoordVector tessCoords;
+	TriangleArrayPtr tessTriangles;
+	int numPoints, numTriangles;
 
-	// Evaluate
-	Evaluate(surface, tessCoords, tessPositions, tessNormals);
+	tie(tessCoords, tessTriangles, numPoints, numTriangles) =
+		surface.Tessellate(tessellationRate);
 
+	// Record initial vertex count
+	u_int numMeshVertex = srcMesh->GetTotalVertexCount();
+
+	// Evaluate positions and normals
+	PointArrayPtr tessPoints;
+	NormalArrayPtr tessNormals;
+	{
+		// Interpolate positions on subdivided surface
+		auto interpolatedPositions =
+			surface.Interpolate(srcMesh->GetVertices(), numMeshVertex);
+
+		// Evaluate refined (interpolated) positions
+		SDL_LOG("Subdivision (enhanced) - Evaluating positions and normals");
+		tie(tessPoints, tessNormals) =
+			surface.EvaluatePositions(interpolatedPositions, tessCoords);
+	}
+
+	// Evaluate other primvars
+	MultiLayerDataEvaluator evaluator(surface, numMeshVertex, tessCoords);
+
+	// Evaluate UV
+	auto extractorUV = [&srcMesh](u_int layer) { return srcMesh->GetUVs(layer); };
+	auto tessUVs = evaluator.evaluate(extractorUV);
+
+	// Evaluate Colors
+	auto extractorCols = [&srcMesh](u_int layer) { return srcMesh->GetColors(layer); };
+	auto tessCols = evaluator.evaluate(extractorCols);
+
+	// Evaluate Alphas
+	auto extractorAlphas = [&srcMesh](u_int layer)
+		{ return (FloatAdapter*) srcMesh->GetAlphas(layer); };
+	auto tessAlphas = evaluator.evaluate(extractorAlphas);
+
+	// Evaluate AOVs
+	auto extractorAOVs = [&srcMesh](u_int layer)
+		{ return (FloatAdapter*) srcMesh->GetVertexAOVs(layer); };
+	auto tessAOVs = evaluator.evaluate(extractorAOVs);
+
+	// Allocate the new mesh and release buffers (transfer ownership to new
+	// mesh)
 	SDL_LOG(
 		"Subdivision (enhanced) - Building new mesh: "
-		<< pointCount << " points, "
-		<< triCount << " triangles"
+		<< numPoints << " points / "
+		<< numTriangles << " triangles"
 	);
 
-	SDL_LOG("Subdivision (enhanced) - Allocating");
-
-	// Allocate the new mesh
 	ExtTriangleMesh *newMesh =  new ExtTriangleMesh(
-		pointCount, triCount, tessPositions, tessTriangles, tessNormals
+		u_int(numPoints), u_int(numTriangles),
+		tessPoints.release(),
+		tessTriangles.release(),
+		tessNormals.release(),
+		tessUVs.releaseLayers(),
+		tessCols.releaseLayers(),
+		tessAlphas.releaseLayers()
 	);
+
+	// Handle AOVs
+	auto tessAOVs_released = *tessAOVs.releaseLayers();
+	for (u_int i = 0; i < EXTMESH_MAX_DATA_COUNT; ++i) {
+		newMesh->SetVertexAOV(i, tessAOVs_released[i]);
+	}
 
 	return newMesh;
 
@@ -1042,21 +1354,40 @@ SubdivShape::SubdivShape(
 
 	if (maxLevel > 0) {
 		if (camera && (maxEdgeScreenSize > 0.f)) {
-			SDL_LOG("Subdividing shape " << srcMesh->GetName() << " max. at level: " << maxLevel);
+			SDL_LOG("Subdividing shape " << srcMesh->GetName()
+					<< " - Adaptive subdivision");
 
 			mesh = srcMesh->Copy();
 
 			for (u_int i = 0; i < maxLevel; ++i) {
+				SDL_LOG("Subdividing - Adaptive - Computing max edge size");
 				// Check the size of the longest mesh edge on film image plane
 				const float edgeScreenSize = MaxEdgeScreenSize(camera, mesh);
-				SDL_LOG("Subdividing shape current max. edge screen size: " << edgeScreenSize);
 
 				if (edgeScreenSize <= maxEdgeScreenSize)
 					break;
 
-				// Subdivide by one level and re-try
-				ExtTriangleMesh *newMesh = ApplySubdiv(mesh, 1, enhanced);
-				SDL_LOG("Subdivided shape step #" << i << " from " << mesh->GetTotalTriangleCount() << " to " << newMesh->GetTotalTriangleCount() << " faces");
+				SDL_LOG(
+					"Subdivision - Adaptive - Step #" << i << " - "
+					<< "Current maximum edge size on screen = "
+					<< edgeScreenSize
+					<< ", target = "
+					<< maxEdgeScreenSize
+				);
+
+
+				int optimizedLevel =
+					static_cast<int>(std::ceil(std::log2f(edgeScreenSize / maxEdgeScreenSize)));
+				SDL_LOG("Subdividing adapted level = " << optimizedLevel);
+
+				// Subdivide and re-try
+				ExtTriangleMesh *newMesh = ApplySubdiv(mesh, optimizedLevel, enhanced);
+				SDL_LOG(
+					"Done step #" << i
+					<< " from " << mesh->GetTotalTriangleCount()
+					<< " to " << newMesh->GetTotalTriangleCount() << " faces "
+					<< "(level=" << optimizedLevel << ")"
+				);
 
 				// Replace old mesh with new one
 				delete mesh;
@@ -1094,48 +1425,47 @@ float SubdivShape::MaxEdgeScreenSize(const Camera *camera, ExtTriangleMesh *srcM
 	// Note VisualStudio doesn't support:
 	//#pragma omp parallel for reduction(max:maxEdgeSize)
 
-	const u_int threadCount =
-#if defined(_OPENMP)
-			omp_get_max_threads()
-#else
-			0
-#endif
-			;
+	const u_int threadCount = omp_get_max_threads();
 
 	const Transform worldToScreen = Inverse(camera->GetScreenToWorld());
 
 	std::vector<float> maxEdgeSizes(threadCount, 0.f);
-	for(
-			// Visual C++ 2013 supports only OpenMP 2.5
-#if _OPENMP >= 200805
-			unsigned
-#endif
-			int i = 0; i < triCount; ++i) {
-		const int tid =
-#if defined(_OPENMP)
-			omp_get_thread_num()
-#else
-			0
-#endif
-			;
 
-		const Triangle &tri = tris[i];
-		const Point p0 = worldToScreen * verts[tri.v[0]];
-		const Point p1 = worldToScreen * verts[tri.v[1]];
-		const Point p2 = worldToScreen * verts[tri.v[2]];
-
-		float maxEdgeSize = (p1 - p0).Length();
-		maxEdgeSize = Max(maxEdgeSize, (p2 - p1).Length());
-		maxEdgeSize = Max(maxEdgeSize, (p0 - p2).Length());
-
-		maxEdgeSizes[tid] = Max(maxEdgeSizes[tid], maxEdgeSize);
+	std::vector<Point> projectedPoints(srcMesh->GetTotalVertexCount());
+	#pragma omp parallel for
+	for(int i = 0; i < srcMesh->GetTotalVertexCount(); ++i) {
+		projectedPoints[i] = worldToScreen * verts[i];
+		projectedPoints[i] /= projectedPoints[i].z;
 	}
 
-	float maxEdgeSize = 0.f;
-	for (u_int i = 0; i < threadCount; ++i)
-		maxEdgeSize = Max(maxEdgeSize, maxEdgeSizes[i]);
+	// Visual C++ 2013 supports only OpenMP 2.5, with int loop indices
+	// At any rate, opensubdiv indices are of type 'int', so no regret...
+	//
+	// We use LengthSquared for max search, sparing one operation per iteration (sqrt)
+	#pragma omp parallel for
+	for(int i = 0; i < triCount; ++i) {
+		const int tid = omp_get_thread_num();
+		//const int tid = 0;
 
-	return maxEdgeSize;
+		const Triangle &tri = tris[i];
+		const Point p0 = projectedPoints[tri.v[0]];
+		const Point p1 = projectedPoints[tri.v[1]];
+		const Point p2 = projectedPoints[tri.v[2]];
+
+		std::array<float, 4> triMaxEdgeSize;
+		triMaxEdgeSize[0] = (p1 - p0).LengthSquared();
+		triMaxEdgeSize[1] = (p2 - p1).LengthSquared();
+		triMaxEdgeSize[2] = (p0 - p2).LengthSquared();
+		triMaxEdgeSize[3] = maxEdgeSizes[tid];
+
+		maxEdgeSizes[tid] =
+			*std::max_element(triMaxEdgeSize.begin(), triMaxEdgeSize.end());
+
+	}
+
+	float maxEdgeSize = *std::max_element(maxEdgeSizes.begin(), maxEdgeSizes.end());
+
+	return sqrtf(maxEdgeSize);
 }
 
 
@@ -1153,12 +1483,19 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(
 	assert(srcMesh->GetTotalTriangleCount() <= std::numeric_limits<int>::max());
 
 	if (enhanced) {
-		SDL_LOG("Subdivision (enhanced) - Starting");
+		SDL_LOG(
+			"Subdivision (enhanced) - Starting - "
+			<< srcMesh->GetTotalVertexCount() << " points / "
+			<< srcMesh->GetTotalTriangleCount() << " triangles"
+		);
 
 		return enhanced::ApplySubdiv(srcMesh, maxLevel);
 	}
 	else {
-		SDL_LOG("Subdivision - Starting");
+		SDL_LOG("Subdivision - Starting - "
+			<< srcMesh->GetTotalVertexCount() << " points / "
+			<< srcMesh->GetTotalTriangleCount() << " triangles"
+		);
 
 		return simple::ApplySubdiv(srcMesh, maxLevel);
 	}
@@ -1175,4 +1512,4 @@ ExtTriangleMesh *SubdivShape::RefineImpl(const Scene *scene) {
 }
 
 
-// vim: autoindent noexpandtab tabstop=4 shiftwidth=4
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4 foldmethod=syntax
