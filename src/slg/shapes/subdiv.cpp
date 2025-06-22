@@ -1162,27 +1162,21 @@ struct Surface {
 
 // Helper to evaluate multi-layers data, like UV, Colors, Gamma, AOV.
 // EXTRACTOR is a callable type providing the coarse data for a given layer.
-template < typename EXTRACTOR >
 struct MultiLayerDataEvaluator{
 
-	// Evaluated data are stored as smart pointers in a vector (one row per
-	// layer), so that they are automatically freed if anything goes wrong
-	// before the mesh is built. Each element of the vector is a buffer for a
-	// layer. Eventually, the buffers have to be passed to ExtTriangleMesh
-	// constructor, which takes ownership. In that way, they will be released.
-
-	using DATA = std::remove_pointer_t<std::invoke_result_t<EXTRACTOR, u_int>>;
-	using DATA_BUFFER = std::unique_ptr<DATA[]>;
-
-	// Return float* if DATA is FloatAdapter
-	// (for Alpha and AOV)
-	using DATA_OUT = std::conditional_t<
-		std::is_same_v<DATA, FloatAdapter>,
-		float,
-		DATA
-	>;
+	// Constructor
+	MultiLayerDataEvaluator(
+		const Surface& p_surface,
+		u_int p_layerSize,
+		const CoordVector& p_coords
+	):
+		surface(p_surface),
+		layerSize(p_layerSize),
+		coords(p_coords)
+	{}
 
 	// Return type for evaluation
+	template <typename DATA_BUFFER, typename DATA_OUT>
 	struct EvaluatedLayers: std::vector<DATA_BUFFER> {
 
 		// Return-object constructor
@@ -1191,37 +1185,45 @@ struct MultiLayerDataEvaluator{
 		{}
 
 		// Return-object releaser
-		std::array<DATA_OUT *, EXTMESH_MAX_DATA_COUNT>* release() {
+		std::array<DATA_OUT *, EXTMESH_MAX_DATA_COUNT>* releaseLayers() {
 			for (size_t layer = 0; layer < EXTMESH_MAX_DATA_COUNT; ++layer) {
-				res[layer] = reinterpret_cast<DATA_OUT *>((*this)[layer].release());
+				outBuffers[layer] = reinterpret_cast<DATA_OUT *>((*this)[layer].release());
 			}
-			return &res;
+			return &outBuffers;
 		}
 
-		std::array<DATA_OUT *, EXTMESH_MAX_DATA_COUNT> res;  // Released buffers
+		std::array<DATA_OUT *, EXTMESH_MAX_DATA_COUNT> outBuffers;
 	};
 
-	// Constructor
-	MultiLayerDataEvaluator(
-		const Surface& p_surface,
-		EXTRACTOR p_getLayerData,
-		u_int p_layerSize,
-		const CoordVector& p_coords
-	):
-		surface(p_surface),
-		getLayerData(p_getLayerData),
-		layerSize(p_layerSize),
-		coords(p_coords)
-	{}
 
 	// Evaluator
-	EvaluatedLayers evaluate() {
-		EvaluatedLayers res(EXTMESH_MAX_DATA_COUNT);
+	template < typename EXTRACTOR >
+	auto evaluate(EXTRACTOR getLayerData) {
+
+		// Evaluated data are stored as smart pointers in a vector (one row per
+		// layer), so that they are automatically freed if anything goes wrong
+		// before the mesh is built. Each element of the vector is a buffer for a
+		// layer. Eventually, the buffers have to be passed to ExtTriangleMesh
+		// constructor, which takes ownership. In that way, they will be released.
+
+		using DATA_IN = std::remove_pointer_t<std::invoke_result_t<EXTRACTOR, u_int>>;
+		using DATA_BUFFER = std::unique_ptr<DATA_IN[]>;
+
+		// Return float* if DATA is FloatAdapter
+		// (for Alpha and AOV)
+		using DATA_OUT = std::conditional_t<
+			std::is_same_v<DATA_IN, FloatAdapter>, float, DATA_IN
+		>;
+
+		// Return object
+		EvaluatedLayers<DATA_BUFFER, DATA_OUT> res(EXTMESH_MAX_DATA_COUNT);
+
+		// Treatment
 		for (size_t layer = 0; layer < EXTMESH_MAX_DATA_COUNT; ++layer) {
-			DATA* layerData = getLayerData(layer);
+			DATA_IN* layerData = getLayerData(layer);
 			if (layerData) {
 				auto interpolatedData = surface.Interpolate(layerData, layerSize);
-				res[layer] = surface.Evaluate<DATA>(interpolatedData, coords);
+				res[layer] = surface.Evaluate<DATA_IN>(interpolatedData, coords);
 			}
 		}
 		return res;
@@ -1229,7 +1231,6 @@ struct MultiLayerDataEvaluator{
 
 	const Surface& surface;
 	const size_t layerSize;
-	const std::function<DATA*(u_int)> getLayerData;
 	const CoordVector& coords;
 
 };
@@ -1284,31 +1285,26 @@ ExtTriangleMesh *ApplySubdiv(
 			surface.EvaluatePositions(interpolatedPositions, tessCoords);
 	}
 
+	// Evaluate other primvars
+	MultiLayerDataEvaluator evaluator(surface, numMeshVertex, tessCoords);
+
 	// Evaluate UV
 	auto extractorUV = [&srcMesh](u_int layer) { return srcMesh->GetUVs(layer); };
-	MultiLayerDataEvaluator
-		EvaluatorUV(surface, extractorUV, numMeshVertex, tessCoords);
-	auto tessUVs = EvaluatorUV.evaluate();
+	auto tessUVs = evaluator.evaluate(extractorUV);
 
 	// Evaluate Colors
 	auto extractorCols = [&srcMesh](u_int layer) { return srcMesh->GetColors(layer); };
-	MultiLayerDataEvaluator
-		EvaluatorCols(surface, extractorCols, numMeshVertex, tessCoords);
-	auto tessCols = EvaluatorCols.evaluate();
+	auto tessCols = evaluator.evaluate(extractorCols);
 
 	// Evaluate Alphas
 	auto extractorAlphas = [&srcMesh](u_int layer)
 		{ return (FloatAdapter*) srcMesh->GetAlphas(layer); };
-	MultiLayerDataEvaluator
-		EvaluatorAlphas(surface, extractorAlphas, numMeshVertex, tessCoords);
-	auto tessAlphas = EvaluatorAlphas.evaluate();
+	auto tessAlphas = evaluator.evaluate(extractorAlphas);
 
 	// Evaluate AOVs
 	auto extractorAOVs = [&srcMesh](u_int layer)
 		{ return (FloatAdapter*) srcMesh->GetVertexAOVs(layer); };
-	MultiLayerDataEvaluator
-		EvaluatorAOVs(surface, extractorAOVs, numMeshVertex, tessCoords);
-	auto tessAOVs = EvaluatorAOVs.evaluate();
+	auto tessAOVs = evaluator.evaluate(extractorAOVs);
 
 	// Allocate the new mesh and release buffers (transfer ownership to new
 	// mesh)
@@ -1323,13 +1319,13 @@ ExtTriangleMesh *ApplySubdiv(
 		tessPoints.release(),
 		tessTriangles.release(),
 		tessNormals.release(),
-		tessUVs.release(),
-		tessCols.release(),
-		tessAlphas.release()
+		tessUVs.releaseLayers(),
+		tessCols.releaseLayers(),
+		tessAlphas.releaseLayers()
 	);
 
 	// Handle AOVs
-	auto tessAOVs_released = *tessAOVs.release();
+	auto tessAOVs_released = *tessAOVs.releaseLayers();
 	for (u_int i = 0; i < EXTMESH_MAX_DATA_COUNT; ++i) {
 		newMesh->SetVertexAOV(i, tessAOVs_released[i]);
 	}
