@@ -40,7 +40,7 @@ target_link_libraries(pyluxcore PRIVATE
     blender-types
     robin_hood::robin_hood
     openimageio::openimageio
-    embree
+    embree::embree
 )
 target_link_libraries(pyluxcore PRIVATE OpenMP::OpenMP_CXX)
 

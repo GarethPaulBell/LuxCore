@@ -497,7 +497,7 @@ target_link_libraries(slg-core PRIVATE
   openexr::openexr
   opensubdiv::opensubdiv
   Imath::Imath
-  embree
+  embree::embree
   openimageio::openimageio
   nlohmann_json::nlohmann_json
   robin_hood::robin_hood
@@ -716,7 +716,7 @@ add_library(slg-film STATIC ${SLG_FILM_SRCS})
 target_link_libraries(slg-film PRIVATE
     boost::boost
     OpenColorIO::OpenColorIO
-    embree
+    embree::embree
     oidn::oidn
     openimageio::openimageio
     OpenMP::OpenMP_CXX

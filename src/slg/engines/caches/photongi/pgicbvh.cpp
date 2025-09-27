@@ -18,8 +18,8 @@
 
 #include <algorithm>
 
-#include <embree3/rtcore.h>
-#include <embree3/rtcore_builder.h>
+#include <embree4/rtcore.h>
+#include <embree4/rtcore_builder.h>
 
 #include "luxrays/core/bvh/bvhbuild.h"
 #include "slg/engines/caches/photongi/photongicache.h"

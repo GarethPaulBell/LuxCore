@@ -87,7 +87,7 @@ target_link_libraries(luxcore PRIVATE
     boost::boost
     spdlog::spdlog_header_only
     openimageio::openimageio
-    embree
+    embree::embree
     luxparser
 )
 target_link_libraries(luxcore_static PRIVATE
@@ -100,7 +100,7 @@ target_link_libraries(luxcore_static PRIVATE
     boost::boost
     spdlog::spdlog_header_only
     openimageio::openimageio
-    embree
+    embree::embree
     luxparser
 )
 

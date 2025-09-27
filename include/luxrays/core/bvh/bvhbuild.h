@@ -22,8 +22,8 @@
 #include <vector>
 #include <ostream>
 
-#include <embree3/rtcore.h>
-#include <embree3/rtcore_builder.h>
+#include <embree4/rtcore.h>
+#include <embree4/rtcore_builder.h>
 
 #include "luxrays/luxrays.h"
 #include "luxrays/core/geometry/bbox.h"

@@ -51,7 +51,7 @@ EmbreeAccel::~EmbreeAccel() {
 
 void EmbreeAccel::ExportTriangleMesh(const RTCScene embreeScene, const Mesh *mesh) const {
 	const RTCGeometry geom = rtcNewGeometry(embreeDevice, RTC_GEOMETRY_TYPE_TRIANGLE);
-	
+
 	// Share with Embree the mesh vertices
 	Point *meshVerts = mesh->GetVertices();
 	rtcSetSharedGeometryBuffer(geom, RTC_BUFFER_TYPE_VERTEX, 0, RTC_FORMAT_FLOAT3, meshVerts,
@@ -62,11 +62,11 @@ void EmbreeAccel::ExportTriangleMesh(const RTCScene embreeScene, const Mesh *mes
 	Triangle *meshTris = mesh->GetTriangles();
 	rtcSetSharedGeometryBuffer(geom, RTC_BUFFER_TYPE_INDEX, 0, RTC_FORMAT_UINT3, meshTris,
 			0, sizeof(Triangle), mesh->GetTotalTriangleCount());
-	
+
 	rtcCommitGeometry(geom);
-	
+
 	rtcAttachGeometry(embreeScene, geom);
-	
+
 	rtcReleaseGeometry(geom);
 
 }
@@ -99,11 +99,11 @@ void EmbreeAccel::ExportMotionTriangleMesh(const RTCScene embreeScene, const Mot
 			0, sizeof(Triangle), mtm->GetTotalTriangleCount());
 
 	rtcCommitGeometry(geom);
-	
+
 	rtcAttachGeometry(embreeScene, geom);
 
 	rtcReleaseGeometry(geom);
-	
+
 }
 
 void EmbreeAccel::Init(const std::deque<const Mesh *> &meshes,
@@ -119,7 +119,7 @@ void EmbreeAccel::Init(const std::deque<const Mesh *> &meshes,
 	maxTime = std::numeric_limits<float>::min();
 	for(const Mesh *mesh: meshes) {
 		const MotionTriangleMesh *mtm = dynamic_cast<const MotionTriangleMesh *>(mesh);
-		
+
 		if (mtm) {
 			minTime = Min(minTime, mtm->GetMotionSystem().StartTime());
 			maxTime = Max(maxTime, mtm->GetMotionSystem().EndTime());
@@ -181,7 +181,7 @@ void EmbreeAccel::Init(const std::deque<const Mesh *> &meshes,
 				// Save the instance ID
 				uniqueGeomByMesh[mesh] = geom;
 				// Save the matrix
-				uniqueInstMatrixByMesh[mesh] = itm->GetTransformation().m;				
+				uniqueInstMatrixByMesh[mesh] = itm->GetTransformation().m;
 				break;
 			}
 			case TYPE_TRIANGLE_MOTION:
@@ -224,13 +224,12 @@ bool EmbreeAccel::MeshPtrCompare(const Mesh *p0, const Mesh *p1) {
 }
 
 bool EmbreeAccel::Intersect(const Ray *ray, RayHit *hit) const {
-	RTCIntersectContext context;
-	rtcInitIntersectContext(&context);
 
 	RTCRayHit embreeRayHit;
 
-	if (isnan(ray->o.x) || isnan(ray->o.y) || isnan(ray->o.z) || isnan(ray->d.x) || isnan(ray->d.y) || isnan(ray->d.z))
+	if (isnan(ray->o.x) || isnan(ray->o.y) || isnan(ray->o.z) || isnan(ray->d.x) || isnan(ray->d.y) || isnan(ray->d.z)) {
 		return false;
+	}
 
 	embreeRayHit.ray.org_x = ray->o.x;
 	embreeRayHit.ray.org_y = ray->o.y;
@@ -250,7 +249,7 @@ bool EmbreeAccel::Intersect(const Ray *ray, RayHit *hit) const {
 	embreeRayHit.hit.primID = RTC_INVALID_GEOMETRY_ID;
 	embreeRayHit.hit.instID[0] = RTC_INVALID_GEOMETRY_ID;
 	
-	rtcIntersect1(embreeScene, &context, &embreeRayHit);
+	rtcIntersect1(embreeScene, &embreeRayHit);
 
 	if ((embreeRayHit.hit.geomID != RTC_INVALID_GEOMETRY_ID) &&
 			// A safety check in case of not enough numerical precision. Embree
@@ -266,8 +265,9 @@ bool EmbreeAccel::Intersect(const Ray *ray, RayHit *hit) const {
 		hit->b2 = embreeRayHit.hit.v;
 
 		return true;
-	} else
+	} else {
 		return false;
+	}
 }
 
 }

@@ -19,7 +19,7 @@
 #ifndef _LUXRAYS_EMBREEACCEL_H
 #define	_LUXRAYS_EMBREEACCEL_H
 
-#include <embree3/rtcore.h>
+#include <embree4/rtcore.h>
 
 #include "luxrays/luxrays.h"
 #include "luxrays/core/accelerator.h"
