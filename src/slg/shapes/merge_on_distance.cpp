@@ -192,6 +192,7 @@ namespace std {
 
 namespace {
 
+// Grid definition
 struct alignas(std::hardware_destructive_interference_size)
 GridElem : public std::pair<u_int, luxrays::Point> {
 	GridElem(u_int id, const luxrays::Point& point)
@@ -199,8 +200,12 @@ GridElem : public std::pair<u_int, luxrays::Point> {
 };
 
 using GridBucket = std::vector<GridElem, tbb::cache_aligned_allocator<GridElem>>;
-using GridType = std::unordered_map<CellId, GridBucket>;
+using GridAllocator = tbb::scalable_allocator<std::pair<const CellId, GridBucket>>;
+using GridHash = std::hash<CellId>;
+using GridEqual = std::equal_to<CellId>;
+using GridType = std::unordered_map<CellId, GridBucket, GridHash, GridEqual, GridAllocator>;
 
+// Gather similar points (at zero distance)
 UnionFind ProcessGrid(const GridType& grid, u_int numPoints) {
 
 	auto partitioner = tbb::auto_partitioner();
@@ -275,10 +280,13 @@ mergePoints(Point * points, u_int numPoints) {
 
 	using sixfloats = std::tuple<float, float, float, float, float, float>;
 	auto boundingbox = parallel_reduce(
+		// Range
 		blocked_range<Point*>(points, points+numPoints),
 
+		// Init
 		std::make_tuple(maxlimit, maxlimit, maxlimit, minlimit, minlimit, minlimit),
 
+		// Body
 		[](const blocked_range<Point*>& r, sixfloats init) -> sixfloats {
 			auto [minX, minY, minZ, maxX, maxY, maxZ] = init;
 			for(auto p=r.begin(); p!=r.end(); ++p) {
@@ -292,7 +300,8 @@ mergePoints(Point * points, u_int numPoints) {
 			return std::make_tuple(minX, minY, minZ, maxX, maxY, maxZ);
 		},
 
-		[](sixfloats a, sixfloats b) {
+		// Reduce
+		[](const sixfloats& a, const sixfloats& b) {
 			auto [minXa, minYa, minZa, maxXa, maxYa, maxZa] = a;
 			auto [minXb, minYb, minZb, maxXb, maxYb, maxZb] = b;
 			return std::make_tuple(
@@ -305,7 +314,7 @@ mergePoints(Point * points, u_int numPoints) {
 			);
 		}
 	);
-	auto [minX, minY, minZ, maxX, maxY, maxZ] = boundingbox;
+	auto& [minX, minY, minZ, maxX, maxY, maxZ] = boundingbox;
 	Point midPoint((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2);
 
 	// Compute cell sizes
@@ -334,27 +343,46 @@ mergePoints(Point * points, u_int numPoints) {
 	);
 
 	// Assign points to grid cells
-	GridType grid(numPoints);
-	for (u_int i = 0; i < numPoints; ++i) {
-		auto p = points[i] - midPoint;
-		auto cellX = static_cast<int16_t>(p.x / cellSizeX);
-		auto cellY = static_cast<int16_t>(p.y / cellSizeY);
-		auto cellZ = static_cast<int16_t>(p.z / cellSizeZ);
+	// We could have written something smarter with tbb::unordered_multimap
+	// but it may not be worth spending time on that, as the most common
+	// use case should be to call it with low or medium poly
+	auto grid = tbb::parallel_reduce(
+		// Range
+		blocked_range<u_int>(0, numPoints),
 
-		CellId cellId(cellX, cellY, cellZ);
-		grid[cellId].emplace_back(i, points[i]);
-	}
+		// Init
+		GridType(numPoints),
 
-	// Debug
-#if 0
-	for (auto& [cellId, vect] : grid) {
-		if (vect.size()) {
-			for (auto v : vect) {
-				SDL_LOG("Cell " << cellId << ":  " << v << " (" << points[v] << ")");
+		// Body
+		[&](const blocked_range<u_int>& r, GridType&& grid) -> GridType {
+			for (u_int i = r.begin(); i != r.end(); ++i) {
+				auto p = points[i] - midPoint;
+				auto cellX = static_cast<int16_t>(p.x / cellSizeX);
+				auto cellY = static_cast<int16_t>(p.y / cellSizeY);
+				auto cellZ = static_cast<int16_t>(p.z / cellSizeZ);
+
+				CellId cellId(cellX, cellY, cellZ);
+				grid[cellId].emplace_back(i, points[i]);
 			}
+			return grid;
+		},
+
+		// Reduce
+		[](GridType&& grid1, GridType&& grid2) -> GridType {
+			if (grid1.size() < grid2.size()) {
+				std::swap(grid1, grid2);
+			}
+			grid1.merge(grid2);
+			for (auto& [cellId, gridBucket2] : grid2) {
+				auto& gridBucket1 = grid1[cellId];
+				gridBucket1.reserve(gridBucket1.size() + gridBucket2.size());
+				gridBucket1.insert(
+					gridBucket1.end(), gridBucket2.begin(), gridBucket2.end()
+				);
+			}
+			return grid1;
 		}
-	}
-#endif
+	);
 
 	// For each cell, compare points within the cell and adjacent cells
 	// and gather points in small distance
@@ -363,35 +391,56 @@ mergePoints(Point * points, u_int numPoints) {
 	SDL_LOG("After process");
 
 	// Group points by their root parent
-	std::unordered_map<u_int, std::vector<u_int>> clusters;
-	std::vector<u_int> pointMap(numPoints);
+	std::unordered_map<u_int, std::vector<u_int>> clusters(numPoints);
 	for (u_int i = 0; i < numPoints; ++i) {
 		auto clusterIndex = dsu.find(i);
 		clusters[clusterIndex].push_back(i);
 	}
+	// Get an array of clusters
+	std::vector<const std::vector<u_int> *> clusterRefs;
+	clusterRefs.reserve(clusters.size());
+    for (auto& [root, cluster] : clusters) {
+		clusterRefs.push_back(&cluster);
+	}
+	SDL_LOG("After group");
 
 	// Replace each cluster with its centroid
 	auto numNewPoints = clusters.size();
-	std::unique_ptr<Point> newPoints{luxrays::ExtTriangleMesh::AllocVerticesBuffer(numNewPoints)};
+	std::vector<u_int> pointMap(numPoints);
+	std::unique_ptr<Point> newPoints{
+		luxrays::ExtTriangleMesh::AllocVerticesBuffer(numNewPoints)
+	};
+	auto newPointsPtr = newPoints.get();
 	std::vector<u_int> histogram(numPoints);
-	u_int iPoint = 0;
-	for (auto& [root, cluster] : clusters) {
-		float cx = 0, cy = 0, cz = 0;
-		for (const auto& p : cluster) {
-			cx += points[p].x;
-			cy += points[p].y;
-			cz += points[p].z;
-			pointMap[p] = iPoint;
-		}
-		auto cluster_size = cluster.size();
-		cx /= cluster_size;
-		cy /= cluster_size;
-		cz /= cluster_size;
+	auto newPointsPtr = newPoints.get();
 
-		histogram[iPoint] = cluster_size;
-		assert(iPoint < numNewPoints);
-		newPoints.get()[iPoint++] = Point(cx, cy, cz);
-	}
+	tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, numNewPoints),
+		[&](tbb::blocked_range<size_t>& r) {
+			for (auto newIdx = r.begin(); newIdx != r.end(); ++newIdx) {
+				auto& cluster = *clusterRefs[newIdx];
+				auto cluster_size = cluster.size();
+				if (!cluster_size) continue;
+
+				// Compute point map (mapping between old and new points)
+				for (auto oldIdx: cluster) {
+					pointMap[oldIdx] = newIdx;
+				}
+
+				// Compute equivalent point (centroid)
+				Point newPoint = std::transform_reduce(
+					cluster.cbegin(),
+					cluster.cend(),
+					Point(0, 0, 0),
+					std::plus{},
+					[&points](auto idx) -> Point { return points[idx]; }
+				) / cluster_size;
+
+				histogram[newIdx] = cluster_size;
+				newPointsPtr[newIdx] = newPoint;
+			}
+		}
+	);
 
 	auto out = std::make_tuple(
 		std::move(newPoints),
@@ -409,9 +458,6 @@ luxrays::ExtTriangleMesh* slg::MergeOnDistanceShape::ApplyMergeOnDistance(
 ) {
 	const double startTime = WallClockTime();
 
-	// Compute cellSize
-	float cellSize = 10; // TODO
-
 	// Get points
 	u_int numOldPoints = srcMesh->GetTotalVertexCount();
 	auto [newPoints, numNewPoints, pointMap, histogram] = mergePoints(
@@ -425,6 +471,7 @@ luxrays::ExtTriangleMesh* slg::MergeOnDistanceShape::ApplyMergeOnDistance(
 	auto newTriangles = std::unique_ptr<luxrays::Triangle>(
 		luxrays::ExtTriangleMesh::AllocTrianglesBuffer(numTriangles)
 	);
+	auto newTrianglesPtr = newTriangles.get();
 	for (u_int i = 0; i < numTriangles; ++i) {
 		auto oldTriangle = oldTriangles[i];
 		auto newTriangle = luxrays::Triangle(
@@ -432,22 +479,22 @@ luxrays::ExtTriangleMesh* slg::MergeOnDistanceShape::ApplyMergeOnDistance(
 			pointMap[oldTriangle.v[1]],
 			pointMap[oldTriangle.v[2]]
 		);
-		newTriangles.get()[i] = newTriangle;
+		newTrianglesPtr[i] = newTriangle;
 	}
 
-	// Recompute normals
-	std::unique_ptr<luxrays::Normal> newNormals;
-	if (srcMesh->HasNormals()) {
-		auto oldNormals = srcMesh->GetNormals();
-		newNormals.reset(new luxrays::Normal[numNewPoints]);
-		for (u_int i = 0; i < numOldPoints; ++i) {
-			newNormals.get()[pointMap[i]] += oldNormals[i];
-		}
-		for (u_int j = 0; j < numNewPoints; ++j) {
-			auto newNormal = newNormals.get()[j];
-			newNormal /= newNormal.Length();
-		}
-	}
+	//// Recompute normals
+	//std::unique_ptr<luxrays::Normal> newNormals;
+	//if (srcMesh->HasNormals()) {
+		//auto oldNormals = srcMesh->GetNormals();
+		//newNormals.reset(new luxrays::Normal[numNewPoints]);
+		//for (u_int i = 0; i < numOldPoints; ++i) {
+			//newNormals.get()[pointMap[i]] += oldNormals[i];
+		//}
+		//for (u_int j = 0; j < numNewPoints; ++j) {
+			//auto newNormal = newNormals.get()[j];
+			//newNormal /= newNormal.Length();
+		//}
+	//}
 	// Recompute uv
 	// Recompute colors
 	// Recompute alphas
