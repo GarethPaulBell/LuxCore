@@ -279,6 +279,9 @@ void BiDirCPURenderThread::ConnectVertices(const float time,
 			BSDF bsdfConn;
 			Spectrum connectionThroughput;
 			PathVolumeInfo volInfo = eyeVertex.volInfo; // I need to use a copy here
+			// For the connection event, we need to evaluate the volume based on whether the shadow ray is going into the object or not
+			bool connectionIntoObject = (Dot(lightVertex.bsdf.hitPoint.geometryN, -shadowRayDir) < 0.f);
+			volInfo.SetCurrentVolume(connectionIntoObject ? lightVertex.bsdf.hitPoint.interiorVolume : lightVertex.bsdf.hitPoint.exteriorVolume);
 			if (!scene->Intersect(device, LIGHT_RAY | INDIRECT_RAY | SHADOW_RAY, &volInfo, u0, &p2pRay, &p2pRayHit, &bsdfConn,
 					&connectionThroughput)) {
 				// Nothing was hit, the light path vertex is visible
@@ -326,24 +329,47 @@ void BiDirCPURenderThread::ConnectToEye(const float time,
 	BiDirCPURenderEngine *engine = (BiDirCPURenderEngine *)renderEngine;
 	Scene *scene = engine->renderConfig->scene;
 
-	Vector eyeDir(lightVertex.bsdf.hitPoint.p - lensPoint);
-	const float eyeDistance = eyeDir.Length();
-	eyeDir /= eyeDistance;
+	Vector eyeDir;
+	float eyeDistance = 0;
+    if (scene->camera->GetType() == Camera::ORTHOGRAPHIC){
+		// Orthographic camera need to be handled separately,
+		// lensPoint can not be pre-calculated in this case
+		Point p = lightVertex.bsdf.hitPoint.p;
+		eyeDir = scene->camera->GetDir();
+		// calculate distance from vertex to camera plane
+		const float D = -eyeDir.x*lensPoint.x - eyeDir.y*lensPoint.y - eyeDir.z*lensPoint.z;
+		eyeDistance = eyeDir.x*p.x + eyeDir.y*p.y + eyeDir.z*p.z + D;
+		eyeDistance = fabsf(eyeDistance);
+	} else {
+		eyeDir = Vector(lightVertex.bsdf.hitPoint.p - lensPoint);
+		eyeDistance = eyeDir.Length();
+		eyeDir /= eyeDistance;
+	}
 
 	float bsdfPdfW, bsdfRevPdfW;
 	BSDFEvent event;
 	const Spectrum bsdfEval = lightVertex.bsdf.Evaluate(-eyeDir, &event, &bsdfPdfW, &bsdfRevPdfW);
 
 	if (!bsdfEval.Black()) {
-		Ray eyeRay(lensPoint, eyeDir,
+		float filmX, filmY;
+		bool sampleSuccess;
+		Ray eyeRay;
+		
+		if (scene->camera->GetType() == Camera::ORTHOGRAPHIC){
+			Vector rayDir(lightVertex.bsdf.hitPoint.p - lensPoint);
+			eyeRay = Ray(lightVertex.bsdf.hitPoint.p, rayDir,
 				0.f,
 				eyeDistance,
 				time);
-		scene->camera->ClampRay(&eyeRay);
-		eyeRay.UpdateMinMaxWithEpsilon();
-
-		float filmX, filmY;
-		if (scene->camera->GetSamplePosition(&eyeRay, &filmX, &filmY)) {
+			sampleSuccess = scene->camera->ProjectToImage(&eyeRay, &filmX, &filmY);
+		} else {
+			eyeRay = Ray(lensPoint, eyeDir,
+				0.f,
+				eyeDistance,
+				time);
+			sampleSuccess = scene->camera->GetSamplePosition(&eyeRay, &filmX, &filmY);
+		}
+		if (sampleSuccess) {
 			// I have to flip the direction of the traced ray because
 			// the information inside PathVolumeInfo are about the path from
 			// the light toward the camera (i.e. ray.o would be in the wrong
@@ -534,7 +560,7 @@ void BiDirCPURenderThread::DirectHitLight(const bool finiteLightSource,
 }
 
 bool BiDirCPURenderThread::TraceLightPath(const float time,
-		Sampler *sampler, const Point &lensPoint,
+		Sampler *sampler, Camera *camera,
 		vector<PathVertexVM> &lightPathVertices,
 		vector<SampleResult> &sampleResults) const {
 	BiDirCPURenderEngine *engine = (BiDirCPURenderEngine *)renderEngine;
@@ -597,7 +623,7 @@ bool BiDirCPURenderThread::TraceLightPath(const float time,
 				// Check if it is something with a not black shadow transparency
 				// and stop if it has. Direct light sampling will take care of
 				// this kind of paths.
-				if (!lightVertex.bsdf.GetPassThroughShadowTransparency().Black())
+				if (!lightVertex.bsdf.GetPassThroughShadowTransparency().Black() & !lightVertex.bsdf.GetPassThroughShadowTransparencyOverride())
 					break;
 
 				// Update the new light vertex
@@ -618,6 +644,10 @@ bool BiDirCPURenderThread::TraceLightPath(const float time,
 					//----------------------------------------------------------
 					// Try to connect the light path vertex with the eye
 					//----------------------------------------------------------
+
+					// Sample a point on the camera lens
+					Point lensPoint;
+					camera->SampleLens(time, sampler->GetSample(3), sampler->GetSample(4), &lensPoint);
 
 					ConnectToEye(time, lightVertex, sampler->GetSample(sampleOffset + 1),
 							lensPoint, sampleResults);
@@ -768,6 +798,7 @@ void BiDirCPURenderThread::RenderFunc(std::stop_token stop_token) {
 		const float timeSample = sampler->GetSample(12);
 		const float time = scene->camera->GenerateRayTime(timeSample);
 
+		/*
 		// Sample a point on the camera lens
 		Point lensPoint;
 		if (!camera->SampleLens(time, sampler->GetSample(3), sampler->GetSample(4),
@@ -777,12 +808,13 @@ void BiDirCPURenderThread::RenderFunc(std::stop_token stop_token) {
 			sampler->NextSample(sampleResults);
 			continue;
 		}
+		*/
 
 		//----------------------------------------------------------------------
 		// Trace light path
 		//----------------------------------------------------------------------
 
-		const bool validLightPath = TraceLightPath(time, sampler, lensPoint, lightPathVertices, sampleResults);
+		const bool validLightPath = TraceLightPath(time, sampler, camera, lightPathVertices, sampleResults);
 		assert (SampleResult::IsAllValid(sampleResults));
 
 		if (validLightPath) {
@@ -872,6 +904,7 @@ void BiDirCPURenderThread::RenderFunc(std::stop_token stop_token) {
 					albedoToDo = false;
 				}
 
+				float t_MIS;
 				if (eyeSampleResult.firstPathVertex) {
 					eyeSampleResult.alpha = 1.f;
 					eyeSampleResult.depth = eyeRayHit.t;
@@ -880,11 +913,18 @@ void BiDirCPURenderThread::RenderFunc(std::stop_token stop_token) {
 					eyeSampleResult.materialID = eyeVertex.bsdf.GetMaterialID();
 					eyeSampleResult.objectID = eyeVertex.bsdf.GetObjectID();
 					eyeSampleResult.uv = eyeVertex.bsdf.hitPoint.GetUV(0);
+					// for the camera ray, we need to add the clipping distance
+					// because eyeRayHit.t is measured from clipping start.
+					// Otherwise, the brightness near the front clipping plane may be distorted.
+					t_MIS = eyeRayHit.t + camera->clipHither;
+				} 
+				else{
+					t_MIS = eyeRayHit.t;
 				}
 
 				// Update MIS constants
 				const float factor = 1.f / MIS(AbsDot(eyeVertex.bsdf.hitPoint.shadeN, eyeVertex.bsdf.hitPoint.fixedDir));
-				eyeVertex.dVCM *= MIS(eyeRayHit.t * eyeRayHit.t) * factor;
+				eyeVertex.dVCM *= MIS(t_MIS * t_MIS) * factor;
 				eyeVertex.dVC *= factor;
 				eyeVertex.dVM *= factor;
 

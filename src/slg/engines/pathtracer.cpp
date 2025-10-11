@@ -698,19 +698,41 @@ void PathTracer::ConnectToEye(IntersectionDevice *device,
 	if (bsdf.IsCameraInvisible() || bsdf.IsDelta())
 		return;
 
-	Vector eyeDir(bsdf.hitPoint.p - pathInfo.lensPoint);
-	const float eyeDistance = eyeDir.Length();
-	eyeDir /= eyeDistance;
+	float filmX, filmY;
+	bool sampleSuccess;
+	Ray eyeRay;
 
-	Ray eyeRay(pathInfo.lensPoint, eyeDir,
+	Vector eyeDir;
+	float eyeDistance = 0;
+	Point lensPoint = pathInfo.lensPoint;
+    if (scene->camera->GetType() == Camera::ORTHOGRAPHIC){
+		// Orthographic camera need to be handled separately,
+		// lensPoint can not be pre-calculated in this case
+		Point p = bsdf.hitPoint.p;
+		eyeDir = scene->camera->GetDir();
+		// calculate distance from vertex to camera plane
+		const float D = -eyeDir.x*lensPoint.x - eyeDir.y*lensPoint.y - eyeDir.z*lensPoint.z;
+		eyeDistance = eyeDir.x*p.x + eyeDir.y*p.y + eyeDir.z*p.z + D;
+		eyeDistance = fabsf(eyeDistance);
+
+		eyeRay = Ray(bsdf.hitPoint.p, eyeDir,
 			0.f,
 			eyeDistance,
 			time);
-	scene->camera->ClampRay(&eyeRay);
-	eyeRay.UpdateMinMaxWithEpsilon();
+		sampleSuccess = scene->camera->ProjectToImage(&eyeRay, &filmX, &filmY);
+	} else {
+		eyeDir = Vector(bsdf.hitPoint.p - lensPoint);
+		eyeDistance = eyeDir.Length();
+		eyeDir /= eyeDistance;
 
-	float filmX, filmY;
-	if (scene->camera->GetSamplePosition(&eyeRay, &filmX, &filmY)) {
+		eyeRay = Ray(lensPoint, eyeDir,
+			0.f,
+			eyeDistance,
+			time);
+		sampleSuccess = scene->camera->GetSamplePosition(&eyeRay, &filmX, &filmY);
+	}
+
+	if (sampleSuccess) {
 		BSDFEvent event;
 		const Spectrum bsdfEval = bsdf.Evaluate(-eyeDir, &event);
 
@@ -798,10 +820,12 @@ void PathTracer::RenderLightSample(IntersectionDevice *device,
 
 		LightPathInfo pathInfo;
 
+		/*
 		// Sample a point on the camera lens
 		if (!scene->camera->SampleLens(time, sampler->GetSample(6), sampler->GetSample(7),
 				&pathInfo.lensPoint))
 			return;
+		*/
 
 		//----------------------------------------------------------------------
 		// Trace the light path
@@ -821,6 +845,12 @@ void PathTracer::RenderLightSample(IntersectionDevice *device,
 				break;
 			}
 
+			// Check if it is something with a not black shadow transparency
+			// and stop if it has. Direct light sampling will take care of
+			// this kind of paths.
+			if (!bsdf.GetPassThroughShadowTransparency().Black() & !bsdf.GetPassThroughShadowTransparencyOverride())
+				break;
+
 			// Something was hit
 
 			lightPathFlux *= connectionThroughput;
@@ -828,6 +858,9 @@ void PathTracer::RenderLightSample(IntersectionDevice *device,
 			//--------------------------------------------------------------
 			// Try to connect the light path vertex with the eye
 			//--------------------------------------------------------------
+
+			scene->camera->SampleLens(time, sampler->GetSample(6), sampler->GetSample(7),
+				&pathInfo.lensPoint);
 
 			if (ConnectToEyeCallBack){
 				ConnectToEyeCallBack(pathInfo, bsdf, light->GetID(), lightPathFlux, sampleResults);
