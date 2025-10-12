@@ -457,7 +457,7 @@ UnionFind GroupPoints(const Partition& partition, u_int numPoints) {
 			}
 		},
 
-		// Partitioner
+		// Partitioner (for tbb)
 		partitioner
     );
 	return res;
@@ -598,23 +598,33 @@ ClusterVector mergePoints(const Point * points, u_int numPoints) {
 
 
 // Recreate a mesh, based on a source mesh and a clusterisation
+// Replace each variable with interpolated value
 luxrays::ExtTriangleMesh* RecreateMesh(
 	const luxrays::ExtTriangleMesh& srcMesh,
 	const ClusterVector& clusters
 ) {
-	// Replace each variable with interpolated value
-	auto numPoints = srcMesh.GetTotalVertexCount();
-	auto points = srcMesh.GetVertices();
+	const auto numPoints = srcMesh.GetTotalVertexCount();
+	const auto srcPoints = srcMesh.GetVertices();
+	const auto numNewPoints = clusters.size();
 
-	auto numNewPoints = clusters.size();
+
 	std::vector<u_int> pointMap(numPoints);
+
+	// Points
 	std::unique_ptr<Point> newPoints{
 		luxrays::ExtTriangleMesh::AllocVerticesBuffer(numNewPoints)
 	};
-
 	auto newPointsPtr = newPoints.get();
 
-	// Avoid tiny sets of data for body
+	// Normals
+	std::unique_ptr<luxrays::Normal> newNormals;
+	const auto srcNormals = srcMesh.GetNormals();
+	if (srcMesh.HasNormals()) {
+		newNormals.reset(new luxrays::Normal[numNewPoints]);
+	}
+	auto newNormalsPtr = newNormals.get();
+
+	// Avoid tiny sets of data for tbb body
 	constexpr size_t grain = 1024;
 
 	tbb::parallel_for(
@@ -630,30 +640,33 @@ luxrays::ExtTriangleMesh* RecreateMesh(
 					pointMap[oldIdx] = newIdx;
 				}
 
-				// Compute equivalent point (centroid)
+				// Compute equivalent points (centroids)
 				Point newPoint = std::transform_reduce(
 					cluster.cbegin(),
 					cluster.cend(),
 					Point(0, 0, 0),
 					std::plus{},
-					[&points](auto idx) -> Point { return points[idx]; }
+					[&srcPoints](auto idx) -> Point { return srcPoints[idx]; }
 				) / cluster_size;
-
 				newPointsPtr[newIdx] = newPoint;
 
-				//// Recompute normals
-				//std::unique_ptr<luxrays::Normal> newNormals;
-				//if (srcMesh->HasNormals()) {
-					//auto oldNormals = srcMesh->GetNormals();
-					//newNormals.reset(new luxrays::Normal[numNewPoints]);
-					//for (u_int i = 0; i < numOldPoints; ++i) {
-						//newNormals.get()[pointMap[i]] += oldNormals[i];
-					//}
-					//for (u_int j = 0; j < numNewPoints; ++j) {
-						//auto newNormal = newNormals.get()[j];
-						//newNormal /= newNormal.Length();
-					//}
-				//}
+				// Compute equivalent normals
+				if (srcMesh.HasNormals()) {
+					luxrays::Normal newNormal = std::transform_reduce(
+						cluster.cbegin(),
+						cluster.cend(),
+						luxrays::Normal(0, 0, 0),
+						std::plus{},
+						[&srcNormals](auto idx) -> luxrays::Normal {
+							return srcNormals[idx];
+						}
+					) / cluster_size;
+					const float newNormalLength = newNormal.Length();
+					if (newNormalLength) {
+						newNormal /= newNormalLength;
+					}
+				}
+
 				// Recompute uv
 				// Recompute colors
 				// Recompute alphas
