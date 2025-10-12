@@ -379,12 +379,10 @@ UnionFind ProcessGrid(const GridType& grid, u_int numPoints) {
 
 		// Body
         [&grid](const tbb::blocked_range<size_t>& r, UnionFind&& dsu) -> UnionFind {
-			//SDL_LOG("Begin body: " << r.begin() << " / " << r.end() );  // TODO
             auto it = grid.begin();
             std::advance(it, r.begin());
             for (size_t i = r.begin(); i != r.end(); ++i, ++it) {
                 auto [cellId, cellPoints] = *it;
-				//SDL_LOG("#points: " << cellPoints.size()); // TODO
 
                 // Check adjacent cells
                 for (int16_t dx = -1; dx <= 1; ++dx) {
@@ -412,7 +410,6 @@ UnionFind ProcessGrid(const GridType& grid, u_int numPoints) {
                     }  // for dy
                 }  // for dx
             }  // for i
-			//SDL_LOG("End body");  // TODO
 			return dsu;
         },  // lambda
 
@@ -433,9 +430,11 @@ UnionFind ProcessGrid(const GridType& grid, u_int numPoints) {
 	return res;
 }
 
+using Cluster = std::vector<u_int, tbb::scalable_allocator<u_int>>;
+using ClusterVector = std::vector<Cluster, tbb::scalable_allocator<Cluster>>;
+
 // Group points into clusters
-tbb::concurrent_vector<std::vector<u_int, tbb::scalable_allocator<u_int>>>
-CreateClusters(const UnionFind& dsu, u_int numPoints) {
+ClusterVector CreateClusters(const UnionFind& dsu, u_int numPoints) {
 	// Group equivalent points into map
 	using ClusterMap = std::unordered_multimap<
 		u_int,
@@ -455,13 +454,13 @@ CreateClusters(const UnionFind& dsu, u_int numPoints) {
 	// Avoid tiny sets of data for body
 	constexpr size_t grain = 1024;
 
+	// Get clusters as a multimap and a set of keys
 	auto [map, keys] = tbb::parallel_reduce(
 		// Range
 		tbb::blocked_range<u_int>(0, numPoints, grain),
 
 		// Init
-		//std::tuple(ClusterMap(numPoints), ClusterKeys(numPoints)),
-		std::tuple(ClusterMap(), ClusterKeys()),
+		std::tuple(ClusterMap(grain), ClusterKeys(grain)),
 
 		// Body
 		[&dsu](const tbb::blocked_range<u_int>& r, ClusterMapAndKey&& mapkey)
@@ -499,30 +498,39 @@ CreateClusters(const UnionFind& dsu, u_int numPoints) {
 
 	SDL_LOG("Middle group");
 
-	// Copy set to vector
-	using KeyVector = std::vector<u_int>;
-	KeyVector keyvect;
-	keyvect.reserve(keys.size());
-	std::copy(keys.begin(), keys.end(), std::back_inserter(keyvect));
+	// Transform the previous structure into a vector of vectors
 
-	// Get an array of clusters
-	// TODO Reduce
-	tbb::concurrent_vector<std::vector<u_int, tbb::scalable_allocator<u_int>>> clusters;
-	clusters.reserve(map.size());
-	tbb::parallel_for(
-		tbb::blocked_range<KeyVector::iterator>(keyvect.begin(), keyvect.end(), grain),
-		[&](const auto& r) {
-			for (auto it = r.begin(); it != r.end(); ++it) {
+	auto clusters = tbb::parallel_reduce(
+		// Range
+		tbb::blocked_range<size_t>(0, keys.size(), grain),
+
+		// Init
+		ClusterVector(),
+
+		// Body
+		[&](const auto& r, ClusterVector&& clustervect) -> ClusterVector {
+			auto it = keys.begin();
+			std::advance(it, r.begin());
+			for (auto i = r.begin(); i != r.end(); ++i, ++it) {
 				const auto& [begin, end] = map.equal_range(*it);
-				auto new_cluster = clusters.emplace_back();
-				new_cluster->reserve(std::distance(begin, end));
-				for (auto it = begin; it != end; ++it) {
-					auto [key, value] = *it;
-					new_cluster->push_back(value);
+				Cluster cluster;
+				cluster.reserve(std::distance(begin, end));
+				for (auto itval = begin; itval != end; ++itval) {
+					cluster.push_back(itval->second);
 				}
+				clustervect.push_back(cluster);
 			}
+			return clustervect;
+		},
+
+		// Reduce
+		[](ClusterVector&& a, const ClusterVector& b) -> ClusterVector {
+			std::copy(b.begin(), b.end(), std::back_inserter(a));
+			return a;
 		}
+
 	);
+
 	return clusters;
 }
 
@@ -538,7 +546,6 @@ mergePoints(const Point * points, u_int numPoints) {
 
 	// Compute grid dimensions
 	auto [midPoint, cellSizeX, cellSizeY, cellSizeZ] = ComputeGrid(points, numPoints);
-	SDL_LOG("After compute grid");
 	// Assign points to grid cells
 	// We could have written something smarter with tbb::unordered_multimap
 	// but it may not be worth spending time on that, as the most common
@@ -547,16 +554,12 @@ mergePoints(const Point * points, u_int numPoints) {
 		AssignPointsToGrid(midPoint, cellSizeX, cellSizeZ, cellSizeZ, points, numPoints)
 	};
 
-	SDL_LOG("After assignment");
 
 	// For each cell, compare points within the cell and adjacent cells
 	// and gather points in small distance
-	SDL_LOG("Before process");
-	auto dsu = ProcessGrid(grid, numPoints);
-	SDL_LOG("After process");
+	UnionFind dsu{ProcessGrid(grid, numPoints)};
 
-	auto clusters = CreateClusters(dsu, numPoints);
-	SDL_LOG("After group");
+	ClusterVector clusters{CreateClusters(dsu, numPoints)};
 
 	// Replace each cluster with its centroid
 	auto numNewPoints = clusters.size();
@@ -615,7 +618,7 @@ luxrays::ExtTriangleMesh* slg::MergeOnDistanceShape::ApplyMergeOnDistance(
 ) {
 	const double startTime = WallClockTime();
 
-	// Get points
+	// Get merged points
 	u_int numOldPoints = srcMesh->GetTotalVertexCount();
 	auto [newPoints, numNewPoints, pointMap, histogram] = mergePoints(
 		srcMesh->GetVertices(),
