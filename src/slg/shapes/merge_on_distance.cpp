@@ -453,29 +453,29 @@ public:
 		auto it = partition.begin();
 		std::advance(it, r.begin());
 		for (auto i = r.begin(); i != r.end(); ++i, ++it) {
-			auto [cellId, cellPoints] = *it;
+			auto& [cellId, cellPoints] = *it;
 
-			// Check adjacent cells
-			for (auto [dx, dy, dz] : ADJACENCY) {
-				CellId adjCellId(
-					cellId.x() + dx, cellId.y() + dy, cellId.z() + dz
-				);
-				auto adjIt = partition.find(adjCellId);
-				if (adjIt == partition.end()) continue;
-				auto adjPoints = adjIt->second;
+			for (auto& [idx, curPoint] : cellPoints) {
+				// Check adjacent cells
+				for (auto [dx, dy, dz] : ADJACENCY) {
+					CellId adjCellId(
+						cellId.x() + dx, cellId.y() + dy, cellId.z() + dz
+					);
+					auto adjIt = partition.find(adjCellId);
+					if (adjIt == partition.end()) continue;
+					auto& adjPoints = adjIt->second;
 
-				// For each point in current cell and for each point
-				// in adjacent cell, compute distance
-				for (auto [idx, curPoint] : cellPoints) {
-					for (auto [adjIdx, adjPoint] : adjPoints) {
-						if (idx >= adjIdx) continue;
-						auto dist = distance(curPoint, adjPoint);
-						if (nearly_equal(dist, 0.f, tolerance)) {
-							dsu.unite(idx, adjIdx);
+					// For each point in current cell and for each point
+					// in adjacent cell, compute distance
+						for (auto& [adjIdx, adjPoint] : adjPoints) {
+							if (idx >= adjIdx) continue;
+							auto dist = distance(curPoint, adjPoint);
+							if (nearly_equal(dist, 0.f, tolerance)) {
+								dsu.unite(idx, adjIdx);
+							}
 						}
-					}
+					}  // for dx, dy, dz
 				}
-			}  // for dx, dy, dz
 		}  // for i
 	}  // operator()
 
