@@ -61,7 +61,7 @@ float distance(const luxrays::Point& p1, const luxrays::Point& p2) {
 	float m0 = std::fabs(p2[0] - p1[0]);
 	float m1 = std::fabs(p2[1] - p1[1]);
 	float m2 = std::fabs(p2[2] - p1[2]);
-	return std::max({m1, m2, m3});
+	return std::max({m0, m1, m2});
 }
 
 
@@ -407,7 +407,7 @@ constexpr std::array<std::array<int, 3>, 27> adjacency() {
 	for (auto dx : {-1, 0, 1}) {
 		for (auto dy : {-1, 0, 1}) {
 			for (auto dz : {-1, 0, 1}) {
-				res[i] = {dx, dy, dz};
+				res[i++] = {dx, dy, dz};
 			}
 		}
 	}
@@ -415,13 +415,84 @@ constexpr std::array<std::array<int, 3>, 27> adjacency() {
 }
 
 
+
 // Gather equivalent points ("equivalent" meaning located at zero distance from
 // each others)
 // Points have previously been assigned to grid cells, so that we
 // just compare points within same cells (saves a lot of time)
 // 'tolerance' is a parameter for float comparison
+class PointGrouping {
+	const Partition& partition;
+	u_int tolerance;
+	u_int numPoints;
+	static constexpr size_t grain = 0;  // TODO
+	static constexpr auto ADJACENCY = adjacency();
+
+public:
+
+	UnionFind dsu;
+
+	// Constructor (plain)
+	PointGrouping(const Partition& p_partition, u_int p_tolerance, u_int p_numPoints) :
+		partition(p_partition),
+		tolerance(p_tolerance),
+		numPoints(p_numPoints),
+		dsu(UnionFind(numPoints))
+	{}
+
+	// Constructor (split)
+	PointGrouping(PointGrouping& x, tbb::split):
+		partition(x.partition),
+		tolerance(x.tolerance),
+		numPoints(x.numPoints),
+		dsu(UnionFind(numPoints))
+	{}
+
+	// Body
+	void operator()(const tbb::blocked_range<size_t>& r) {
+		auto it = partition.begin();
+		std::advance(it, r.begin());
+		for (auto i = r.begin(); i != r.end(); ++i, ++it) {
+			auto [cellId, cellPoints] = *it;
+
+			// Check adjacent cells
+			for (auto [dx, dy, dz] : ADJACENCY) {
+				CellId adjCellId(
+					cellId.x() + dx, cellId.y() + dy, cellId.z() + dz
+				);
+				auto adjIt = partition.find(adjCellId);
+				if (adjIt == partition.end()) continue;
+				auto adjPoints = adjIt->second;
+
+				// For each point in current cell and for each point
+				// in adjacent cell, compute distance
+				for (auto [idx, curPoint] : cellPoints) {
+					for (auto [adjIdx, adjPoint] : adjPoints) {
+						if (idx >= adjIdx) continue;
+						auto dist = distance(curPoint, adjPoint);
+						if (nearly_equal(dist, 0.f, tolerance)) {
+							dsu.unite(idx, adjIdx);
+						}
+					}
+				}
+			}  // for dx, dy, dz
+		}  // for i
+	}  // operator()
+
+	// Reduction
+	void join(PointGrouping& rhs) {
+		if (dsu.size() < rhs.dsu.size()) {
+			std::swap(dsu, rhs.dsu);
+		}
+		dsu += rhs.dsu;
+	}
+
+};
+
+
 UnionFind GroupPoints(const Partition& partition, u_int numPoints, u_int tolerance) {
 
+	// TODO
 	auto partitioner = tbb::auto_partitioner();
 
 	// Debug
@@ -438,63 +509,14 @@ UnionFind GroupPoints(const Partition& partition, u_int numPoints, u_int toleran
 	// Avoid tiny sets of data for body
 	//constexpr size_t grain = 1024;
 	constexpr size_t grain = 0;
+	const auto partition_size = partition.size();
 
-    auto res = tbb::parallel_reduce(
-		// Range
-        tbb::blocked_range<size_t>(0, partition.size(), grain),
-
-		// Init
-		UnionFind(grain),
-
-		// Body
-        [partition, tolerance](const tbb::blocked_range<size_t>& r, UnionFind&& dsu)
-			-> UnionFind
-		{
-            auto it = partition.begin();
-            std::advance(it, r.begin());
-            for (auto i = r.begin(); i != r.end(); ++i, ++it) {
-                auto [cellId, cellPoints] = *it;
-
-                // Check adjacent cells
-				for (auto [dx, dy, dz] : adjacency()) {
-					CellId adjCellId(
-						cellId.x() + dx, cellId.y() + dy, cellId.z() + dz
-					);
-					auto adjIt = partition.find(adjCellId);
-					if (adjIt == partition.end()) continue;
-					auto adjPoints = adjIt->second;
-
-					// For each point in current cell and for each point
-					// in adjacent cell, compute distance
-					for (auto [idx, curPoint] : cellPoints) {
-						for (auto [adjIdx, adjPoint] : adjPoints) {
-							if (idx >= adjIdx) continue;
-							auto dist = distance(curPoint, adjPoint);
-							if (nearly_equal(dist, 0.f, tolerance)) {
-								dsu.unite(idx, adjIdx);
-							}
-						}
-					}
-                }  // for dx, dy, dz
-            }  // for i
-			return dsu;
-        },  // lambda
-
-		// Reduce
-		[](UnionFind&& dsu1, UnionFind&& dsu2) -> UnionFind {
-			if (dsu1.size() < dsu2.size()) {
-				dsu2 += dsu1;
-				return dsu2;
-			} else {
-				dsu1 += dsu2;
-				return dsu1;
-			}
-		},
-
-		// Partitioner (for tbb)
-		partitioner
-    );
-	return res;
+	PointGrouping ptg(partition, tolerance, numPoints);
+	tbb::parallel_reduce(
+		tbb::blocked_range<size_t>(0, partition_size),
+		ptg
+	);
+	return ptg.dsu;
 }
 
 
