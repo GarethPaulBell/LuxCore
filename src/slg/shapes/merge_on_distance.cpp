@@ -480,6 +480,15 @@ public:
 			for (auto& [idx, curPoint] : cellPoints) {
 				// Check adjacent cells
 				for (auto [dx, dy, dz] : ADJACENCY) {
+					// TODO Rewrite
+					// Skip out-of-bound cells
+					if (cellId.x() == INT16_MIN && dx == -1) continue;
+					if (cellId.x() == INT16_MAX && dx == +1) continue;
+					if (cellId.y() == INT16_MIN && dy == -1) continue;
+					if (cellId.y() == INT16_MAX && dy == +1) continue;
+					if (cellId.z() == INT16_MIN && dz == -1) continue;
+					if (cellId.z() == INT16_MAX && dz == +1) continue;
+
 					CellId adjCellId(
 						cellId.x() + dx, cellId.y() + dy, cellId.z() + dz
 					);
