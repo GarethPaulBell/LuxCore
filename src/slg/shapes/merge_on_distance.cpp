@@ -31,6 +31,7 @@
 #include "oneapi/tbb.h"
 #include "oneapi/tbb/scalable_allocator.h"
 #include "oneapi/tbb/cache_aligned_allocator.h"
+#include "oneapi/tbb/tbbmalloc_proxy.h"
 
 #include "luxrays/core/exttrianglemesh.h"
 #include "slg/shapes/merge_on_distance.h"
@@ -41,29 +42,9 @@ using luxrays::Point;
 using luxrays::WallClockTime;
 using namespace oneapi::tbb;
 
+
 namespace {
 
-	//TODO
-//bool nearly_equal(float a, float b)
-//{
-	//return std::nextafter(a, std::numeric_limits<float>::lowest()) <= b
-		//&& std::nextafter(a, std::numeric_limits<float>::max()) >= b;
-//}
-
-//bool nearly_equal(float a, float b, u_int tolerance [> a factor of epsilon <])
-//{
-	//float min_a = a - (a - std::nextafter(a, std::numeric_limits<float>::lowest())) * tolerance;
-	//float max_a = a + (std::nextafter(a, std::numeric_limits<float>::max()) - a) * tolerance;
-
-	//return min_a <= b && b <= max_a;
-//}
-
-//float distance(const luxrays::Point& p1, const luxrays::Point& p2) {
-	//float m0 = std::fabs(p2[0] - p1[0]);
-	//float m1 = std::fabs(p2[1] - p1[1]);
-	//float m2 = std::fabs(p2[2] - p1[2]);
-	//return std::max({m0, m1, m2});
-//}
 
 
 class NearlyEqualComparator {
@@ -74,7 +55,7 @@ public:
 		boundmax(plus_epsilon * float(tolerance))
 	{}
 	inline bool compare(const float a, const float b) const {
-		auto delta = b - a;
+		float delta = b - a;
 		return (boundmin <= delta and delta <= boundmax);
 	}
 
@@ -464,7 +445,6 @@ class PointGrouping {
 	const Partition& partition;
 	u_int tolerance;
 	u_int numPoints;
-	static constexpr size_t grain = 0;  // TODO
 	static constexpr auto ADJACENCY = adjacency();
 	NearlyEqualComparator comparator;
 
@@ -534,8 +514,7 @@ public:
 
 UnionFind GroupPoints(const Partition& partition, u_int numPoints, u_int tolerance) {
 
-	// TODO
-	auto partitioner = tbb::auto_partitioner();
+	static tbb::affinity_partitioner tbb_partitioner;
 
 	// Debug
 #if 0
@@ -550,13 +529,14 @@ UnionFind GroupPoints(const Partition& partition, u_int numPoints, u_int toleran
 
 	// Avoid tiny sets of data for body
 	//constexpr size_t grain = 1024;
-	constexpr size_t grain = 0;
+	constexpr size_t grain = 512;
 	const auto partition_size = partition.size();
 
 	PointGrouping ptg(partition, tolerance, numPoints);
 	tbb::parallel_reduce(
-		tbb::blocked_range<size_t>(0, partition_size),
-		ptg
+		tbb::blocked_range<size_t>(0, partition_size, grain),
+		ptg,
+		tbb_partitioner
 	);
 	return ptg.dsu;
 }
