@@ -210,15 +210,32 @@ union CellId {
 			throw std::runtime_error("Invalid CellId");
 		}
 	}
-	CellId(const CellId& other) { u64 = other.u64; }
+	CellId(const CellId& other) : u64(other.u64) {};
 
-	int16_t x() const { return i16[1]; }
-	int16_t y() const { return i16[2]; }
-	int16_t z() const { return i16[3]; }
-	uint64_t id() const { return u64; }
+	CellId(const CellId& other, int16_t dx, int16_t dy, int16_t dz) :
+		u64(other.u64) {
+		i16[1] += dx;
+		i16[2] += dy;
+		i16[3] += dz;
+	};
 
-	bool operator==(const CellId& other) const {
+	inline int16_t x() const { return i16[1]; }
+	inline int16_t y() const { return i16[2]; }
+	inline int16_t z() const { return i16[3]; }
+	inline uint64_t id() const { return u64; }
+
+	inline bool operator==(const CellId& other) const {
 		return u64 == other.u64;
+	}
+	inline bool out_of_bound(int16_t dx, int16_t dy, int16_t dz) const {
+		bool res =
+			   (x() == INT16_MIN && dx == -1)
+			or (x() == INT16_MAX && dx == +1)
+			or (y() == INT16_MIN && dy == -1)
+			or (y() == INT16_MAX && dy == +1)
+			or (z() == INT16_MIN && dz == -1)
+			or (z() == INT16_MAX && dz == +1);
+		return res;
 	}
 private:
 	uint64_t u64;
@@ -229,14 +246,16 @@ private:
 
 // Introduce hash into std namespace
 namespace std {
-  template <> struct hash<CellId>
-  {
-    size_t operator()(const CellId & x) const
-    {
-      return x.id();
+template <>
+struct hash<CellId>
+{
+	std::size_t operator()(const CellId& x) const noexcept
+	{
+		std::size_t h = std::hash<uint64_t>{}(x.id());
+		return h;
     }
-  };
-}
+};
+}  // namespace std
 
 namespace {
 
@@ -483,18 +502,10 @@ public:
 			for (auto& [idx, curPoint] : cellPoints) {
 				// Check adjacent cells
 				for (auto [dx, dy, dz] : ADJACENCY) {
-					// TODO Rewrite
 					// Skip out-of-bound cells
-					if (cellId.x() == INT16_MIN && dx == -1) continue;
-					if (cellId.x() == INT16_MAX && dx == +1) continue;
-					if (cellId.y() == INT16_MIN && dy == -1) continue;
-					if (cellId.y() == INT16_MAX && dy == +1) continue;
-					if (cellId.z() == INT16_MIN && dz == -1) continue;
-					if (cellId.z() == INT16_MAX && dz == +1) continue;
+					if (cellId.out_of_bound(dx, dy, dz)) continue;
+					CellId adjCellId(cellId, dx, dy, dz);
 
-					CellId adjCellId(
-						cellId.x() + dx, cellId.y() + dy, cellId.z() + dz
-					);
 					auto adjIt = partition.find(adjCellId);
 					if (adjIt == partition.end()) continue;
 					auto& adjPoints = adjIt->second;
@@ -503,8 +514,7 @@ public:
 					// in adjacent cell, compute distance
 					for (auto& [adjIdx, adjPoint] : adjPoints) {
 						if (idx >= adjIdx) continue;
-						bool are_equivalent = compare_points(curPoint, adjPoint, comparator);
-						if (are_equivalent) {
+						if (compare_points(curPoint, adjPoint, comparator)) {
 							dsu.unite(idx, adjIdx);
 						}
 					}
