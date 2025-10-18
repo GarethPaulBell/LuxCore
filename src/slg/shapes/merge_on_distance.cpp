@@ -620,8 +620,8 @@ ClusterMap CreateClusters(const UnionFind& dsu, u_int numPoints) {
 				cluster1.reserve(cluster1.size() + cluster2.size());
 				cluster1.insert(
 					cluster1.end(),
-					cluster2.begin(),
-					cluster2.end()
+					std::make_move_iterator(cluster2.begin()),
+					std::make_move_iterator(cluster2.end())
 				);
 			}
 
