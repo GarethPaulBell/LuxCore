@@ -19,7 +19,7 @@ You can find more information about at https://www.luxcorerender.org
 - MacOS Intel: XCode 15.2
 - MacOS Arm: XCode 15.4
 
-[Mandatory] Ensure the following software is also installed and available in
+[Mandatory] Then, ensure the following software is also installed and available in
 the PATH:
 - Git
 - Python 3
