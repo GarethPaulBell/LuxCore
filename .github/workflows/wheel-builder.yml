@@ -58,11 +58,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-minor: [9, 10, 11, 12, 13]
-        os: [ubuntu-latest, windows-latest, macos-13, macos-14]
+        #python-minor: [9, 10, 11, 12, 13]
+        #os: [ubuntu-latest, windows-latest, macos-15-intel, macos-15]
         #python-minor: [ 9 ]
-        #python-minor: [ 12]
-        #os: [macos-14]
+        python-minor: [ 12]
+        os: [macos-15-intel, macos-15]
         #python-minor: [ 11]
         #os: [windows-latest]
         #python-minor: [ 11]
@@ -192,7 +192,7 @@ jobs:
               arch='x86_64';
             }
             else {
-              target = '14.2';
+              target = '15.0';
               arch='armv8';
             }
             core.exportVariable('MACOSX_DEPLOYMENT_TARGET', target);
