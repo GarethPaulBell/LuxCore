@@ -673,18 +673,28 @@ ClusterMap mergePoints(const Point * points, u_int numPoints, u_int tolerance) {
 // Replace each variable with interpolated value
 luxrays::ExtTriangleMesh* RecreateMesh(
 	const luxrays::ExtTriangleMesh& srcMesh,
-	const ClusterMap& clusters
+	const ClusterMap& clustermap
 ) {
 	const auto numPoints = srcMesh.GetTotalVertexCount();
 	const auto srcPoints = srcMesh.GetVertices();
-	const auto numNewPoints = clusters.size();
+	const auto numNewPoints = clustermap.size();
 
 	// Nota: we use smart pointers until the creation of the ExtTriangleMesh,
 	// so that the memory is automatically released if something goes wrong in
 	// the process. Please keep it so.
 
+	std::vector<Cluster> clusters;
+	clusters.reserve(numNewPoints);
+	std::transform(
+		std::make_move_iterator(clustermap.begin()),
+		std::make_move_iterator(clustermap.end()),
+		std::back_inserter(clusters),
+		[](auto &kv){ return kv.second;}
+	);
+
 	std::vector<u_int> pointMap(numPoints);
 
+	// Allocate mesh data structures
 	// Points
 	std::unique_ptr<Point> newPoints{
 		luxrays::ExtTriangleMesh::AllocVerticesBuffer(numNewPoints)
@@ -747,11 +757,9 @@ luxrays::ExtTriangleMesh* RecreateMesh(
         tbb::blocked_range<size_t>(0, numNewPoints, grain),
 
 		[&](tbb::blocked_range<size_t>& r) {
-			auto it = clusters.begin();
-			std::advance(it, r.begin());
 
-			for (auto newIdx = r.begin(); newIdx != r.end(); ++newIdx, ++it) {
-				const auto& cluster = it->second;
+			for (auto newIdx = r.begin(); newIdx != r.end(); ++newIdx) {
+				const auto& cluster = clusters[newIdx];
 				auto cluster_size = cluster.size();
 				if (!cluster_size) continue;
 
