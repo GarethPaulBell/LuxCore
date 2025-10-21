@@ -29,8 +29,8 @@ CONAN_ENV = {}
 URL_SUFFIXES = {
     "Linux-X64": "ubuntu-latest",
     "Windows-X64": "windows-latest",
-    "macOS-ARM64": "macos-14",
-    "macOS-X64": "macos-13",
+    "macOS-ARM64": "macos-15",
+    "macOS-X64": "macos-15-intel",
 }
 
 
