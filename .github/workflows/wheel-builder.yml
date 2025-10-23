@@ -206,18 +206,28 @@ jobs:
             # We make conan believe we use apple-clang (see profiles), but
             # actually we use recent version of llvm, to get full compatibility
             # with C++20 (in particular: joining threads)
+
+            # llvm
             brew install llvm@20
             LLVM_PREFIX=$(brew --prefix llvm@20)
-            echo "PATH=$LLVM_PREFIX/bin:$PATH" >> $GITHUB_ENV
             echo "CC=clang" >> $GITHUB_ENV
             echo "CXX=clang++" >> $GITHUB_ENV
             echo "AR=llvm-ar" >> $GITHUB_ENV
             echo "RANLIB=llvm-ranlib" >> $GITHUB_ENV
-            echo "LD=ld.lld" >> $GITHUB_ENV
-            echo "DYLD_LIBRARY_PATH=$LLVM_PREFIX/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
 
+            # lld
             brew install lld@20
+            LLD_PREFIX=$(brew --prefix lld@20)
 
+            # Set paths
+            echo "PATH=${LLVM_PREFIX}/bin:${LLD_PREFIX}/bin:$PATH" >> $GITHUB_ENV
+            echo "DYLD_LIBRARY_PATH=${LLVM_PREFIX}/lib:${LLD_PREFIX}/lib:${DYLD_LIBRARY_PATH}" >> $GITHUB_ENV
+
+            # Set flags
+            echo "LDFLAGS=${LD_FLAGS} -fuse-ld=lld -headerpad_max_install_names -L${LLVM_PREFIX}/lib -L${LLD_PREFIX}/lib" >> $GITHUB_ENV
+            echo "CPPFLAGS=${CPPFLAGS} -I${LLVM_PREFIX}/include -I${LLD_PREFIX}/include" >> $GITHUB_ENV
+
+            # OpenMP
             brew install libomp
             echo "OpenMP_ROOT=$(brew --prefix libomp)" >> $GITHUB_ENV
 
