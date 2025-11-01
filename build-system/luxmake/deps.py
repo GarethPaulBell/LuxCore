@@ -213,6 +213,36 @@ def download(
         downloaded.extractall(destdir)
 
 
+def show_build_info(destdir):
+    """Show build information that should be bundled with the archive."""
+    file_path = destdir / "build-info.json"
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        logger.debug("Error: The file '%s' does not exist.", file_path)
+        return
+    except json.JSONDecodeError:
+        logger.debug(
+            "Error: The file '%s' is not a valid JSON file.", file_path
+        )
+        return
+
+    missing = "<missing>"
+    timestamp = data.get("TIMESTAMP", missing)
+    system = data.get("SYSTEM", missing)
+    system_name = data.get("SYSTEM_NAME", missing)
+    compiler_id = data.get("CXX_COMPILER_ID", missing)
+    compiler_version = data.get("CXX_COMPILER_VERSION", missing)
+    compiler_architecture = data.get("CXX_COMPILER_ARCHITECTURE_ID", missing)
+
+    logger.info("Build information:")
+    logger.info(" - Build date: %s", timestamp)
+    logger.info(" - System: %s (%s)", system_name, system)
+    logger.info(" - Compiler: %s - version %s", compiler_id, compiler_version)
+    logger.info(" - Target architecture: %s", compiler_architecture)
+
+
 def install(
     filename,
     destdir,
@@ -365,6 +395,9 @@ def main(
                 args.local,
             )
 
+        # Retrieve deps build information
+        show_build_info(tmpdir)
+
         # Clean
         logger.info("Cleaning local cache")
         res = run_conan(
@@ -487,5 +520,7 @@ def deps(
     main([f"--output={BINARY_DIR}"])
 
 
+# Historically, this module was independent; there are some remnants of this
+# previous situation (main entry point, with ability to parse command line)
 if __name__ == "__main__":
     main()
