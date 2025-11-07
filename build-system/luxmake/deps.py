@@ -316,14 +316,25 @@ def main(
         output_dir,
     )
 
-    # Get optional command-line parameters
-    # Nota: --local option is used by LuxCoreDeps CI
+    # Command-line parameters for standalone execution (debug)
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "-l",
         "--local",
         type=Path,
-        help="Use local dependency set (debug)",
+        help="Use local dependency set, located at LOCAL path",
+    )
+    parser.add_argument(
+        "-u",
+        "--user",
+        type=str,
+        help="Specify dependencies user (override build-settings.json)",
+    )
+    parser.add_argument(
+        "-r",
+        "--release",
+        type=str,
+        help="Specify dependencies release (override build-settings.json)",
     )
     parser.add_argument(
         "-o",
@@ -372,8 +383,8 @@ def main(
         )
 
         # Initialize
-        user = settings["Dependencies"]["user"]
-        release = settings["Dependencies"]["release"]
+        user = args.user or settings["Dependencies"]["user"]
+        release = args.release or settings["Dependencies"]["release"]
         url = build_url(
             user,
             release,
