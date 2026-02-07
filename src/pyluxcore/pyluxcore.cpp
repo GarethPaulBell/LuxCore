@@ -2407,7 +2407,7 @@ PYBIND11_MODULE(pyluxcore, m) {
     .def("HaveNamesRE", &luxrays::Properties::HaveNamesRE)
     .def("GetAllProperties", &luxrays::Properties::GetAllProperties)
 
-    .def<const luxrays::Property & (luxrays::Properties::*)(const std::string &) const>
+    .def<const luxrays::Property (luxrays::Properties::*)(const std::string &) const>
       ("Get", &luxrays::Properties::Get)
     .def("Get", &Properties_GetWithDefaultValues)
 

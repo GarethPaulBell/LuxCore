@@ -29,6 +29,7 @@
 #include <cstdarg>
 #include <stdexcept>
 #include <memory>
+#include <mutex>
 
 #include "luxrays/usings.h"
 #include "luxrays/utils/exportdefs.h"
@@ -329,7 +330,7 @@ public:
 	/*!
 	 * \brief Initialize the property from a string (ex. "a.b.c = 1 2")
 	 */
-	void FromString(std::string &s);
+	static Property FromString(std::string &s);
 	/*!
 	 * \brief Returns a string with the name of the property followed by " = "
 	 * and by all values associated to the property.
@@ -505,10 +506,11 @@ inline std::ostream &operator<<(std::ostream &os, const Property &p) {
  */
 CPP_EXPORT class CPP_API Properties {
 public:
+	// No copy, move only
 	Properties(const Properties &) = delete;
 	Properties& operator=(const Properties &) = delete;
-	Properties(Properties &&) = default;
-	Properties& operator=(Properties &&) = default;
+	Properties(Properties &&) noexcept;
+	Properties& operator=(Properties &&) noexcept;
 
 	Properties() { }
 	/*!
@@ -703,20 +705,27 @@ public:
 	 *
 	 * \throws std::runtime_error if the Property doesn't exist.
 	 */
-	const Property &Get(const std::string &propName) const;
+	const Property Get(const std::string &propName) const;
 	/*!
 	 * \brief Returns a Property with the same name of the passed Property if
 	 * it has been defined or the passed Property itself (i.e. the default values).
+	 *
+	 * We return an object rather than a reference to avoid issues in concurrent
+	 * accesses
 	 *
 	 * \param defaultProp has the Property to look for and the default values in
 	 * case it has not been defined.
 	 *
 	 * \return a Property.
 	 */
-	const Property &Get(const Property &defaultProp) const;
+	const Property Get(const Property &defaultProp) const;
 	/*!
 	 * \brief Returns a Property with the same name of the passed Property if
 	 * it has been defined or the passed Property itself (i.e. the default values).
+	 *
+	 * We return an object rather than a reference to avoid issues in concurrent
+	 * accesses
+	 *
 	 *
 	 * \param defaultProp has the Property to look for and the default values in
 	 * case it has not been defined.
@@ -772,7 +781,13 @@ private:
 	// This vector is used, among other things, to keep track of the insertion order
 	std::vector<std::string> names;
 	std::map<std::string, PropertyUPtr> props;
+
+	// For concurrent access (bake engine, for instance)
+	mutable std::recursive_mutex mtx;
+
 };
+
+
 
 CPP_EXPORT CPP_API Properties &operator<<(const Property &prop0, const Property &prop1);
 CPP_EXPORT CPP_API Properties &operator<<(const Property &prop0, const Properties &props);

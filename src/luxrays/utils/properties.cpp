@@ -654,18 +654,19 @@ template<> Property &Property::Add<Matrix4x4>(const Matrix4x4 &m) {
 
 //------------------------------------------------------------------------------
 
-void Property::FromString(string &line) {
+Property Property::FromString(string &line) {
+	Property prop;
 	const size_t idx = line.find('=');
 	if (idx == string::npos)
 		throw runtime_error("Syntax error in property string: " + line);
 
 	// Check if it is a valid name
-	name = line.substr(0, idx);
-	boost::trim(name);
+	prop.name = line.substr(0, idx);
+	boost::trim(prop.name);
 
-	values.clear();
+	prop.values.clear();
 
-	string value(line.substr(idx + 1));
+	std::string value(line.substr(idx + 1));
 	// Check if the last char is a LF or a CR and remove that (in case of
 	// a DOS file read under Linux/MacOS)
 	if ((value.size() > 0) && ((value[value.size() - 1] == '\n') || (value[value.size() - 1] == '\r')))
@@ -685,7 +686,7 @@ void Property::FromString(string &line) {
 				if ((value[last] == ']') || (value[last + 1] == '}')) {
 					const size_t size = last - first + 2; // +2 is for "]}"
 					const Blob blob(value.substr(first, size).c_str());
-					Add(blob);
+					prop.Add(blob);
 					found = true;
 					// Eat the "]}"
 					last += 2;
@@ -700,7 +701,7 @@ void Property::FromString(string &line) {
 			}
 
 			if (!found) 
-				throw runtime_error("Unterminated blob in property: " + name);
+				throw runtime_error("Unterminated blob in property: " + prop.name);
 		} else
 		// Check if it is a quoted field
 		if ((value[first] == '"') || (value[first] == '\'')) {
@@ -714,7 +715,7 @@ void Property::FromString(string &line) {
 					boost::replace_all(s,"\\\"", "\"");
 					boost::replace_all(s,"\\\'", "'");
 
-					Add(s);
+					prop.Add(s);
 					found = true;
 					++last;
 
@@ -728,7 +729,7 @@ void Property::FromString(string &line) {
 			}
 
 			if (!found) 
-				throw runtime_error("Unterminated quote in property: " + name);
+				throw runtime_error("Unterminated quote in property: " + prop.name);
 		} else {
 			last = first;
 			while (last < len) {
@@ -739,7 +740,7 @@ void Property::FromString(string &line) {
 						++last;
 					} else
 						field = value.substr(first, last - first);
-					Add(field);
+					prop.Add(field);
 
 					// Eat all additional spaces
 					while ((last < len) && ((value[last] == ' ') || (value[last] == '\t')))
@@ -753,6 +754,7 @@ void Property::FromString(string &line) {
 
 		first = last;
 	}
+	return prop;
 }
 
 string Property::ToString() const {
@@ -762,7 +764,7 @@ string Property::ToString() const {
 	for (unsigned int i = 0; i < values.size(); ++i) {
 		if (i != 0)
 			ss << " ";
-		
+
 		if (GetValueType(i) == PropertyValue::STRING_VAL) {
 			// Escape " char
 			string s = Get<string>(i);
@@ -821,115 +823,55 @@ string Property::PopPrefix(const std::string &name) {
 // Properties class
 //------------------------------------------------------------------------------
 
+// Some engine may operate concurrent accesses on Properties (eg bake engine),
+// therefore this class has to be protected against race conditions (mutex).
+// Beware, however, to avoid deadlocks...
+
+Properties::Properties(Properties&& other) noexcept :
+	names(std::move(other.names)),
+	props(std::move(other.props)),
+	mtx()  // Mutex is not movable
+{}
+
+Properties& Properties::operator=(Properties&& other) noexcept {
+	if (this != &other) {
+		names = std::move(other.names);
+		props = std::move(props);
+	}
+	return *this;
+}
+
 Properties::Properties(const string &fileName) {
 	SetFromFile(fileName);
 }
 
 unsigned int Properties::GetSize() const {
+
+	std::lock_guard lk(mtx);
 	return names.size();
 }
 
-Properties &Properties::Set(const Properties &props) {
-	for(const string name: props.GetAllNames()) {
-		this->Set(props.Get(name));
-	}
-
-	return *this;
-}
-
-Properties &Properties::Set(const PropertiesUPtr &props) {
-	for(const string name: props->GetAllNames()) {
-		this->Set(props->Get(name));
-	}
-
-	return *this;
-}
-
-Properties &Properties::Set(const Properties &props, const string &prefix) {
-	for(const string name: props.GetAllNames()) {
-		Set(props.Get(name).AddedNamePrefix(prefix));
-	}
-
-	return *this;
-}
-
-
-Properties &Properties::SetFromStream(istream &stream) {
-	string line;
-
-	for (int lineNumber = 1;; ++lineNumber) {
-		if (stream.eof())
-			break;
-
-		getline(stream, line);
-		if (stream.bad())
-			throw runtime_error("Error while reading from a properties stream at line " + luxrays::ToString(lineNumber));
-
-		boost::trim(line);
-
-		// Ignore comments
-		if (line[0] == '#')
-			continue;
-
-		// Ignore empty lines
-		if (line.length() == 0)
-			continue;
-
-		const size_t idx = line.find('=');
-		if (idx == string::npos)
-			throw runtime_error("Syntax error in a Properties at line " + luxrays::ToString(lineNumber));
-
-		Property prop;
-		prop.FromString(line);
-
-		Set(prop);
-	}
-
-	return *this;
-}
-
-Properties &Properties::SetFromFile(const string &fileName) {
-	// The use of std::filesystem::path is required for UNICODE support: fileName
-	// is supposed to be UTF-8 encoded.
-	std::ifstream inFile(std::filesystem::path(fileName),
-			std::ifstream::in); 
-
-	if (inFile.fail())
-		throw runtime_error("Unable to open properties file: " + fileName);
-
-	// Force to use C locale
-	inFile.imbue(cLocale);
-
-	return SetFromStream(inFile);
-}
-
-Properties &Properties::SetFromString(const string &propDefinitions) {
-	istringstream stream(propDefinitions);
-
-	// Force to use C locale
-	stream.imbue(cLocale);
-
-	return SetFromStream(stream);
-}
-
 void Properties::Save(const std::string &fileName) {
+	// Mutex will be locked by operator <<
+
 	// The use of std::filesystem::path is required for UNICODE support: fileName
 	// is supposed to be UTF-8 encoded.
 	std::ofstream outFile(std::filesystem::path(fileName),
 			std::ofstream::trunc);
-	
+
 	// Force to use C locale
 	outFile.imbue(cLocale);
 
 	outFile << ToString();
-	
+
 	if (outFile.fail())
 		throw runtime_error("Unable to save properties file: " + fileName);
 
-	outFile.close();	
+	outFile.close();
 }
 
 Properties &Properties::Clear() {
+	std::lock_guard lk(mtx);
 	names.clear();
 	props.clear();
 
@@ -937,12 +879,14 @@ Properties &Properties::Clear() {
 }
 
 std::vector<std::string> Properties::GetAllNames() const {
+	std::lock_guard lk(mtx);
 	std::vector<std::string> res;
 	std::copy(names.begin(), names.end(), std::back_inserter(res));
 	return res;
 }
 
 vector<string> Properties::GetAllNames(const string &prefix) const {
+	std::lock_guard lk(mtx);
 	vector<string> namesSubset;
 	for(const string name: names) {
 		if (name.find(prefix) == 0)
@@ -953,6 +897,7 @@ vector<string> Properties::GetAllNames(const string &prefix) const {
 }
 
 std::vector<string> Properties::GetAllNamesRE(const string &regularExpression) const {
+	std::lock_guard lk(mtx);
 	std::regex re(regularExpression);
 
 	std::vector<string> namesSubset;
@@ -967,6 +912,7 @@ std::vector<string> Properties::GetAllNamesRE(const string &regularExpression) c
 std::vector<std::string> Properties::GetAllUniqueSubNames(
 	const string prefix, const bool sorted
 ) const {
+	std::lock_guard lk(mtx);
 	const size_t fieldsCount = count(prefix.begin(), prefix.end(), '.') + 2;
 
 	std::set<std::string> definedNames;
@@ -1028,7 +974,8 @@ std::vector<std::string> Properties::GetAllUniqueSubNames(
 }
 
 bool Properties::HaveNames(const string &prefix) const {
-	for(const string name: names) {
+	std::lock_guard lk(mtx);
+	for(const std::string& name: names) {
 		if (name.find(prefix) == 0)
 			return true;
 	}
@@ -1037,9 +984,10 @@ bool Properties::HaveNames(const string &prefix) const {
 }
 
 bool Properties::HaveNamesRE(const string &regularExpression) const {
+	std::lock_guard lk(mtx);
 	std::regex re(regularExpression);
 
-	for(const string name: names) {
+	for(const std::string& name: names) {
 		if (std::regex_match(name, re))
 			return true;
 	}
@@ -1048,8 +996,9 @@ bool Properties::HaveNamesRE(const string &regularExpression) const {
 }
 
 std::unique_ptr<Properties> Properties::GetAllProperties(const string &prefix) const {
+	// Mutex is already locked in Set(Get)
 	std::unique_ptr<Properties> subset = std::make_unique<Properties>();
-	for(const string name: names) {
+	for(const std::string& name: names) {
 		if (name.find(prefix) == 0)
 			subset->Set(Get(name));
 	}
@@ -1059,10 +1008,14 @@ std::unique_ptr<Properties> Properties::GetAllProperties(const string &prefix) c
 }
 
 bool Properties::IsDefined(const string &propName) const {
+	std::lock_guard lk(mtx);
 	return (props.count(propName) != 0);
 }
 
-const Property &Properties::Get(const string &propName) const {
+// We return an object rather than a reference to avoid issues in concurrent
+// accesses
+const Property Properties::Get(const string &propName) const {
+	std::lock_guard lk(mtx);
 	auto it = props.find(propName);
 	if (it == props.end())
 		throw runtime_error("Undefined property in Properties::Get(): " + propName);
@@ -1070,7 +1023,10 @@ const Property &Properties::Get(const string &propName) const {
 	return *it->second;
 }
 
-const Property &Properties::Get(const Property &prop) const {
+// We return an object rather than a reference to avoid issues in concurrent
+// accesses
+const Property Properties::Get(const Property &prop) const {
+	std::lock_guard lk(mtx);
 	auto it = props.find(prop.GetName());
 	if (it == props.end())
 			return prop;
@@ -1081,8 +1037,12 @@ const Property &Properties::Get(const Property &prop) const {
 PropertyUPtr Properties::Get(
 	Property&& prop, const std::string alternativeName
 ) const {
+
+	std::lock_guard lk(mtx);
+
 	const auto& name = prop.GetName();
 
+	// Look for the main property name
 	auto it = props.find(name);
 	if (it != props.end())
 		return std::make_unique<Property>(*it->second);  // Found
@@ -1092,11 +1052,14 @@ PropertyUPtr Properties::Get(
 	if (itAlt != props.end())
 		return itAlt->second->Renamed(name);  // Found (alternate)
 
-	// Fall back to input
+	// If not found, fall back to input
 	return std::make_unique<Property>(std::move(prop));
 }
 
 void Properties::Delete(const string &propName) {
+
+	std::lock_guard lk(mtx);
+
 	vector<string>::iterator it = find(names.begin(), names.end(), propName);
 	if (it != names.end())
 		names.erase(it);
@@ -1105,6 +1068,7 @@ void Properties::Delete(const string &propName) {
 }
 
 void Properties::DeleteAll(const vector<string> &propNames) {
+	// Mutex is locked in Delete
 	for(const string &n: propNames)
 		Delete(n);
 }
@@ -1112,54 +1076,123 @@ void Properties::DeleteAll(const vector<string> &propNames) {
 string Properties::ToString() const {
 	stringstream ss;
 
+	std::lock_guard lk(mtx);
 	for (vector<string>::const_iterator i = names.begin(); i != names.end(); ++i)
 		ss << props.at(*i)->ToString() << "\n";
 
 	return ss.str();
 }
 
-Properties &Properties::Set(const Property &prop) {
-	const string propName = prop.GetName();
+// This overload version of Set is the mutex protected one and is to be used as
+// a basis for the others.
+Properties &Properties::Set(Property&& prop) {
 
-	if (!IsDefined(propName)) {
-		// It is a new name
-		names.push_back(propName);
-	} else {
-		// std::unordered_set::insert() doesn't overwrite an existing entry
-		props.erase(propName);
-	}
+	std::lock_guard lk(mtx);
 
-	props.emplace(propName, std::make_unique<Property>(prop));
+	auto ptr = std::make_unique<Property>(prop);
+	auto name = ptr->GetName();  // Copy
 
-	return *this;
+	auto [it, result] = props.insert_or_assign(name, std::move(ptr));
+	if (result) names.push_back(name);  // It's a new name
+
+	return std::ref(*this);
 }
 
-Properties &Properties::Set(Property&& prop) {
-	const string propName = prop.GetName();
-
-	if (!IsDefined(propName)) {
-		// It is a new name
-		names.push_back(propName);
-	} else {
-		// std::unordered_set::insert() doesn't overwrite an existing entry
-		props.erase(propName);
-	}
-
-	props.emplace(propName, std::make_unique<Property>(prop));
-
-	return *this;
+Properties &Properties::Set(const Property &prop) {
+	return Set(Property(prop));
 }
 
 Properties &Properties::Set(PropertyPtr prop) {
-	return Set(*prop);
+	return Set(Property(*prop));
 }
 
 Properties &Properties::operator<<(const Property &prop) {
-	return Set(prop);
+	return Set(Property(prop));
 }
 
 Properties &Properties::operator<<(Property&& prop) {
 	return Set(prop);
+}
+
+Properties &Properties::Set(const Properties &props) {
+	for(const std::string name: props.GetAllNames()) {
+		this->Set(std::move(props.Get(name)));
+	}
+
+	return std::ref(*this);
+}
+
+Properties &Properties::Set(const PropertiesUPtr &props) {
+	for(const string name: props->GetAllNames()) {
+		this->Set(std::move(props->Get(name)));
+	}
+
+	return std::ref(*this);
+}
+
+Properties &Properties::Set(const Properties &props, const string &prefix) {
+	for(const string name: props.GetAllNames()) {
+		Set(props.Get(name).AddedNamePrefix(prefix));
+	}
+
+	return std::ref(*this);
+}
+
+
+Properties &Properties::SetFromStream(istream &stream) {
+	string line;
+
+	for (int lineNumber = 1;; ++lineNumber) {
+		if (stream.eof())
+			break;
+
+		getline(stream, line);
+		if (stream.bad())
+			throw runtime_error("Error while reading from a properties stream at line " + luxrays::ToString(lineNumber));
+
+		boost::trim(line);
+
+		// Ignore comments
+		if (line[0] == '#')
+			continue;
+
+		// Ignore empty lines
+		if (line.length() == 0)
+			continue;
+
+		const size_t idx = line.find('=');
+		if (idx == string::npos)
+			throw runtime_error("Syntax error in a Properties at line " + luxrays::ToString(lineNumber));
+
+		Set(Property::FromString(line));
+
+	}
+
+	return std::ref(*this);
+}
+
+Properties &Properties::SetFromFile(const string &fileName) {
+	// The use of std::filesystem::path is required for UNICODE support: fileName
+	// is supposed to be UTF-8 encoded.
+	std::ifstream inFile(std::filesystem::path(fileName),
+			std::ifstream::in); 
+
+	if (inFile.fail())
+		throw runtime_error("Unable to open properties file: " + fileName);
+
+	// Force to use C locale
+	inFile.imbue(cLocale);
+
+	return SetFromStream(inFile);
+}
+
+Properties &Properties::SetFromString(const string &propDefinitions) {
+	istringstream stream(propDefinitions);
+
+	// Force to use C locale
+	stream.imbue(cLocale);
+
+	return SetFromStream(stream);
 }
 
 Properties &Properties::operator<<(const Properties &props) {
@@ -1171,6 +1204,9 @@ Properties &Properties::operator<<(const std::unique_ptr<Properties> &props) {
 }
 
 PropertiesUPtr Properties::Clone() const {
+
+	std::lock_guard lk(mtx);
+
 	auto result = std::make_unique<Properties>();
 
 	// Property map

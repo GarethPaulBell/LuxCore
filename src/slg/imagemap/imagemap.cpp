@@ -1518,7 +1518,7 @@ ImageMapUPtr ImageMap::FromProperties(const Properties &props, const string &pre
 	if (props.IsDefined(prefix + ".file")) {
 		// Read the image map from a file
 		const string fileName = props.Get(Property(prefix + ".file")("image.png")).Get<string>();
-		
+
 		im = std::make_unique<ImageMap>(fileName, ImageMapConfig(props, prefix));
 	} else if (props.IsDefined(prefix + ".blob")) {
 		// Read the image map from embedded data
