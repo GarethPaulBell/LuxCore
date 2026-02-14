@@ -151,7 +151,7 @@ std::experimental::observer_ptr<ImageMap> Scene::CreateEmissionMap(
 
 		ImageMapConfig imgCfg(props, propName);
 		// Force float storage
-		imgCfg.storageType = ImageMapStorage::FLOAT;
+		imgCfg.SetStorageType(ImageMapStorage::FLOAT);
 
 		imgMap.reset(&imgMapCache.GetImageMap(imgMapName, imgCfg, false));
 

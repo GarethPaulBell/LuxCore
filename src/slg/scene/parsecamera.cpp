@@ -126,7 +126,7 @@ CameraUPtr Scene::CreateCamera(const Properties &props) {
 
 				ImageMapConfig imgCfg(props, "scene.camera.bokeh.distribution.image");
 				// Force float storage
-				imgCfg.storageType = ImageMapStorage::FLOAT;
+				imgCfg.SetStorageType(ImageMapStorage::FLOAT);
 
 				perspCamera->bokehDistributionImageMap.reset(&imgMapCache.GetImageMap(imgMapName, imgCfg, false));
 

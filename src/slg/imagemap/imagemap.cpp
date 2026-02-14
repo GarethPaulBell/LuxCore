@@ -16,6 +16,7 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include "luxrays/utils/strutils.h"
 #include <OpenImageIO/typedesc.h>
 #include <sstream>
 #include <algorithm>
@@ -366,8 +367,7 @@ ImageMapStorage::ChannelSelectionType ImageMapStorage::String2ChannelSelectionTy
 template <class T, u_int CHANNELS>
 OIIO::image_span<T> ImageMapStorageImpl<T, CHANNELS>::GetPixelsSpan() {
 	T* ptr = &pixels[0][0];
-	auto imageSpan = OIIO::image_span<T>(ptr, CHANNELS, width * height, 1);
-	return imageSpan;
+	return OIIO::image_span<T, 3>(ptr, CHANNELS, width, height);
 }
 
 template <class T, u_int CHANNELS>
@@ -770,17 +770,25 @@ ImageMapConfig::ImageMapConfig(const Properties &props, const string &prefix) {
 	FromProperties(props, prefix, *this);
 }
 
-void ImageMapConfig::FromProperties(const Properties &props, const string &prefix, ImageMapConfig &imgCfg) {	
+void ImageMapConfig::FromProperties(const Properties &props, const string &prefix, ImageMapConfig &imgCfg) {
 	ColorSpaceConfig::FromProperties(props, prefix, imgCfg.colorSpaceCfg, ColorSpaceConfig::defaultLuxCoreConfig);
 
-	imgCfg.storageType = ImageMapStorage::String2StorageType(
-		props.Get(Property(prefix + ".storage")("auto")).Get<string>());
-	imgCfg.wrapType = ImageMapStorage::String2WrapType(
-			props.Get(Property(prefix + ".wrap")("repeat")).Get<string>());
-	imgCfg.filterType = ImageMapStorage::String2FilterType(
-			props.Get(Property(prefix + ".filter")("linear")).Get<string>());
-	imgCfg.selectionType = ImageMapStorage::String2ChannelSelectionType(
-		props.Get(Property(prefix + ".channel")("default")).Get<string>());
+	imgCfg.SetStorageType(
+		ImageMapStorage::String2StorageType(
+		props.Get(Property(prefix + ".storage")("auto")).Get<string>())
+	);
+	imgCfg.SetWrapType(
+		ImageMapStorage::String2WrapType(
+			props.Get(Property(prefix + ".wrap")("repeat")).Get<string>())
+	);
+	imgCfg.SetFilterType(
+		ImageMapStorage::String2FilterType(
+			props.Get(Property(prefix + ".filter")("linear")).Get<string>())
+	);
+	imgCfg.SetSelectionType(
+		ImageMapStorage::String2ChannelSelectionType(
+			props.Get(Property(prefix + ".channel")("default")).Get<string>())
+	);
 }
 
 //------------------------------------------------------------------------------
@@ -819,7 +827,7 @@ ImageMap::ImageMap(
 	imageMapConfig(cfg),
 	instrumentationInfo(
 		std::make_unique<InstrumentationInfo>(
-			pixelStorage->width, pixelStorage->height, cfg
+			pixelStorage->GetWidth(), pixelStorage->GetHeight(), cfg
 		)
 	)
 {}
@@ -835,7 +843,9 @@ void ImageMap::Reload() {
 	Init(GetName(), instrumentationInfo->originalImgCfg, 0, 0);
 }
 
-void ImageMap::Reload(const string &fileName, const u_int widthHint, const u_int heightHint) {
+void ImageMap::Reload(
+	const string &fileName, const u_int widthHint, const u_int heightHint
+) {
 	if (!instrumentationInfo)
 		throw runtime_error("ImageMap::Reload() called on a not instrumented image map: " + GetName() + " from " + fileName);
 
@@ -851,12 +861,18 @@ static auto createBuffer(u_int channelCount, u_int width, u_int height) {
 		case 2: return std::vector<ImageMapPixel<T, 2>>(width * height);
 		case 3: return std::vector<ImageMapPixel<T, 3>>(width * height);
 		case 4: return std::vector<ImageMapPixel<T, 4>>(width * height);
-		// TODO default: throw
+		default: throw std::runtime_error(
+			"createBuffer: unhandled channelCount (" + ToString(channelCount) + ")"
+		);
 	}
 }
 
-void ImageMap::Init(const string &fileName, const ImageMapConfig &cfg,
-		const u_int widthHint, const u_int heightHint) {
+void ImageMap::Init(
+	const string &fileName,
+	const ImageMapConfig &cfg,
+	const u_int widthHint,
+	const u_int heightHint
+) {
 	const string resolvedFileName = SLG_FileNameResolver.ResolveFile(fileName);
 	SDL_LOG("Reading texture map: " << resolvedFileName);
 
@@ -876,7 +892,7 @@ void ImageMap::Init(const string &fileName, const ImageMapConfig &cfg,
 
 	// Check the mipmap level available
 	int mipmapLevel = 0;
-	stringstream ss;
+	std::stringstream ss;
 	std::vector<pair<u_int, u_int> > mipmapSizes;
 	while (in->seek_subimage(0, mipmapLevel)) {
 		const ImageSpec &spec = in->spec();
@@ -926,7 +942,7 @@ void ImageMap::Init(const string &fileName, const ImageMapConfig &cfg,
 
 	// Anything not TypeDesc::UCHAR or TypeDesc::HALF, is stored in float format
 
-	ImageMapStorage::StorageType selectedStorageType = cfg.storageType;
+	ImageMapStorage::StorageType selectedStorageType = cfg.GetStorageType();
 	if (selectedStorageType == ImageMapStorage::AUTO) {
 		// Automatically select the storage type
 
@@ -943,19 +959,19 @@ void ImageMap::Init(const string &fileName, const ImageMapConfig &cfg,
 	switch (selectedStorageType) {
 		case ImageMapStorage::BYTE:
 			pixelStorage = AllocImageMapStorage<u_char>(
-				channelCount, width, height, cfg.wrapType, cfg.filterType
+				channelCount, width, height, cfg.GetWrapType(), cfg.GetFilterType()
 			);
 			td = TypeDesc::UCHAR;
 			break;
 		case ImageMapStorage::HALF:
 			pixelStorage = AllocImageMapStorage<half>(
-				channelCount, width, height, cfg.wrapType, cfg.filterType
+				channelCount, width, height, cfg.GetWrapType(), cfg.GetFilterType()
 			);
 			td = TypeDesc::HALF;
 			break;
 		case ImageMapStorage::FLOAT:
 			pixelStorage = AllocImageMapStorage<float>(
-				channelCount, width, height, cfg.wrapType, cfg.filterType
+				channelCount, width, height, cfg.GetWrapType(), cfg.GetFilterType()
 			);
 			td = TypeDesc::FLOAT;
 			break;
@@ -991,8 +1007,14 @@ void ImageMap::Init(const string &fileName, const ImageMapConfig &cfg,
 			throw runtime_error("Unknown color space in ImageMap::ImageMap(" +
 					fileName + "): " + ToString(cfg.colorSpaceCfg.colorSpaceType));
 	}
+	auto span = pixelStorage->ToSpan();
+	SDL_LOG("Image dimensions: "
+		<< span.width() << "x" << span.height()
+		<< "@" << span.nchannels()
+		<< " (contiguous=" << span.is_contiguous() << ")"
+	);
 
-	SelectChannel(cfg.selectionType);
+	SelectChannel(cfg.GetSelectionType());
 	Preprocess();
 }
 
@@ -1034,26 +1056,26 @@ ImageMapUPtr ImageMap::AllocImageMap(
 	// This lambda avoids to deal with a predeclared UPtr (at low level, it avoids a
 	// a release)
 	auto createIMS = [&]() {
-		switch (cfg.storageType) {
+		switch (cfg.GetStorageType()) {
 			case ImageMapStorage::BYTE:
 				return AllocImageMapStorage<u_char>(
-					channels, width, height,cfg.wrapType, cfg.filterType
+					channels, width, height,cfg.GetWrapType(), cfg.GetFilterType()
 				);
 				break;
 			case ImageMapStorage::HALF:
 				return AllocImageMapStorage<half>(
-					channels, width, height, cfg.wrapType, cfg.filterType
+					channels, width, height, cfg.GetWrapType(), cfg.GetFilterType()
 				);
 				break;
 			case ImageMapStorage::FLOAT:
 				return AllocImageMapStorage<float>(
-					channels, width, height, cfg.wrapType, cfg.filterType
+					channels, width, height, cfg.GetWrapType(), cfg.GetFilterType()
 				);
 				break;
 			default:
 				throw runtime_error(
 					"Unknown storage type in ImageMap::AllocImageMap(): "
-					+ ToString(cfg.storageType)
+					+ ToString(cfg.GetStorageType())
 				);
 		}  // Switch
 	};  // lambda
@@ -1070,26 +1092,26 @@ ImageMapUPtr ImageMap::AllocImageMap(
 	// This lambda avoids to deal with a predeclared UPtr (at low level, it avoids a
 	// a release)
 	auto&& createIMS = [&]() {
-		switch (cfg.storageType) {
+		switch (cfg.GetStorageType()) {
 			case ImageMapStorage::BYTE:
 				return AllocImageMapStorage<u_char>(
-					channels, width, height,cfg.wrapType, cfg.filterType
+					channels, width, height, cfg.GetWrapType(), cfg.GetFilterType()
 				);
 				break;
 			case ImageMapStorage::HALF:
 				return AllocImageMapStorage<half>(
-					channels, width, height, cfg.wrapType, cfg.filterType
+					channels, width, height, cfg.GetWrapType(), cfg.GetFilterType()
 				);
 				break;
 			case ImageMapStorage::FLOAT:
 				return AllocImageMapStorage<float>(
-					channels, width, height, cfg.wrapType, cfg.filterType
+					channels, width, height, cfg.GetWrapType(), cfg.GetFilterType()
 				);
 				break;
 			default:
 				throw runtime_error(
 					"Unknown storage type in ImageMap::AllocImageMap(): "
-					+ ToString(cfg.storageType)
+					+ ToString(cfg.GetStorageType())
 				);
 		}  // Switch
 	};  // lambda
@@ -1115,14 +1137,14 @@ ImageMapUPtr ImageMap::AllocImageMap(
 					ToString(cfg.colorSpaceCfg.colorSpaceType));
 	}
 
-	imageMap->SelectChannel(cfg.selectionType);
+	imageMap->SelectChannel(cfg.GetSelectionType());
 	imageMap->Preprocess();
 
 	return imageMap;
 }
 
 float ImageMap::CalcSpectrumMean() const {
-	const u_int pixelCount = pixelStorage->width * pixelStorage->height;
+	const u_int pixelCount = pixelStorage->GetWidth() * pixelStorage->GetHeight();
 
 	float mean = 0.f;
 	#pragma omp parallel for reduction(+:mean)
@@ -1138,14 +1160,14 @@ float ImageMap::CalcSpectrumMean() const {
 		mean += m;
 	}
 
-	const float result = mean / (pixelStorage->width * pixelStorage->height);
+	const float result = mean / (pixelStorage->GetWidth() * pixelStorage->GetHeight());
 	assert (!isnan(result) && !isinf(result));
 
 	return result;
 }
 
 float ImageMap::CalcSpectrumMeanY() const {
-	const u_int pixelCount = pixelStorage->width * pixelStorage->height;
+	const u_int pixelCount = pixelStorage->GetWidth() * pixelStorage->GetHeight();
 
 	float mean = 0.f;
 	#pragma omp parallel for reduction(+:mean)
@@ -1161,7 +1183,7 @@ float ImageMap::CalcSpectrumMeanY() const {
 		mean += m;
 	}
 
-	const float result = mean / (pixelStorage->width * pixelStorage->height);
+	const float result = mean / (pixelStorage->GetWidth() * pixelStorage->GetHeight());
 	assert (!isnan(result) && !isinf(result));
 
 	return result;
@@ -1188,10 +1210,10 @@ void ImageMap::ConvertStorage(const ImageMapStorage::StorageType newStorageType,
 	if ((storageType == newStorageType) && (channelCount == newChannelCount))
 		return;
 
-	const u_int width = pixelStorage->width;
-	const u_int height = pixelStorage->height;
-	const ImageMapStorage::WrapType wrapType = pixelStorage->wrapType;
-	const ImageMapStorage::FilterType filterType = pixelStorage->filterType;
+	const u_int width = pixelStorage->GetWidth();
+	const u_int height = pixelStorage->GetHeight();
+	const ImageMapStorage::WrapType wrapType = pixelStorage->GetWrapType();
+	const ImageMapStorage::FilterType filterType = pixelStorage->GetFilterType();
 
 	// Allocate the new image map storage
 	ImageMapStorageUPtr newPixelStorage;
@@ -1278,7 +1300,7 @@ void ImageMap::ConvertColorSpace(const string &configFileName,
 
 		// Apply the color transform with OpenColorIO
 		OCIO::PackedImageDesc img(pixelStorage->GetPixelsData(),
-				pixelStorage->width, pixelStorage->height,
+				pixelStorage->GetWidth(), pixelStorage->GetHeight(),
 				pixelStorage->GetChannelCount());
 		cpu->apply(img);
 	} catch (OCIO::Exception &exception) {
@@ -1290,8 +1312,8 @@ void ImageMap::ConvertColorSpace(const string &configFileName,
 }
 
 void ImageMap::Resize(const u_int newWidth, const u_int newHeight) {
-	const u_int width = pixelStorage->width;
-	const u_int height = pixelStorage->height;
+	const u_int width = pixelStorage->GetWidth();
+	const u_int height = pixelStorage->GetHeight();
 	if ((width == newWidth) && (height == newHeight))
 		return;
 
@@ -1322,9 +1344,9 @@ void ImageMap::Resize(const u_int newWidth, const u_int newHeight) {
 	ImageBuf dest = ImageBufAlgo::resize(source, options, roi);
 
 	// Save the wrap mode
-	const ImageMapStorage::WrapType wrapType = pixelStorage->wrapType;
+	const ImageMapStorage::WrapType wrapType = pixelStorage->GetWrapType();
 	// Save the filter mode
-	const ImageMapStorage::FilterType filterType = pixelStorage->filterType;
+	const ImageMapStorage::FilterType filterType = pixelStorage->GetFilterType();
 	// I can delete the current image
 	pixelStorage.reset();
 
@@ -1372,8 +1394,8 @@ void ImageMap::WriteImage(const string &fileName) const {
 	switch (storageType) {
 		case ImageMapStorage::BYTE: {
 			ImageSpec spec(
-				pixelStorage->width,
-				pixelStorage->height,
+				pixelStorage->GetWidth(),
+				pixelStorage->GetHeight(),
 				pixelStorage->GetChannelCount(),
 				TypeDesc::UCHAR
 			);
@@ -1384,8 +1406,8 @@ void ImageMap::WriteImage(const string &fileName) const {
 		}
 		case ImageMapStorage::HALF: {
 			ImageSpec spec(
-				pixelStorage->width,
-				pixelStorage->height,
+				pixelStorage->GetWidth(),
+				pixelStorage->GetHeight(),
 				pixelStorage->GetChannelCount(),
 				TypeDesc::HALF
 			);
@@ -1398,7 +1420,7 @@ void ImageMap::WriteImage(const string &fileName) const {
 			if (pixelStorage->GetChannelCount() == 1) {
 				// OIIO 1 channel EXR output is apparently not working, I write
 				// 3 channels as temporary workaround
-				const u_int size = pixelStorage->width * pixelStorage->height;
+				const u_int size = pixelStorage->GetWidth() * pixelStorage->GetHeight();
 				const float *srcBuffer = (float *)pixelStorage->GetPixelsData();
 				float *tmpBuffer = new float[size * 3];
 
@@ -1411,7 +1433,7 @@ void ImageMap::WriteImage(const string &fileName) const {
 				}
 
 				ImageSpec spec(
-					pixelStorage->width, pixelStorage->height, 3, TypeDesc::FLOAT
+					pixelStorage->GetWidth(), pixelStorage->GetHeight(), 3, TypeDesc::FLOAT
 				);
 				out->open(fileName, spec);
 				out->write_image(TypeDesc::FLOAT, tmpBuffer);
@@ -1420,8 +1442,8 @@ void ImageMap::WriteImage(const string &fileName) const {
 				delete[] tmpBuffer;
 			} else {
 				ImageSpec spec(
-					pixelStorage->width,
-					pixelStorage->height,
+					pixelStorage->GetWidth(),
+					pixelStorage->GetHeight(),
 					pixelStorage->GetChannelCount(),
 					TypeDesc::FLOAT
 				);
@@ -1459,7 +1481,7 @@ ImageMapUPtr ImageMap::Merge(
 			ImageMapConfig(
 				1.f,
 				ImageMapStorage::StorageType::FLOAT,
-				map0.GetStorage().wrapType,
+				map0.GetStorage().GetWrapType(),
 				ImageMapStorage::ChannelSelectionType::DEFAULT
 			)
 		);
@@ -1480,7 +1502,7 @@ ImageMapUPtr ImageMap::Merge(
 			ImageMapConfig(
 				1.f,
 				ImageMapStorage::StorageType::FLOAT,
-				map0.GetStorage().wrapType,
+				map0.GetStorage().GetWrapType(),
 				ImageMapStorage::ChannelSelectionType::DEFAULT)
 			);
 		float *mergedImg = (float *)imgMap->GetStorage().GetPixelsData();
@@ -1515,7 +1537,7 @@ ImageMapUPtr ImageMap::Resample(ImageMapConstRef map, const u_int channels,
 		auto imgMap = AllocImageMap(1, width, height,
 				ImageMapConfig(1.f,
 					ImageMapStorage::StorageType::FLOAT,
-					map.GetStorage().wrapType,
+					map.GetStorage().GetWrapType(),
 					ImageMapStorage::ChannelSelectionType::DEFAULT));
 		float *newImg = (float *)imgMap->GetStorage().GetPixelsData();
 
@@ -1531,7 +1553,7 @@ ImageMapUPtr ImageMap::Resample(ImageMapConstRef map, const u_int channels,
 		auto imgMap = AllocImageMap(3, width, height,
 				ImageMapConfig(1.f,
 					ImageMapStorage::StorageType::FLOAT,
-					map.GetStorage().wrapType,
+					map.GetStorage().GetWrapType(),
 					ImageMapStorage::ChannelSelectionType::DEFAULT));
 		float *newImg = (float *)imgMap->GetStorage().GetPixelsData();
 
@@ -1643,16 +1665,16 @@ PropertiesUPtr ImageMap::ToProperties(const string &prefix, const bool includeBl
 			// The image is internally stored always in NOP_COLORSPACE
 			Property(prefix + ".colorspace")("nop") <<
 			Property(prefix + ".storage")(ImageMapStorage::StorageType2String(pixelStorage->GetStorageType()));
-			Property(prefix + ".wrap")(ImageMapStorage::WrapType2String(pixelStorage->wrapType));
-			Property(prefix + ".filter")(ImageMapStorage::FilterType2String(pixelStorage->filterType));
+			Property(prefix + ".wrap")(ImageMapStorage::WrapType2String(pixelStorage->GetWrapType()));
+			Property(prefix + ".filter")(ImageMapStorage::FilterType2String(pixelStorage->GetFilterType()));
 
 	if (includeBlobImg)
 		props <<
 				Property(prefix + ".blob")(
 					std::make_shared<Blob>((char *)pixelStorage->GetPixelsData(), pixelStorage->GetMemorySize())
 					) <<
-				Property(prefix + ".blob.width")(pixelStorage->width) <<
-				Property(prefix + ".blob.height")(pixelStorage->height) <<
+				Property(prefix + ".blob.width")(pixelStorage->GetWidth()) <<
+				Property(prefix + ".blob.height")(pixelStorage->GetHeight()) <<
 				Property(prefix + ".blob.channelcount")(pixelStorage->GetChannelCount());
 
 	return props_ptr;

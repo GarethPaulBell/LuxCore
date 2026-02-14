@@ -203,7 +203,7 @@ Spectrum DensityGridTexture::GetSpectrumValue(const HitPoint &hitPoint) const {
 	float x, y, z;
 	int vx, vy, vz;
 
-	switch (imageMap.GetStorage().wrapType) {
+	switch (imageMap.GetStorage().GetWrapType()) {
 		case ImageMapStorage::REPEAT:
 			x = P.x * nx;
 			vx = Floor2Int(x);
@@ -281,7 +281,7 @@ PropertiesUPtr DensityGridTexture::ToProperties(const ImageMapCache &imgMapCache
 	props->Set(Property("scene.textures." + name + ".nx")(nx));
 	props->Set(Property("scene.textures." + name + ".ny")(ny));
 	props->Set(Property("scene.textures." + name + ".nz")(nz));
-	props->Set(Property("scene.textures." + name + ".wrap")(ImageMapStorage::WrapType2String(imageMap.GetStorage().wrapType)));
+	props->Set(Property("scene.textures." + name + ".wrap")(ImageMapStorage::WrapType2String(imageMap.GetStorage().GetWrapType())));
 	
 	Property dataProp("scene.textures." + name + ".data");
 	auto& imgStorage = imageMap.GetStorage();

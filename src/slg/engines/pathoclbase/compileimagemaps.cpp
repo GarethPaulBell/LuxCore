@@ -82,7 +82,7 @@ u_int CompiledScene::CompileImageMap(ImageMapConstRef im) {
 	imd->width = im.GetWidth();
 	imd->height = im.GetHeight();
 
-	switch (im.GetStorage().wrapType) {
+	switch (im.GetStorage().GetWrapType()) {
 		case ImageMapStorage::REPEAT:
 			imd->wrapType = slg::ocl::WRAP_REPEAT;
 			break;
@@ -97,10 +97,10 @@ u_int CompiledScene::CompileImageMap(ImageMapConstRef im) {
 			break;
 		default:
 			throw runtime_error("Unknown wrap type in CompiledScene::CompileImageMap(): " +
-					ToString(im.GetStorage().wrapType));
+					ToString(im.GetStorage().GetWrapType()));
 	}
 
-	switch (im.GetStorage().filterType) {
+	switch (im.GetStorage().GetFilterType()) {
 		case ImageMapStorage::NEAREST:
 			imd->filterType = slg::ocl::FILTER_NEAREST;
 			break;
@@ -109,7 +109,7 @@ u_int CompiledScene::CompileImageMap(ImageMapConstRef im) {
 			break;
 		default:
 			throw runtime_error("Unknown filter type in CompiledScene::CompileImageMap(): " +
-					ToString(im.GetStorage().filterType));
+					ToString(im.GetStorage().GetFilterType()));
 	}
 
 	switch (im.GetStorage().GetStorageType()) {
