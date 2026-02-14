@@ -1314,7 +1314,8 @@ void ImageMap::Resize(const u_int newWidth, const u_int newHeight) {
 	}
 
 	ImageSpec sourceSpec(width, height, channelCount, baseType);
-	ImageBuf source(sourceSpec, (void *)pixelStorage->GetPixelsData());
+	ImageBuf source(sourceSpec, pixelStorage->ToSpan());
+	SLG_LOG("Resizing to " << width << "x" << height << " (" << channelCount << ")");
 
 	ImageBufAlgo::KWArgs options = {};
 	ROI roi(0, newWidth, 0, newHeight, 0, 1, 0, source.nchannels());

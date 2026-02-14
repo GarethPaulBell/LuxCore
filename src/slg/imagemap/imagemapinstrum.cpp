@@ -75,7 +75,7 @@ ImageMap::InstrumentationInfo::~InstrumentationInfo() {
 }
 
 void ImageMap::InstrumentationInfo::ThreadSetUp() {
-#ifndef NDEBUG
+#ifdef DEBUG_IMAGEMAP
 	cout << "ImageMap::InstrumentationInfo::ThreadSetUp() [" << this << "]" << endl;
 #endif
 
@@ -84,7 +84,7 @@ void ImageMap::InstrumentationInfo::ThreadSetUp() {
 }
 
 void ImageMap::InstrumentationInfo::ThreadFinalize() {
-#ifndef NDEBUG
+#ifdef DEBUG_IMAGEMAP
 	cout << "ImageMap::InstrumentationInfo::ThreadFinalize() [" << this << "]" << endl;
 #endif	
 	std::unique_lock<std::mutex> lock(classLock);
@@ -107,7 +107,7 @@ void ImageMap::InstrumentationInfo::ThreadFinalize() {
 }
 
 void ImageMap::InstrumentationInfo::ThreadSetSampleIndex(const InstrumentationSampleIndex index) {
-#ifndef NDEBUG
+#ifdef DEBUG_IMAGEMAP
 	//cerr << "ImageMap::InstrumentationInfo::ThreadSetSampleIndex(" << index << ") [" << this << "]" << endl;
 #endif
 
@@ -118,7 +118,7 @@ void ImageMap::InstrumentationInfo::ThreadSetSampleIndex(const InstrumentationSa
 void ImageMap::InstrumentationInfo::ThreadAddSample(const luxrays::UV &uv) {
 	const std::unique_ptr<ThreadData> & ti = threadInfo[std::this_thread::get_id()];
 
-#ifndef NDEBUG
+#ifdef DEBUG_IMAGEMAP
 	//cout << "ImageMap::InstrumentationInfo::ThreadAddSample(" << uv << ") [" << this << ", " << ti->currentSamplesIndex << "]" << endl;
 #endif
 
@@ -126,7 +126,7 @@ void ImageMap::InstrumentationInfo::ThreadAddSample(const luxrays::UV &uv) {
 }
 
 void ImageMap::InstrumentationInfo::ThreadAccumulateSamples() {
-#ifndef NDEBUG
+#ifdef DEBUG_IMAGEMAP
 	//cout << "ImageMap::InstrumentationInfo::ThreadAccumulateSamples() [" << this << "]" << endl;
 #endif
 
