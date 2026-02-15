@@ -37,7 +37,7 @@ class SampleResult;
 
 class FilmDenoiser {
 public:
-	FilmDenoiser(std::experimental::observer_ptr<Film> film);
+	FilmDenoiser(FilmPtr film);
 	~FilmDenoiser();
 
 	void Reset();
@@ -51,11 +51,11 @@ public:
 	void WarmUpDone();
 
 	void SetReferenceFilm(
-		std::experimental::observer_ptr<Film> refFilm,
+		FilmPtr refFilm,
 		const u_int offsetX = 0,
 		const u_int offsetY = 0
 	);
-	void CopyReferenceFilm(std::experimental::observer_ptr<Film> refFilm);
+	void CopyReferenceFilm(FilmPtr refFilm);
 
 	bool HasReferenceFilm() const { return bool(referenceFilm); }
 
@@ -108,7 +108,7 @@ private:
 		ar & enabled;
 	}
 
-	std::experimental::observer_ptr<Film> film;
+	FilmPtr film;
 
 	SamplesAccumulator *samplesAccumulatorPixelNormalized;
 	SamplesAccumulator *samplesAccumulatorScreenNormalized;
@@ -123,7 +123,7 @@ private:
 	bool warmUpDone;
 	// The reference film is used by local thread films to share command
 	// bcd::SamplesAccumulator parameters
-	std::experimental::observer_ptr<const Film> referenceFilm;
+	FilmConstPtr referenceFilm;
 	u_int referenceFilmWidth, referenceFilmHeight;
 	u_int referenceFilmOffsetX, referenceFilmOffsetY;
 

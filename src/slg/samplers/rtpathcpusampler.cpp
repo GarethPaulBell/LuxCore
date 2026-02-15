@@ -29,7 +29,7 @@ using namespace slg;
 // RTPathCPU specific sampler shared data
 //------------------------------------------------------------------------------
 
-RTPathCPUSamplerSharedData::RTPathCPUSamplerSharedData(std::experimental::observer_ptr<Film> film) :
+RTPathCPUSamplerSharedData::RTPathCPUSamplerSharedData(FilmPtr film) :
 	engineFilm(film),
 	SamplerSharedData()
 {
@@ -43,7 +43,7 @@ RTPathCPUSamplerSharedData::RTPathCPUSamplerSharedData(std::experimental::observ
 	Reset(film);
 }
 
-void RTPathCPUSamplerSharedData::Reset(std::experimental::observer_ptr<Film> film) {
+void RTPathCPUSamplerSharedData::Reset(FilmPtr film) {
 	engineFilm = film;
 	Reset();
 }
@@ -86,7 +86,7 @@ void RTPathCPUSamplerSharedData::Reset() {
 }
 
 std::unique_ptr<SamplerSharedData> RTPathCPUSamplerSharedData::FromProperties(
-	const Properties &cfg, const RandomGeneratorUPtr & rndGen, std::experimental::observer_ptr<Film> film
+	const Properties &cfg, const RandomGeneratorUPtr & rndGen, FilmPtr film
 ) {
 	return std::make_unique<RTPathCPUSamplerSharedData>(film);
 }
@@ -97,7 +97,7 @@ std::unique_ptr<SamplerSharedData> RTPathCPUSamplerSharedData::FromProperties(
 
 RTPathCPUSampler::RTPathCPUSampler(
 	const luxrays::RandomGeneratorUPtr & rnd,
-	std::experimental::observer_ptr<Film> flm,
+	FilmPtr flm,
 	const FilmSampleSplatterUPtr& flmSplatter,
 	SamplerSharedDataSPtr samplerSharedData
 ) :
@@ -120,7 +120,7 @@ void RTPathCPUSampler::SetRenderEngine(RTPathCPURenderEngine *re) {
 	Reset(film);
 }
 
-void RTPathCPUSampler::Reset(std::experimental::observer_ptr<Film> flm) {
+void RTPathCPUSampler::Reset(FilmPtr flm) {
 	film = flm;
 	// Disable denoiser statistics collection
 	film->GetDenoiser().SetEnabled(false);
@@ -249,7 +249,7 @@ PropertiesUPtr RTPathCPUSampler::ToProperties(const Properties &cfg) {
 }
 
 SamplerUPtr RTPathCPUSampler::FromProperties(const Properties &cfg, const RandomGeneratorUPtr & rndGen,
-		std::experimental::observer_ptr<Film> film, const FilmSampleSplatterUPtr& flmSplatter, SamplerSharedDataSPtr sharedData) {
+		FilmPtr film, const FilmSampleSplatterUPtr& flmSplatter, SamplerSharedDataSPtr sharedData) {
 	return std::make_unique<RTPathCPUSampler>(rndGen, film, flmSplatter, sharedData);
 }
 

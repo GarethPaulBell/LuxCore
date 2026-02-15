@@ -47,7 +47,7 @@ void HitPoint::Init(const bool fixedFromLight, const bool throughShadowTransp,
 	objectID = sceneObject.GetID();
 
 	// Mesh information
-	mesh.reset(&sceneObject.GetExtMesh());
+	mesh = &sceneObject.GetExtMesh();
 	triangleIndex = triIndex;
 	triangleBariCoord1 = b1;
 	triangleBariCoord2 = b2;

@@ -35,7 +35,7 @@ public:
 		TextureConstOPtr backTransp,
 		TextureConstOPtr emitted,
 		TextureConstOPtr bump,
-		std::experimental::observer_ptr<const Material> mB,
+		MaterialConstPtr mB,
 		TextureConstOPtr ks,
 		TextureConstOPtr u,
 		TextureConstOPtr v,
@@ -104,7 +104,7 @@ protected:
 	virtual void UpdateAvgPassThroughTransparency();
 
 private:
-	std::experimental::observer_ptr<const Material> matBase;
+	MaterialConstPtr matBase;
 	TextureConstOPtr Ks;
 	TextureConstOPtr nu;
 	TextureConstOPtr nv;

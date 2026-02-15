@@ -407,35 +407,35 @@ void CarPaintMaterial::UpdateTextureReferences(
 
 	bool updateGlossiness = false;
 	if (Kd == &oldTex)
-		Kd.reset(&newTex);
+		Kd = &newTex;
 	if (Ks1 == &oldTex)
-		Ks1.reset(&newTex);
+		Ks1 = &newTex;
 	if (Ks2 == &oldTex)
-		Ks2.reset(&newTex);
+		Ks2 = &newTex;
 	if (Ks3 == &oldTex)
-		Ks3.reset(&newTex);
+		Ks3 = &newTex;
 	if (M1 == &oldTex) {
-		M1.reset(&newTex);
+		M1 = &newTex;
 		updateGlossiness = true;
 	}
 	if (M2 == &oldTex) {
-		M2.reset(&newTex);
+		M2 = &newTex;
 		updateGlossiness = true;
 	}
 	if (M3 == &oldTex) {
-		M3.reset(&newTex);
+		M3 = &newTex;
 		updateGlossiness = true;
 	}
 	if (R1 == &oldTex)
-		R1.reset(&newTex);
+		R1 = &newTex;
 	if (R2 == &oldTex)
-		R2.reset(&newTex);
+		R2 = &newTex;
 	if (R3 == &oldTex)
-		R3.reset(&newTex);
+		R3 = &newTex;
 	if (Ka == &oldTex)
-		Ka.reset(&newTex);
+		Ka = &newTex;
 	if (depth == &oldTex)
-		depth.reset(&newTex);
+		depth = &newTex;
 	
 	if (updateGlossiness)
 		ComputeGlossiness(M1, M2, M3);

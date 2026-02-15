@@ -144,7 +144,7 @@ public:
 			float *directPdfA = NULL,
 			float *emissionPdfW = NULL) const = 0;
 
-	std::experimental::observer_ptr<const Material> lightMaterial;
+	MaterialConstPtr lightMaterial;
 };
 
 //------------------------------------------------------------------------------

@@ -90,7 +90,7 @@ void MatteMaterial::UpdateTextureReferences(TextureConstRef oldTex, TextureRef n
 	Material::UpdateTextureReferences(oldTex, newTex);
 
 	if (Kd == &oldTex)
-		Kd.reset(&newTex);
+		Kd = &newTex;
 }
 
 PropertiesUPtr MatteMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {

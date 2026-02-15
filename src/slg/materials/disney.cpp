@@ -564,23 +564,23 @@ void DisneyMaterial::UpdateTextureReferences(TextureConstRef oldTex, TextureRef 
 
 	bool updateGlossiness = false;
 
-	if (BaseColor == &oldTex) BaseColor.reset(&newTex);
-	if (Subsurface == &oldTex) Subsurface.reset(&newTex);
+	if (BaseColor == &oldTex) BaseColor = &newTex;
+	if (Subsurface == &oldTex) Subsurface = &newTex;
 	if (Roughness == &oldTex) {
-		Roughness.reset(&newTex);
+		Roughness = &newTex;
 		updateGlossiness = true;
 	}
-	if (Metallic == &oldTex) Metallic.reset(&newTex);
-	if (Specular == &oldTex) Specular.reset(&newTex);
-	if (SpecularTint == &oldTex) SpecularTint.reset(&newTex);
-	if (Clearcoat == &oldTex) Clearcoat.reset(&newTex);
-	if (ClearcoatGloss == &oldTex) ClearcoatGloss.reset(&newTex);
-	if (Anisotropic == &oldTex) Anisotropic.reset(&newTex);
-	if (Sheen == &oldTex) Sheen.reset(&newTex);
-	if (SheenTint == &oldTex) SheenTint.reset(&newTex);
-	if (filmAmount == &oldTex) filmAmount.reset(&newTex);
-	if (filmThickness == &oldTex) filmThickness.reset(&newTex);
-	if (filmIor == &oldTex) filmIor.reset(&newTex);
+	if (Metallic == &oldTex) Metallic = &newTex;
+	if (Specular == &oldTex) Specular = &newTex;
+	if (SpecularTint == &oldTex) SpecularTint = &newTex;
+	if (Clearcoat == &oldTex) Clearcoat = &newTex;
+	if (ClearcoatGloss == &oldTex) ClearcoatGloss = &newTex;
+	if (Anisotropic == &oldTex) Anisotropic = &newTex;
+	if (Sheen == &oldTex) Sheen = &newTex;
+	if (SheenTint == &oldTex) SheenTint = &newTex;
+	if (filmAmount == &oldTex) filmAmount = &newTex;
+	if (filmThickness == &oldTex) filmThickness = &newTex;
+	if (filmIor == &oldTex) filmIor = &newTex;
 
 	if (updateGlossiness)
 		UpdateGlossiness();

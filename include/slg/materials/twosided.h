@@ -93,8 +93,8 @@ private:
 
 	void Preprocess();
 
-	std::experimental::observer_ptr<const Material> frontMat;
-	std::experimental::observer_ptr<const Material> backMat;
+	MaterialConstPtr frontMat;
+	MaterialConstPtr backMat;
 
 	// Cached values for performance with very large material node trees
 	BSDFEvent eventTypes;

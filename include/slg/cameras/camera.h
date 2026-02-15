@@ -115,7 +115,7 @@ public:
 
 	bool HasVolume() const { return bool(volume); }
 	VolumeConstRef GetVolume() const { return *volume; }
-	void SetVolume(VolumeConstRef vol) { volume.reset(&vol); }
+	void SetVolume(VolumeConstRef vol) { volume = std::addressof(vol); }
 
 	bool autoVolume;
 

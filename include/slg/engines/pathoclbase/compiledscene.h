@@ -172,7 +172,7 @@ private:
 	void CompileLights();
 
 	void CompileDLSC(const LightStrategyDLSCache& dlscLightStrategy);
-	void CompileELVC(std::experimental::observer_ptr<const EnvLightVisibilityCache> visibilityMapCache);
+	void CompileELVC(EnvLightVisibilityCacheConstPtr visibilityMapCache);
 	void CompileLightStrategy();
 	
 	void CompilePhotonGI();

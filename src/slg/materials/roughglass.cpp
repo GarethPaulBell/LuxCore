@@ -356,25 +356,25 @@ void RoughGlassMaterial::UpdateTextureReferences(TextureConstRef oldTex, Texture
 
 	bool updateGlossiness = false;
 	if (Kr == &oldTex)
-		Kr.reset(&newTex);
+		Kr = &newTex;
 	if (Kt == &oldTex)
-		Kt.reset(&newTex);
+		Kt = &newTex;
 	if (exteriorIor == &oldTex)
-		exteriorIor.reset(&newTex);
+		exteriorIor = &newTex;
 	if (interiorIor == &oldTex)
-		interiorIor.reset(&newTex);
+		interiorIor = &newTex;
 	if (nu == &oldTex) {
-		nu.reset(&newTex);
+		nu = &newTex;
 		updateGlossiness = true;
 	}
 	if (nv == &oldTex) {
-		nv.reset(&newTex);
+		nv = &newTex;
 		updateGlossiness = true;
 	}
 	if (filmThickness == &oldTex)
-		filmThickness.reset(&newTex);
+		filmThickness = &newTex;
 	if (filmIor == &oldTex)
-		filmIor.reset(&newTex);
+		filmIor = &newTex;
 
 	if (updateGlossiness)
 		glossiness = ComputeGlossiness(nu, nv);

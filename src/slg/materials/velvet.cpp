@@ -139,15 +139,15 @@ void VelvetMaterial::UpdateTextureReferences(TextureConstRef oldTex, TextureRef 
 	Material::UpdateTextureReferences(oldTex, newTex);
 
 	if (Kd == &oldTex)
-		Kd.reset(&newTex);
+		Kd = &newTex;
 	if (P1 == &oldTex)
-		P1.reset(&newTex);
+		P1 = &newTex;
 	if (P2 == &oldTex)
-		P2.reset(&newTex);
+		P2 = &newTex;
 	if (P3 == &oldTex)
-		P3.reset(&newTex);
+		P3 = &newTex;
 	if (Thickness == &oldTex)
-		Thickness.reset(&newTex);
+		Thickness = &newTex;
 }
 
 PropertiesUPtr VelvetMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {

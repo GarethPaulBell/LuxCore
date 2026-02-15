@@ -284,17 +284,17 @@ void GlassMaterial::UpdateTextureReferences(TextureConstRef oldTex, TextureRef n
 	Material::UpdateTextureReferences(oldTex, newTex);
 
 	if (Kr == &oldTex)
-		Kr.reset(&newTex);
+		Kr = &newTex;
 	if (Kt == &oldTex)
-		Kt.reset(&newTex);
+		Kt = &newTex;
 	if (exteriorIor == &oldTex)
-		exteriorIor.reset(&newTex);
+		exteriorIor = &newTex;
 	if (interiorIor == &oldTex)
-		interiorIor.reset(&newTex);
+		interiorIor = &newTex;
 	if (filmThickness == &oldTex)
-		filmThickness.reset(&newTex);
+		filmThickness = &newTex;
 	if (filmIor == &oldTex)
-		filmIor.reset(&newTex);
+		filmIor = &newTex;
 }
 
 PropertiesUPtr GlassMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {

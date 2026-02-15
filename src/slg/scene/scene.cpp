@@ -524,7 +524,7 @@ void Scene::RemoveUnusedMaterials() {
 
 	// Add the default world volume
 	if (defaultWorldVolume)
-		referencedMats.insert(defaultWorldVolume.get());
+		referencedMats.insert(defaultWorldVolume);
 
 	for (u_int i = 0; i < objDefs.GetSize(); ++i) {
 		auto& obj = objDefs.GetSceneObject(i);

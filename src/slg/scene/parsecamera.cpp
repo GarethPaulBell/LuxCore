@@ -128,7 +128,7 @@ CameraUPtr Scene::CreateCamera(const Properties &props) {
 				// Force float storage
 				imgCfg.SetStorageType(ImageMapStorage::FLOAT);
 
-				perspCamera->bokehDistributionImageMap.reset(&imgMapCache.GetImageMap(imgMapName, imgCfg, false));
+				perspCamera->bokehDistributionImageMap = &imgMapCache.GetImageMap(imgMapName, imgCfg, false);
 
 				if (perspCamera->bokehDistributionImageMap->GetSpectrumMean() == 0.f)
 					throw runtime_error("Used a black image in camera bokeh distribution: " + imgMapName);

@@ -112,7 +112,7 @@ PropertiesUPtr SceneObject::ToProperties(const ExtMeshCache &extMeshCache,
 }
 
 void SceneObject::SetBakeMap(ImageMapConstRef map, const BakeMapType type, const u_int uvIndex) {
-	bakeMap.reset(&map);
+	bakeMap = &map;
 	bakeMapType = type;
 	bakeMapUVIndex = uvIndex;
 }

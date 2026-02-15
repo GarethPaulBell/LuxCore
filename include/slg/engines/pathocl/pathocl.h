@@ -60,6 +60,7 @@ public:
 	virtual void Start();
 
 	FilmRef GetThreadFilm();
+	FilmPtr GetThreadFilmPtr();
 
 	friend class PathOCLRenderEngine;
 

@@ -73,7 +73,7 @@ void Material::SetEmittedTheta(const float theta) {
 }
 
 void Material::SetEmissionMap(ImageMapConstRef map) {
-	emissionMap.reset(&map);
+	emissionMap = &map;
 	delete emissionFunc;
 	if (emissionMap)
 		emissionFunc = new SampleableSphericalFunction(new ImageMapSphericalFunction(emissionMap));
@@ -87,7 +87,7 @@ VolumeConstOPtr Material::GetInteriorVolume(const HitPoint &hitPoint,
 VolumeConstOPtr Material::GetInteriorVolume() const { return interiorVolume; }
 void Material::SetInteriorVolume(VolumeConstOPtr vol) { interiorVolume = vol; }
 void Material::SetInteriorVolume(VolumeConstRef vol) {
-	interiorVolume.reset(std::addressof(vol));
+	interiorVolume = std::addressof(vol);
 }
 
 // Exterior Volume
@@ -96,7 +96,7 @@ VolumeConstOPtr Material::GetExteriorVolume(const HitPoint &hitPoint,
 VolumeConstOPtr Material::GetExteriorVolume() const { return exteriorVolume; }
 void Material::SetExteriorVolume(VolumeConstOPtr vol) { exteriorVolume = vol; }
 void Material::SetExteriorVolume(VolumeConstRef vol) {
-	exteriorVolume.reset(std::addressof(vol));
+	exteriorVolume = std::addressof(vol);
 }
 
 
@@ -303,7 +303,9 @@ void Material::AddReferencedTextures(std::unordered_set<const Texture *>  &refer
 		bumpTex->AddReferencedTextures(referencedTexs);
 }
 
-void Material::AddReferencedImageMaps(std::unordered_set<const ImageMap *> &referencedImgMaps) const {
+void Material::AddReferencedImageMaps(
+	std::unordered_set<const ImageMap *> &referencedImgMaps
+) const {
 	if (emissionMap)
 		referencedImgMaps.insert(emissionMap.get());
 }
@@ -311,15 +313,15 @@ void Material::AddReferencedImageMaps(std::unordered_set<const ImageMap *> &refe
 // Update any reference to oldTex with newTex
 void Material::UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
 	if (frontTransparencyTex == &oldTex) {
-		frontTransparencyTex.reset(&newTex);
+		frontTransparencyTex = &newTex;
 		UpdateAvgPassThroughTransparency();
 	}
 	if (backTransparencyTex == &oldTex)
-		backTransparencyTex.reset(&newTex);
+		backTransparencyTex = &newTex;
 	if (emittedTex == &oldTex)
-		emittedTex.reset(&newTex);
+		emittedTex = &newTex;
 	if (bumpTex == &oldTex)
-		bumpTex.reset(&newTex);
+		bumpTex = &newTex;
 }
 
 string Material::MaterialType2String(const MaterialType type) {

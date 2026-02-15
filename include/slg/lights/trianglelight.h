@@ -65,7 +65,7 @@ public:
 			float *directPdfA = NULL,
 			float *emissionPdfW = NULL) const;
 
-	std::experimental::observer_ptr<const SceneObject> sceneObject;
+	SceneObjectConstPtr sceneObject;
 	// Note: meshIndex is initialized in LightSourceDefinitions::Preprocess()
 	u_int meshIndex, triangleIndex;
 	

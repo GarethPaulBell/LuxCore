@@ -36,16 +36,16 @@ ImageMapSphericalFunction::ImageMapSphericalFunction(ImageMapUPtr&& map) :
 {}
 
 ImageMapSphericalFunction::ImageMapSphericalFunction(
-	std::experimental::observer_ptr<const ImageMap> map
+	ImageMapConstPtr map
 ) :
 	imgMap(map)
 {}
 
 void ImageMapSphericalFunction::SetImageMap(ImageMapUPtr&& map) {
 	internalImgMap = std::move(map);
-	imgMap.reset(internalImgMap.get());
+	imgMap = internalImgMap.get();
 }
-void ImageMapSphericalFunction::SetImageMap(std::experimental::observer_ptr<ImageMap> map) {
+void ImageMapSphericalFunction::SetImageMap(ImageMapPtr map) {
 	imgMap = map;
 }
 

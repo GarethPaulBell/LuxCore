@@ -31,7 +31,7 @@ void BSDF::Init(
 		SceneConstRef scene, const Ray &ray, const RayHit &rayHit,
 		const float passThroughEvent, const PathVolumeInfo *volInfo) {
 	// Get the scene object
-	sceneObject.reset(&scene.GetObjects().GetSceneObject(rayHit.meshIndex));
+	sceneObject = &scene.GetObjects().GetSceneObject(rayHit.meshIndex);
 
 	// Get the mesh
 	auto& mesh = sceneObject->GetExtMesh();
@@ -44,7 +44,7 @@ void BSDF::Init(
 			passThroughEvent);
 
 	// Get the material
-	material.reset(&sceneObject->GetMaterial());
+	material = &sceneObject->GetMaterial();
 
 	// Set interior and exterior volumes
 	volInfo->SetHitPointVolumes(hitPoint,
@@ -57,11 +57,10 @@ void BSDF::Init(
 
 	// Check if it is a light source
 	if (material->IsLightSource())
-		triangleLightSource.reset(
+		triangleLightSource =
 			&scene.GetLightSources().GetLightSourceByMeshAndTriIndex(
 				rayHit.meshIndex, rayHit.triangleIndex
-			)
-	);
+			);
 	else
 		triangleLightSource = nullptr;
 
@@ -85,7 +84,7 @@ void BSDF::Init(
 		const PathVolumeInfo *volInfo
 ) {
 	// Get the scene object
-	sceneObject.reset(&scene.GetObjects().GetSceneObject(meshIndex));
+	sceneObject = &scene.GetObjects().GetSceneObject(meshIndex);
 
 	// Get the mesh
 	auto& mesh = sceneObject->GetExtMesh();
@@ -98,7 +97,7 @@ void BSDF::Init(
 			surfacePointBary1, surfacePointBary2, passThroughEvent);
 
 	// Get the material
-	material.reset(&sceneObject->GetMaterial());
+	material = &sceneObject->GetMaterial();
 
 	// Set interior and exterior volumes
 	volInfo->SetHitPointVolumes(hitPoint,
@@ -111,7 +110,7 @@ void BSDF::Init(
 
 	// Check if it is a light source
 	if (material->IsLightSource())
-		triangleLightSource.reset(&scene.GetLightSources().GetLightSourceByMeshAndTriIndex(meshIndex, triangleIndex));
+		triangleLightSource = &scene.GetLightSources().GetLightSourceByMeshAndTriIndex(meshIndex, triangleIndex);
 	else
 		triangleLightSource = nullptr;
 
@@ -140,15 +139,15 @@ void BSDF::Init(
 	hitPoint.fixedDir = -ray.d;
 
 	sceneObject = nullptr;
-	material.reset(&volume);
+	material = &volume;
 
 	hitPoint.geometryN = Normal(-ray.d);
 	hitPoint.interpolatedN = hitPoint.geometryN;
 	hitPoint.shadeN = hitPoint.geometryN;
 
 	hitPoint.intoObject = true;
-	hitPoint.interiorVolume = std::experimental::make_observer(&volume);
-	hitPoint.exteriorVolume = std::experimental::make_observer(&volume);
+	hitPoint.interiorVolume = &volume;
+	hitPoint.exteriorVolume = &volume;
 
 	triangleLightSource = nullptr;
 

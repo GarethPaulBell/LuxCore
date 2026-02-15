@@ -246,12 +246,12 @@ void ArchGlassMaterial::UpdateTextureReferences(
 ) {
 	Material::UpdateTextureReferences(oldTex, newTex);
 
-	if (Kr == &oldTex) Kr.reset(&newTex);
-	if (Kt == &oldTex) Kt.reset(&newTex);
-	if (exteriorIor == &oldTex) exteriorIor.reset(&newTex);
-	if (interiorIor == &oldTex) interiorIor.reset(&newTex);
-	if (filmThickness == &oldTex) filmThickness.reset(&newTex);
-	if (filmIor == &oldTex) filmIor.reset(&newTex);
+	if (Kr == &oldTex) Kr = &newTex;
+	if (Kt == &oldTex) Kt = &newTex;
+	if (exteriorIor == &oldTex) exteriorIor = &newTex;
+	if (interiorIor == &oldTex) interiorIor = &newTex;
+	if (filmThickness == &oldTex) filmThickness = &newTex;
+	if (filmIor == &oldTex) filmIor = &newTex;
 }
 
 PropertiesUPtr ArchGlassMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {

@@ -117,7 +117,7 @@ public:
 	bool IsShadowCatcherOnlyInfiniteLights() const { return material->IsShadowCatcherOnlyInfiniteLights(); }
 	bool IsCameraInvisible() const;
 	bool IsVolume() const {
-		auto ptr = dynamic_cast<const Volume *>(material.operator->());
+		auto ptr = dynamic_observer_cast<VolumeConstPtr>(material);
 		return bool(ptr);
 	}
 	bool IsPhotonGIEnabled() const { return material->IsPhotonGIEnabled(); }
@@ -161,7 +161,7 @@ public:
 
 	luxrays::Spectrum GetEmittedRadiance(float *directPdfA = NULL, float *emissionPdfW = NULL) const ;
 
-	std::experimental::observer_ptr<const LightSource> GetLightSource() const { return triangleLightSource; }
+	LightSourceConstPtr GetLightSource() const { return triangleLightSource; }
 
 	luxrays::Point GetRayOrigin(const luxrays::Vector &sampleDir) const {
 		if (IsVolume())
@@ -184,9 +184,9 @@ private:
 	// design particulars, they are not initialized in constructor, but in
 	// Init(). Therefore they have to be modifiable somehow, thus the mutable
 	// attribute (not fully satisfying, however).
-	mutable std::experimental::observer_ptr<const SceneObject> sceneObject;  // Optional reference, owned by scene
-	mutable std::experimental::observer_ptr<const Material> material;  // Optional reference, owned by scene
-	mutable std::experimental::observer_ptr<const TriangleLight> triangleLightSource; // != NULL only if it is an area light, optional, owned by scen
+	mutable SceneObjectConstPtr sceneObject;  // Optional reference, owned by scene
+	mutable MaterialConstPtr material;  // Optional reference, owned by scene
+	mutable TriangleLightConstPtr triangleLightSource; // != NULL only if it is an area light, optional, owned by scen
 	luxrays::Frame frame;
 };
 

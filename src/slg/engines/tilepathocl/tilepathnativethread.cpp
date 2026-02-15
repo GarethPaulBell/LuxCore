@@ -127,7 +127,7 @@ void TilePathNativeRenderThread::RenderThreadImpl(std::stop_token stop_token) {
 		// Render the tile
 		//----------------------------------------------------------------------
 
-		sampler.Init(&tileWork, FilmOPtr(&GetTileFilm()));
+		sampler.Init(&tileWork, GetTileFilmPtr());
 
 		for (u_int y = 0; y < tileWork.GetCoord().height && !stop_token.stop_requested(); ++y) {
 			for (u_int x = 0; x < tileWork.GetCoord().width && !stop_token.stop_requested(); ++x) {

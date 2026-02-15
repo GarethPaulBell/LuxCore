@@ -22,87 +22,27 @@
 #pragma once
 
 #include <memory>
-#include <optional>
 #include <thread>
-#include <experimental/memory>
+#include <optional>
+#include "luxrays/utils/observer_ptr.h"
 
-#include <boost/serialization/serialization.hpp>
-#include <boost/archive/text_iarchive.hpp>
-#include <boost/serialization/export.hpp>
-#include <boost/serialization/optional.hpp>
-#include <boost/serialization/access.hpp>
-#include <boost/serialization/split_free.hpp>
-
-
-
-namespace luxrays {
-
-template<typename T>
-bool operator==(std::experimental::observer_ptr<T> & lhs, T * rhs) {
-    return lhs.get() == rhs;
-}
-
-template<typename T>
-bool operator==(std::experimental::observer_ptr<T> & lhs, const T * rhs) {
-    return lhs.get() == rhs;
-}
-
-template<typename T>
-bool operator==(std::experimental::observer_ptr<const T> & lhs, const T * rhs) {
-    return lhs.get() == rhs;
-}
-
-template<typename T>
-bool operator==(const std::experimental::observer_ptr<const T> lhs, const T& rhs) {
-    return lhs.get() == &rhs;
-}
-
-
-}
-
-
-// For observer_ptr serialization
-namespace boost {
-namespace serialization {
-
-template<class Archive, class T>
-void save(Archive & ar, const std::experimental::observer_ptr<T> & ptr, const unsigned int /* version */)
-{
-    const T* raw_ptr = ptr.get();
-    ar << raw_ptr;
-}
-
-template<class Archive, class T>
-void load(Archive & ar, std::experimental::observer_ptr<T> & ptr, const unsigned int /* version */)
-{
-    T* raw_ptr;
-    ar >> raw_ptr;
-    ptr.reset(raw_ptr); // observer_ptr can be assigned from a raw pointer
-}
-
-// Macro to define useful associated types
-
-template<class Archive, class T>
-void serialize(Archive & ar, std::experimental::observer_ptr<T> & ptr, const unsigned int version)
-{
-    split_free(ar, ptr, version);
-}
-
-} // namespace serialization
-} // namespace boost
-
+// Below are the reference/pointer macro types to use
+// Please note that ownership is restricted to unique and shared, and
+// explicitely exclude raw pointers
 #define DECLARE_SUBTYPES(T) \
 class T; \
-using T##Ref = T&; \
-using T##ConstRef = const T&; \
-using T##UPtr = std::unique_ptr<T>; \
-using T##ConstUPtr = std::unique_ptr<const T>; \
-using T##RPtr = const std::unique_ptr<T> &; \
-using T##ConstRPtr = const std::unique_ptr<const T> &; \
-using T##SPtr = std::shared_ptr<T>; \
-using T##ConstSPtr = std::shared_ptr<const T>; \
-using T##OPtr = std::experimental::observer_ptr<T>; \
-using T##ConstOPtr = std::experimental::observer_ptr<const T>; \
+using T##Ref = T&;                                 /* Reference */\
+using T##ConstRef = const T&;                      /* Const reference */\
+using T##UPtr = std::unique_ptr<T>;				   /* Unique pointer (OWNING) */\
+using T##ConstUPtr = std::unique_ptr<const T>;     /* Const unique point (OWNING) */\
+using T##RPtr = const std::unique_ptr<T> &;		   /* Reference to unique */\
+using T##ConstRPtr = const std::unique_ptr<const T> &; /* Reference to const unique */\
+using T##SPtr = std::shared_ptr<T>;                /* Shared pointer (OWNING) */\
+using T##ConstSPtr = std::shared_ptr<const T>;     /* Shared const pointer (OWNING) */\
+using T##OPtr = luxrays::observer_ptr<T>;		   /* Raw pointer */\
+using T##ConstOPtr = luxrays::observer_ptr<const T>;   /* Raw const pointer */\
+using T##Ptr = luxrays::observer_ptr<T> ;          /* Raw pointer */\
+using T##ConstPtr = luxrays::observer_ptr<const T>;/* Raw const pointer */\
 
 
 

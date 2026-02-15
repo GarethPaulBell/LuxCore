@@ -426,7 +426,7 @@ MaterialUPtr Scene::CreateMaterial(
 			const auto texname = NamedObject::GetUniqueName(matName + "-Implicit-FresnelPreset");
 			presetTex->SetName(texname);
 			auto [newTexRef, oldTexPtr] = texDefs.DefineTexture(std::move(presetTex));
-			auto refpreset = std::experimental::observer_ptr<const FresnelTexture>(
+			auto refpreset = FresnelTextureConstPtr(
 				dynamic_cast<const FresnelTexture *>(std::addressof(newTexRef))
 			);
 

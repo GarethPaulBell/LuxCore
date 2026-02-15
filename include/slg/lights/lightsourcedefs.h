@@ -47,8 +47,10 @@ public:
 	void DefineLightSource(LightSourceUPtr&& l);
 	bool IsLightSourceDefined(const std::string &name) const;
 
-	LightSourceConstRef GetLightSource(const std::string &name) const;
 	LightSourceRef GetLightSource(const std::string &name);
+	LightSourceConstRef GetLightSource(const std::string &name) const;
+	LightSourcePtr GetLightSourcePtr(const std::string &name);
+	LightSourceConstPtr GetLightSourcePtr(const std::string &name) const;
 
 	u_int GetSize() const { return static_cast<u_int>(lightsByName.size()); }
 	std::vector<std::string> GetLightSourceNames() const;
@@ -70,6 +72,9 @@ public:
 	const std::vector<u_int> &GetLightTypeCounts() const { return lightTypeCount; }
 
 	LightSourceRef GetLightSource(size_t n) const { return lights[n]; }
+	LightSourcePtr GetLightSourcePtr(size_t n) const {
+		return std::addressof(lights[n].get());
+	}
 
 	auto GetEnvLightSources() {
 		// Returns a view of references to the objects

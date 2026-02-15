@@ -28,7 +28,7 @@ using namespace slg;
 // DistributionLightStrategy
 //------------------------------------------------------------------------------
 
-std::experimental::observer_ptr<LightSource> DistributionLightStrategy::SampleLights(
+LightSourcePtr DistributionLightStrategy::SampleLights(
 		SceneConstRef scene,
 		const float u,
 		const Point &p, const Normal &n,
@@ -50,7 +50,7 @@ float DistributionLightStrategy::SampleLightPdf(
 		return 0.f;
 }
 
-std::experimental::observer_ptr<LightSource> DistributionLightStrategy::SampleLights(
+LightSourcePtr DistributionLightStrategy::SampleLights(
 	SceneConstRef scene,
 	const float u,
 	float *pdf
@@ -60,9 +60,7 @@ std::experimental::observer_ptr<LightSource> DistributionLightStrategy::SampleLi
 		assert ((lightIndex >= 0) && (lightIndex < scene.GetLightSources().GetSize()));
 
 		if (*pdf > 0.f)
-			return std::experimental::make_observer(
-				&scene.GetLightSources().GetLightSource(lightIndex)
-			);
+			return &scene.GetLightSources().GetLightSource(lightIndex);
 		else
 			return nullptr;
 	} else

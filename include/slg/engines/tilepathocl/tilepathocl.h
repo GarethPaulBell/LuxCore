@@ -75,6 +75,8 @@ protected:
 	void RenderTile(const Tile *tile, const u_int filmIndex);
 	FilmRef GetTileFilm() { return *tileFilm; }
 	FilmConstRef GetTileFilm() const { return *tileFilm; }
+	FilmPtr GetTileFilmPtr() { return FilmPtr(tileFilm.get()); }
+	FilmConstPtr GetTileFilmPtr() const { return FilmConstPtr(tileFilm.get()); }
 
 
 private:

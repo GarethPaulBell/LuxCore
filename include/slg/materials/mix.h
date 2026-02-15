@@ -91,8 +91,8 @@ private:
 
 	void Preprocess();
 
-	std::experimental::observer_ptr<const Material> matA;
-	std::experimental::observer_ptr<const Material> matB;
+	MaterialConstPtr matA;
+	MaterialConstPtr matB;
 	TextureConstOPtr mixFactor;
 
 	// Cached values for performance with very large material node trees

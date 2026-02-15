@@ -195,9 +195,9 @@ void MatteTranslucentMaterial::UpdateTextureReferences(TextureConstRef oldTex, T
 	Material::UpdateTextureReferences(oldTex, newTex);
 
 	if (Kr == &oldTex)
-		Kr.reset(&newTex);
+		Kr = &newTex;
 	if (Kt == &oldTex)
-		Kt.reset(&newTex);
+		Kt = &newTex;
 }
 
 PropertiesUPtr MatteTranslucentMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {

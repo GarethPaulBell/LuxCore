@@ -621,13 +621,13 @@ void ClothMaterial::UpdateTextureReferences(TextureConstRef oldTex, TextureRef n
 	Material::UpdateTextureReferences(oldTex, newTex);
 
 	if (Weft_Kd == &oldTex)
-		Weft_Kd.reset(&newTex);
+		Weft_Kd = &newTex;
 	if (Weft_Ks == &oldTex)
-		Weft_Ks.reset(&newTex);
+		Weft_Ks = &newTex;
 	if (Warp_Kd == &oldTex)
-		Warp_Kd.reset(&newTex);
+		Warp_Kd = &newTex;
 	if (Warp_Ks == &oldTex)
-		Warp_Ks.reset(&newTex);
+		Warp_Ks = &newTex;
 }
 
 PropertiesUPtr ClothMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {

@@ -30,7 +30,7 @@ using namespace slg;
 GlossyCoatingMaterial::GlossyCoatingMaterial(
 	TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
 	TextureConstOPtr emitted, TextureConstOPtr bump,
-	std::experimental::observer_ptr<const Material> mB,
+	MaterialConstPtr mB,
 	TextureConstOPtr ks, TextureConstOPtr u,
 	TextureConstOPtr v,
 	TextureConstOPtr ka, TextureConstOPtr d,
@@ -427,8 +427,8 @@ void GlossyCoatingMaterial::Pdf(const HitPoint &hitPoint,
 }
 
 void GlossyCoatingMaterial::UpdateMaterialReferences(MaterialConstRef oldMat, MaterialRef newMat) {
-	if (matBase == oldMat)
-		matBase.reset(&newMat);
+	if (matBase == &oldMat)
+		matBase = &newMat;
 
 	// Update volumes too
 	Material::UpdateMaterialReferences(oldMat, newMat);
@@ -465,17 +465,17 @@ void GlossyCoatingMaterial::UpdateTextureReferences(TextureConstRef oldTex, Text
 	Material::UpdateTextureReferences(oldTex, newTex);
 
 	if (Ks == &oldTex)
-		Ks.reset(&newTex);
+		Ks = &newTex;
 	if (nu == &oldTex)
-		nu.reset(&newTex);
+		nu = &newTex;
 	if (nv == &oldTex)
-		nv.reset(&newTex);
+		nv = &newTex;
 	if (Ka == &oldTex)
-		Ka.reset(&newTex);
+		Ka = &newTex;
 	if (depth == &oldTex)
-		depth.reset(&newTex);
+		depth = &newTex;
 	if (index == &oldTex)
-		index.reset(&newTex);
+		index = &newTex;
 
 	// Always update glossiness just in case matBase->GetGlossiness() has changed
 	const float coatGlossiness = ComputeGlossiness(nu, nv);

@@ -88,8 +88,8 @@ void Scene::ParseVolumes(const Properties &props) {
 			);
 
 			// Check also the world default volume
-			if (defaultWorldVolume.get() == &oldMatRef)
-				defaultWorldVolume.reset(static_cast<const Volume *>(&newMatRef));
+			if (defaultWorldVolume == &oldMatRef)
+				defaultWorldVolume = static_cast<const Volume *>(&newMatRef);
 
 			// Check if the old material was or the new material is a light source
 			//if (wasLightSource || newMat->IsLightSource())

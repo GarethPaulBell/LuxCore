@@ -134,8 +134,8 @@ inline void updtex<>(
 	const TextureConstRef oldTex,
 	TextureRef newTex
 ) {
-	if (texture.get() == std::addressof(oldTex)) {
-		texture.reset(std::addressof(newTex));
+	if (texture == std::addressof(oldTex)) {
+		texture = std::addressof(newTex);
 	}
 }
 

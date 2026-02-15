@@ -619,7 +619,7 @@ RenderSessionRPtr RenderSession::Create(
 	FIS& startFilmImpl = dynamic_cast<FIS&>(startFilm);
 
 	//auto startFilmImpl = startFilm ?
-		//std::experimental::observer_ptr<FIS>{static_cast<FIS&>(*startFilm)}:
+		//FISPtr{static_cast<FIS&>(*startFilm)}:
 		//nullptr;
 
 	auto result = RenderSessionImpl::Create(

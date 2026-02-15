@@ -38,7 +38,7 @@ void slg::NullDebugHandler(const char *msg) {
 RenderSession::RenderSession(
 	RenderConfigRef rcfg,
 	RenderStateSPtr startState,
-	std::experimental::observer_ptr<Film> startFilm
+	FilmPtr startFilm
 ) : renderConfig(rcfg) {
 	SDL_LOG("Creating session");
 

@@ -103,7 +103,7 @@ void Scene::ParseLights(const Properties &props) {
 }
 
 
-std::experimental::observer_ptr<ImageMap> Scene::CreateEmissionMap(
+ImageMapPtr Scene::CreateEmissionMap(
 	const string &propName, const luxrays::Properties &props
 ) {
 	const u_int width = props.Get(Property(propName + ".map.width")(0)).Get<u_int>();
@@ -127,17 +127,17 @@ std::experimental::observer_ptr<ImageMap> Scene::CreateEmissionMap(
 
 	ImageMapUPtr iesMap;
 	if (iesData) {
-		if (iesData->IsValid()) {
-			const bool flipZ = props.Get(Property(propName + ".flipz")(false)).Get<bool>();
-			iesMap = IESSphericalFunction::IES2ImageMap(*iesData, flipZ,
-					(width > 0) ? width : 512,
-					(height > 0) ? height : 256);
-
-			// Add the image map to the cache
-			const string name ="LUXCORE_EMISSIONMAP_IES2IMAGEMAP_" + propName;
-			iesMap->SetName(name);
-		} else
+		if (not iesData->IsValid())
 			throw runtime_error("Invalid IES file in property " + propName);
+
+		const bool flipZ = props.Get(Property(propName + ".flipz")(false)).Get<bool>();
+		iesMap = IESSphericalFunction::IES2ImageMap(*iesData, flipZ,
+				(width > 0) ? width : 512,
+				(height > 0) ? height : 256);
+
+		// Add the image map to the cache
+		const string name ="LUXCORE_EMISSIONMAP_IES2IMAGEMAP_" + propName;
+		iesMap->SetName(name);
 
 	}
 
@@ -145,7 +145,7 @@ std::experimental::observer_ptr<ImageMap> Scene::CreateEmissionMap(
 	// Read the image map if available
 	//--------------------------------------------------------------------------
 
-	std::experimental::observer_ptr<ImageMap> imgMap;
+	ImageMapPtr imgMap = nullptr;
 	if (props.IsDefined(propName + ".mapfile")) {
 		const string imgMapName = props.Get(propName + ".mapfile").Get<string>();
 
@@ -153,7 +153,7 @@ std::experimental::observer_ptr<ImageMap> Scene::CreateEmissionMap(
 		// Force float storage
 		imgCfg.SetStorageType(ImageMapStorage::FLOAT);
 
-		imgMap.reset(&imgMapCache.GetImageMap(imgMapName, imgCfg, false));
+		imgMap = &imgMapCache.GetImageMap(imgMapName, imgCfg, false);
 
 		if ((width > 0) || (height > 0)) {
 			// I have to resample the image
@@ -168,7 +168,7 @@ std::experimental::observer_ptr<ImageMap> Scene::CreateEmissionMap(
 			// Add the image map to the cache
 			const string name ="LUXCORE_EMISSIONMAP_RESAMPLED_" + propName;
 			resampledImgMap->SetName(name);
-			imgMap.reset(&imgMapCache.DefineImageMap(std::move(resampledImgMap)));
+			imgMap = &imgMapCache.DefineImageMap(std::move(resampledImgMap));
 		}
 	}
 
@@ -180,7 +180,7 @@ std::experimental::observer_ptr<ImageMap> Scene::CreateEmissionMap(
 	if (!iesMap && !imgMap)
 		return nullptr;
 
-	std::experimental::observer_ptr<ImageMap> map_ref;
+	ImageMapPtr map_ref = nullptr;
 	if (iesMap && imgMap) {
 		// Merge the 2 maps
 		auto map = ImageMap::Merge(*imgMap, *iesMap, imgMap->GetChannelCount());
@@ -387,7 +387,7 @@ LightSourceUPtr Scene::CreateLightSource(const string &name, const luxrays::Prop
 
 		const string imageName = props.Get(Property(propName + ".mapfile")("")).Get<string>();
 
-		std::experimental::observer_ptr<const ImageMap> imgMap = (imageName == "") ?
+		ImageMapConstPtr imgMap = (imageName == "") ?
 			nullptr :
 			ImageMapConstOPtr(
 				std::addressof(
@@ -473,7 +473,7 @@ LightSourceUPtr Scene::CreateLightSource(const string &name, const luxrays::Prop
 	if (props.IsDefined(propName + ".volume")) {
 		auto& vol = matDefs.GetMaterial(props.Get(propName + ".volume").Get<string>());
 		try {
-			lightSource->volume.reset(dynamic_cast<const Volume *>(std::addressof(vol)));
+			lightSource->volume = dynamic_cast<const Volume *>(std::addressof(vol));
 		} catch (std::bad_cast&) {
 			throw runtime_error("\"" + lightName + "\" light volume is a material: " + vol.GetName());
 		}

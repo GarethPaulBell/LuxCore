@@ -46,7 +46,7 @@ public:
 	static std::unique_ptr<SamplerSharedData> FromProperties(
 		const luxrays::Properties &cfg,
 		const luxrays::RandomGeneratorUPtr & rndGen,
-		std::experimental::observer_ptr<Film> film
+		FilmPtr film
 	);
 	static std::unique_ptr<SamplerSharedData> FromProperties(
 		const luxrays::Properties &cfg,
@@ -81,7 +81,7 @@ typedef enum {
 
 class MetropolisSampler : public Sampler {
 public:
-	MetropolisSampler(const luxrays::RandomGeneratorUPtr & rnd, std::experimental::observer_ptr<Film> film,
+	MetropolisSampler(const luxrays::RandomGeneratorUPtr & rnd, FilmPtr film,
 			const FilmSampleSplatterUPtr& flmSplatter, const bool imgSamplesEnable,
 			const u_int maxRej, const float pLarge, const float imgRange,
 			const bool addOnlyCstcs,
@@ -112,7 +112,7 @@ public:
 	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
 	static SamplerUPtr FromProperties(
 		const luxrays::Properties &cfg, const luxrays::RandomGeneratorUPtr & rndGen,
-		std::experimental::observer_ptr<Film> film, const FilmSampleSplatterUPtr& flmSplatter,
+		FilmPtr film, const FilmSampleSplatterUPtr& flmSplatter,
 		SamplerSharedDataSPtr sharedData);
 	static slg::ocl::Sampler *FromPropertiesOCL(const luxrays::Properties &cfg);
 	static void AddRequiredChannels(Film::FilmChannels &channels, const luxrays::Properties &cfg);

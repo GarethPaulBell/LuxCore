@@ -54,7 +54,7 @@ public:
 	void AddVolume(VolumeConstRef vol);
 	void RemoveVolume(VolumeConstOPtr vol);
 	void SetCurrentVolume(VolumeConstOPtr vol) { currentVolume = vol; }
-	void SetCurrentVolume(VolumeConstRef vol) { currentVolume.reset(std::addressof(vol)); }
+	void SetCurrentVolume(VolumeConstRef vol) { currentVolume = std::addressof(vol); }
 	void SetVolume(const u_int i, VolumeConstOPtr vol) { volumeList[i] = vol; }
 
 	VolumeConstOPtr SimulateRemoveVolume(VolumeConstOPtr vol) const;

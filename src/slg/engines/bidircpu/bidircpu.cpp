@@ -130,7 +130,7 @@ void BiDirCPURenderEngine::StartLockLess() {
 	if (aovWarmupSPP > 0)
 		aovWarmupSamplerSharedData = std::make_shared<SobolSamplerSharedData>(
 			seedBaseGenerator->uintValue(),
-			FilmOPtr(&GetFilm())
+			GetFilmPtr()
 		);
 
 	//--------------------------------------------------------------------------

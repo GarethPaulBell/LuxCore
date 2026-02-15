@@ -53,7 +53,7 @@ Metal2Material::Metal2Material(
 	TextureConstOPtr backTransp,
 	TextureConstOPtr emitted,
 	TextureConstOPtr bump,
-	std::experimental::observer_ptr<const FresnelTexture> ft,
+	FresnelTextureConstPtr ft,
 	TextureConstOPtr u,
 	TextureConstOPtr v)
 	:
@@ -208,18 +208,18 @@ void Metal2Material::UpdateTextureReferences(TextureConstRef oldTex, TextureRef 
 	Material::UpdateTextureReferences(oldTex, newTex);
 
 	bool updateGlossiness = false;
-	if (fresnelTex.get() == &oldTex)
-		fresnelTex.reset(static_cast<const FresnelTexture *>(&newTex));
+	if (fresnelTex == static_cast<const FresnelTexture *>(std::addressof(oldTex)))
+		fresnelTex = static_cast<const FresnelTexture *>(&newTex);
 	if (n == &oldTex)
-		n.reset(&newTex);
+		n = &newTex;
 	if (k == &oldTex)
-		k.reset(&newTex);
+		k = &newTex;
 	if (nu == &oldTex) {
-		nu.reset(&newTex);
+		nu = &newTex;
 		updateGlossiness = true;
 	}
 	if (nv == &oldTex) {
-		nv.reset(&newTex);
+		nv = &newTex;
 		updateGlossiness = true;
 	}
 	

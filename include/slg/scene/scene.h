@@ -327,7 +327,7 @@ private:
 	LightSourceUPtr CreateLightSource(const std::string &lightName, const luxrays::Properties &props);
 
 	// Create directly in cache, so result is just a reference
-	std::experimental::observer_ptr<ImageMap> CreateEmissionMap(const std::string &propName, const luxrays::Properties &props);
+	ImageMapPtr CreateEmissionMap(const std::string &propName, const luxrays::Properties &props);
 
 	luxrays::ExtTriangleMeshUPtr CreateInlinedMesh(const std::string &shapeName,
 			const std::string &propName, const luxrays::Properties &props);

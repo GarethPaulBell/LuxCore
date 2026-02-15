@@ -136,7 +136,7 @@ public:
 
 	private:
 		FilmUPtr film;
-		std::experimental::observer_ptr<Film> engineFilm;
+		FilmPtr engineFilm;
 		PathOCLBaseOCLRenderThread *renderThread;
 	};
 

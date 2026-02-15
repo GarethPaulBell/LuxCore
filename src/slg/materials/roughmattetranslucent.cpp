@@ -226,11 +226,11 @@ void RoughMatteTranslucentMaterial::UpdateTextureReferences(TextureConstRef oldT
 	Material::UpdateTextureReferences(oldTex, newTex);
 
 	if (Kr == &oldTex)
-		Kr.reset(&newTex);
+		Kr = &newTex;
 	if (Kt == &oldTex)
-		Kt.reset(&newTex);
+		Kt = &newTex;
 	if (sigma == &oldTex)
-		sigma.reset(&newTex);
+		sigma = &newTex;
 }
 
 PropertiesUPtr RoughMatteTranslucentMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {

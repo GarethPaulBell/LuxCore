@@ -59,7 +59,7 @@ void MirrorMaterial::UpdateTextureReferences(TextureConstRef oldTex, TextureRef 
 	Material::UpdateTextureReferences(oldTex, newTex);
 
 	if (Kr == &oldTex)
-		Kr.reset(&newTex);
+		Kr = &newTex;
 }
 
 PropertiesUPtr MirrorMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {

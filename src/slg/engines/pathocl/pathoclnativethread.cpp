@@ -84,12 +84,16 @@ void PathOCLNativeRenderThread::StartRenderThread() {
 	PathOCLBaseNativeRenderThread::StartRenderThread();
 }
 
-FilmRef PathOCLNativeRenderThread::GetThreadFilm() {
+FilmPtr PathOCLNativeRenderThread::GetThreadFilmPtr() {
 	PathOCLRenderEngine * engine = static_cast<PathOCLRenderEngine *>(renderEngine);
 	auto * thread0 = static_cast<PathOCLNativeRenderThread *>(
 		engine->renderNativeThreads[0]
 	);
-	return *thread0->threadFilm;
+	return thread0->threadFilm.get();
+}
+
+FilmRef PathOCLNativeRenderThread::GetThreadFilm() {
+	return *GetThreadFilmPtr();
 }
 
 void PathOCLNativeRenderThread::RenderThreadImpl(std::stop_token stop_token) {
@@ -109,7 +113,7 @@ void PathOCLNativeRenderThread::RenderThreadImpl(std::stop_token stop_token) {
 	auto rndGen = std::make_unique<RandomGenerator>(engine->seedBase + 1 + threadIndex);
 
 	// All threads use the film allocated by the first thread
-	FilmRef film = GetThreadFilm();
+	FilmPtr film = GetThreadFilmPtr();
 	//FilmRef film = ((PathOCLNativeRenderThread *)(engine->renderNativeThreads[0]))->threadFilm;
 	
 	// Setup the sampler(s)
@@ -133,7 +137,7 @@ void PathOCLNativeRenderThread::RenderThreadImpl(std::stop_token stop_token) {
 			Property("sampler.imagesamples.enable")(false) <<
 			Property("sampler.metropolis.addonlycaustics")(true);
 
-		lightSampler = Sampler::FromProperties(props, rndGen, std::experimental::make_observer(&film), engine->lightSampleSplatter,
+		lightSampler = Sampler::FromProperties(props, rndGen, film, engine->lightSampleSplatter,
 				engine->lightSamplerSharedData);
 		lightSampler->SetThreadIndex(threadIndex);
 		lightSampler->RequestSamples(SCREEN_NORMALIZED_ONLY, pathTracer.lightSampleSize);
@@ -144,7 +148,7 @@ void PathOCLNativeRenderThread::RenderThreadImpl(std::stop_token stop_token) {
 	// Setup PathTracer thread state
 	PathTracerThreadState pathTracerThreadState(intersectionDevice,
 			eyeSampler, lightSampler,
-			engine->renderConfig.GetScene(), film,
+			engine->renderConfig.GetScene(), *film,
 			&varianceClamping);
 
 	//--------------------------------------------------------------------------

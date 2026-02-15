@@ -95,7 +95,7 @@ private:
 	std::reference_wrapper<Material> mat;  // Owned by the scene
 	const u_int objID;
 
-	std::experimental::observer_ptr<const ImageMap> bakeMap;
+	ImageMapConstPtr bakeMap;
 	BakeMapType bakeMapType;
 	u_int bakeMapUVIndex;
 

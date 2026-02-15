@@ -57,7 +57,7 @@ public:
 	static std::unique_ptr<SamplerSharedData> FromProperties(
 		const luxrays::Properties &cfg,
 		const luxrays::RandomGeneratorUPtr & rndGen,
-		std::experimental::observer_ptr<Film> film
+		FilmPtr film
 	);
 };
 
@@ -79,7 +79,7 @@ class Sampler : public luxrays::NamedObject {
 public:
 	Sampler(
 		const luxrays::RandomGeneratorUPtr & rnd,
-		std::experimental::observer_ptr<Film> flm,
+		FilmPtr flm,
 		const FilmSampleSplatterUPtr& flmSplatter,
 		const bool imgSamplesEnable
 	) :
@@ -117,7 +117,7 @@ public:
 	static SamplerUPtr FromProperties(
 		const luxrays::Properties &cfg,
 		const luxrays::RandomGeneratorUPtr & rndGen,
-		std::experimental::observer_ptr<Film> film,
+		FilmOPtr film,
 		const FilmSampleSplatterUPtr& flmSplatter,
 		SamplerSharedDataSPtr sharedData
 	);
@@ -157,7 +157,7 @@ protected:
 
 	u_int threadIndex;
 	const luxrays::RandomGeneratorUPtr & rndGen;
-	std::experimental::observer_ptr<Film> film;
+	FilmPtr film;
 	const FilmSampleSplatterUPtr& filmSplatter;
 
 	SampleType sampleType;

@@ -201,7 +201,7 @@ void CompiledScene::CompileLightStrategy() {
 	}
 }
 
-void CompiledScene::CompileELVC(std::experimental::observer_ptr<const EnvLightVisibilityCache> visibilityMapCache) {
+void CompiledScene::CompileELVC(EnvLightVisibilityCacheConstPtr visibilityMapCache) {
 	if (!visibilityMapCache ||  !visibilityMapCache->GetBVH()) {
 		elvcAllEntries.clear();
 		elvcAllEntries.shrink_to_fit();
@@ -321,7 +321,7 @@ void CompiledScene::CompileLights() {
 	envLightIndices.clear();
 	envLightDistributions.clear();
 
-	CompileELVC(std::experimental::observer_ptr<const EnvLightVisibilityCache>(nullptr));
+	CompileELVC(EnvLightVisibilityCacheConstPtr(nullptr));
 
 	for (u_int i = 0; i < lightCount; ++i) {
 		auto& l = scene.GetLightSources().GetLightSource(i);
@@ -389,7 +389,7 @@ void CompiledScene::CompileLights() {
 					if (elvcAllEntries.size() > 0) {
 						SLG_LOG("WARNING: OpenCL rendering supports only one EnvLightVisibilityCache");
 					} else {
-						using optmapcache_t = std::experimental::observer_ptr<const EnvLightVisibilityCache>;
+						using optmapcache_t = EnvLightVisibilityCacheConstPtr;
 						CompileELVC(
 							visibilityMapCache ?
 							optmapcache_t(visibilityMapCache) :
@@ -453,7 +453,7 @@ void CompiledScene::CompileLights() {
 					if (elvcAllEntries.size() > 0) {
 						SLG_LOG("WARNING: OpenCL rendering supports only one EnvLightVisibilityCache");
 					} else {
-						using optmapcache_t = std::experimental::observer_ptr<const EnvLightVisibilityCache>;
+						using optmapcache_t = EnvLightVisibilityCacheConstPtr;
 						CompileELVC(
 							visibilityMapCache ?
 							optmapcache_t(visibilityMapCache) :
@@ -630,7 +630,7 @@ void CompiledScene::CompileLights() {
 					if (elvcAllEntries.size() > 0) {
 						SLG_LOG("WARNING: OpenCL rendering supports only one EnvLightVisibilityCache");
 					} else {
-						using optmapcache_t = std::experimental::observer_ptr<const EnvLightVisibilityCache>;
+						using optmapcache_t = EnvLightVisibilityCacheConstPtr;
 						CompileELVC(
 							visibilityMapCache ?
 							optmapcache_t(visibilityMapCache) :

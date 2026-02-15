@@ -358,11 +358,11 @@ void MixMaterial::Pdf(const HitPoint &hitPoint,
 }
 
 void MixMaterial::UpdateMaterialReferences(MaterialConstRef oldMat, MaterialRef newMat) {
-	if (matA == oldMat)
-		matA.reset(&newMat);
+	if (matA == &oldMat)
+		matA = &newMat;
 
-	if (matB == oldMat)
-		matB.reset(&newMat);
+	if (matB == &oldMat)
+		matB = &newMat;
 	
 	// Update volumes too
 	Material::UpdateMaterialReferences(oldMat, newMat);
@@ -371,8 +371,8 @@ void MixMaterial::UpdateMaterialReferences(MaterialConstRef oldMat, MaterialRef 
 }
 
 bool MixMaterial::IsReferencing(MaterialConstRef mat) const {
-	return matA == mat || matA->IsReferencing(mat) ||
-		matB == mat || matB->IsReferencing(mat);
+	return matA == &mat || matA->IsReferencing(mat) ||
+		matB == &mat || matB->IsReferencing(mat);
 }
 
 void MixMaterial::AddReferencedMaterials(
@@ -397,7 +397,7 @@ void MixMaterial::AddReferencedTextures(std::unordered_set<const Texture *>  &re
 
 void MixMaterial::UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
 	if (mixFactor == &oldTex)
-		mixFactor.reset(&newTex);
+		mixFactor = &newTex;
 
 	Material::UpdateTextureReferences(oldTex, newTex);
 

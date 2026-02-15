@@ -37,7 +37,7 @@ namespace slg {
 class FilmConvTest {
 public:
 	FilmConvTest(
-		std::experimental::observer_ptr<const Film> flm,
+		FilmConstPtr flm,
 		const float threshold,
 		const u_int warmup,
 		const u_int testStep,
@@ -70,7 +70,7 @@ private:
 	bool useFilter;
 	u_int imagePipelineIndex;
 
-	std::experimental::observer_ptr<const Film> film;  // This could be a const ref, but due to
+	FilmConstPtr film;  // This could be a const ref, but due to
 								   // boost serialization, it isn't...
 
 	GenericFrameBuffer<3, 0, float> *referenceImage;

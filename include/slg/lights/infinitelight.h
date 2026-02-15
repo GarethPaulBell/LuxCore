@@ -64,7 +64,7 @@ public:
 
 	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
-	std::experimental::observer_ptr<const ImageMap> imageMap;
+	ImageMapConstPtr imageMap;
 	bool sampleUpperHemisphereOnly;
 
 	// Visibility map cache options

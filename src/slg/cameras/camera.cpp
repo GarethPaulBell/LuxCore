@@ -137,12 +137,12 @@ PropertiesUPtr Camera::ToProperties(const ImageMapCache &imgMapCache, const bool
 
 	if (motionSystem)
 		props->Set(*motionSystem->ToProperties("scene.camera", false));
-		
+
 	return props;
 }
 
 void Camera::UpdateVolumeReferences(VolumeConstRef oldVol, VolumeConstRef newVol) {
 	if (volume && *volume == oldVol)
-		volume.reset(&newVol);
+		volume = &newVol;
 }
 // vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -29,7 +29,7 @@ namespace slg {
 class SubdivShape : public Shape {
 public:
 	SubdivShape(
-		std::experimental::observer_ptr<const Camera> camera,
+		CameraConstPtr camera,
 		luxrays::ExtTriangleMeshRef srcMesh,
 		const u_int maxLevel,
 		const float maxEdgeScreenSize,

@@ -123,13 +123,11 @@ void RTPathCPURenderEngine::BeginFilmEdit() {
 // A fast path for film resize
 void RTPathCPURenderEngine::EndFilmEdit(FilmRef flm, std::mutex *flmMutex) {
 	// Update the film pointer
-	film.reset(&flm);
+	film = &flm;
 	filmMutex = flmMutex;
 	InitFilm();
 
-	static_cast<RTPathCPUSamplerSharedData *>(samplerSharedData.get())->Reset(
-		std::experimental::make_observer(&GetFilm())
-	);
+	static_cast<RTPathCPUSamplerSharedData *>(samplerSharedData.get())->Reset( GetFilmPtr());
 
 	// Check if the threads were already suspended for pause
 	if (!pauseMode)

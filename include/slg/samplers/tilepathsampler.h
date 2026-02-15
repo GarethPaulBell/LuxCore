@@ -44,7 +44,7 @@ public:
 	static std::unique_ptr<SamplerSharedData> FromProperties(
 		const luxrays::Properties &cfg,
 		const luxrays::RandomGeneratorUPtr & rndGen,
-		std::experimental::observer_ptr<Film> film
+		FilmPtr film
 	);
 
 	// Nothing to share
@@ -56,7 +56,7 @@ public:
 
 class TilePathSampler : public Sampler {
 public:
-	TilePathSampler(const luxrays::RandomGeneratorUPtr & rnd, std::experimental::observer_ptr<Film> flm,
+	TilePathSampler(const luxrays::RandomGeneratorUPtr & rnd, FilmPtr flm,
 			const FilmSampleSplatterUPtr& flmSplatter);
 	virtual ~TilePathSampler();
 
@@ -72,7 +72,7 @@ public:
 	//--------------------------------------------------------------------------
 
 	void SetAASamples(const u_int aaSamp);
-	void Init(TileWork *tileWork, std::experimental::observer_ptr<Film> tileFilm);
+	void Init(TileWork *tileWork, FilmPtr tileFilm);
 
 	//--------------------------------------------------------------------------
 	// Static methods used by SamplerRegistry
@@ -84,7 +84,7 @@ public:
 	static SamplerUPtr FromProperties(
 		const luxrays::Properties &cfg,
 		const luxrays::RandomGeneratorUPtr & rndGen,
-		std::experimental::observer_ptr<Film> film, const FilmSampleSplatterUPtr& flmSplatter,
+		FilmPtr film, const FilmSampleSplatterUPtr& flmSplatter,
 		SamplerSharedDataSPtr sharedData
 	);
 	static slg::ocl::Sampler *FromPropertiesOCL(const luxrays::Properties &cfg);
@@ -99,7 +99,7 @@ private:
 	SobolSequence sobolSequence;
 
 	TileWork *tileWork;
-	std::experimental::observer_ptr<Film> tileFilm;
+	FilmPtr tileFilm;
 	u_int tileX, tileY, tilePass;
 
 	float sample0, sample1;

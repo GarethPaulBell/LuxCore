@@ -35,7 +35,7 @@ public:
 			TextureConstOPtr nn, TextureConstOPtr kk, TextureConstOPtr u, TextureConstOPtr v);
 	Metal2Material(TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
 			TextureConstOPtr emitted, TextureConstOPtr bump,
-			std::experimental::observer_ptr<const FresnelTexture> ft, TextureConstOPtr u, TextureConstOPtr v);
+			FresnelTextureConstPtr ft, TextureConstOPtr u, TextureConstOPtr v);
 
 	virtual MaterialType GetType() const { return METAL2; }
 	virtual BSDFEvent GetEventTypes() const { return GLOSSY | REFLECT; };
@@ -58,14 +58,14 @@ public:
 
 	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
-	std::experimental::observer_ptr<const FresnelTexture> GetFresnel() const { return fresnelTex; }
+	FresnelTextureConstPtr GetFresnel() const { return fresnelTex; }
 	TextureConstOPtr GetN() const { return n; }
 	TextureConstOPtr GetK() const { return k; }
 	TextureConstOPtr GetNu() const { return nu; }
 	TextureConstOPtr GetNv() const { return nv; }
 	
 private:
-	std::experimental::observer_ptr<const FresnelTexture> fresnelTex;
+	FresnelTextureConstPtr fresnelTex;
 	// For compatibility with the past
 	TextureConstOPtr n, k;
 

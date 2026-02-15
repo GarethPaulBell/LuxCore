@@ -276,7 +276,7 @@ protected:
 	TextureConstOPtr bumpTex;
     float bumpSampleDistance;
 
-	std::experimental::observer_ptr<const ImageMap> emissionMap;
+	ImageMapConstPtr emissionMap;
 	SampleableSphericalFunction *emissionFunc;
 
 	VolumeConstOPtr interiorVolume, exteriorVolume;

@@ -36,7 +36,7 @@ using namespace slg;
 
 SobolSamplerSharedData::SobolSamplerSharedData(
 	const u_int seed,
-	std::experimental::observer_ptr<Film> engineFlm
+	FilmPtr engineFlm
 ) :
 	SamplerSharedData(),
 	engineFilm(engineFlm),
@@ -47,7 +47,7 @@ SobolSamplerSharedData::SobolSamplerSharedData(
 
 SobolSamplerSharedData::SobolSamplerSharedData(
 	const RandomGeneratorUPtr & rndGen,
-	std::experimental::observer_ptr<Film> engineFlm
+	FilmPtr engineFlm
 ) :
 	SamplerSharedData(),
 	engineFilm(engineFlm),
@@ -87,7 +87,7 @@ u_int SobolSamplerSharedData::GetPassCount(const u_int bucketCount) const {
 }
 
 std::unique_ptr<SamplerSharedData> SobolSamplerSharedData::FromProperties(const Properties &cfg,
-		const RandomGeneratorUPtr& rndGen, std::experimental::observer_ptr<Film> film) {
+		const RandomGeneratorUPtr& rndGen, FilmPtr film) {
 	return std::make_unique<SobolSamplerSharedData>(rndGen, film);
 }
 
@@ -99,7 +99,7 @@ std::unique_ptr<SamplerSharedData> SobolSamplerSharedData::FromProperties(const 
 
 SobolSampler::SobolSampler(
 	const RandomGeneratorUPtr & rnd,
-	std::experimental::observer_ptr<Film> flm,  // Film is optional!
+	FilmPtr flm,  // Film is optional!
 	const FilmSampleSplatterUPtr& flmSplatter,
 	const bool imgSamplesEnable,
 	const float adaptiveStr,
@@ -361,7 +361,7 @@ PropertiesUPtr SobolSampler::ToProperties(const Properties &cfg) {
 }
 
 SamplerUPtr SobolSampler::FromProperties(const Properties &cfg, const RandomGeneratorUPtr & rndGen,
-		std::experimental::observer_ptr<Film> film, const FilmSampleSplatterUPtr& flmSplatter,
+		FilmPtr film, const FilmSampleSplatterUPtr& flmSplatter,
 		SamplerSharedDataSPtr sharedData
 ) {
 	const bool imageSamplesEnable = cfg.Get(GetDefaultProps()->Get("sampler.imagesamples.enable")).Get<bool>();

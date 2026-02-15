@@ -65,6 +65,7 @@ DECLARE_SUBTYPES(Filter);
 DECLARE_SUBTYPES(FilmSampleSplatter);
 DECLARE_SUBTYPES(CPURenderThread);
 DECLARE_SUBTYPES(LightStrategyLogPower);
+DECLARE_SUBTYPES(EnvLightVisibilityCache);
 
 }  // namespace slg
 

@@ -356,14 +356,14 @@ std::unique_ptr<SamplerSharedData> RenderConfig::AllocSamplerSharedData(
 	return SamplerSharedData::FromProperties(*cfg, rndGen, FilmOPtr(&film));
 }
 std::unique_ptr<SamplerSharedData> RenderConfig::AllocSamplerSharedData(
-	const RandomGeneratorUPtr & rndGen, std::experimental::observer_ptr<Film> film
+	const RandomGeneratorUPtr & rndGen, FilmPtr film
 ) const {
 	return SamplerSharedData::FromProperties(*cfg, rndGen, film);
 }
 
 std::unique_ptr<Sampler> RenderConfig::AllocSampler(
 	const std::unique_ptr<RandomGenerator> & rndGen,
-	std::experimental::observer_ptr<Film> film,
+	FilmPtr film,
 	FilmSampleSplatterRPtr flmSplatter,
 	const std::shared_ptr<SamplerSharedData> sharedData,
 	const Properties &additionalProps

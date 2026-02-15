@@ -69,8 +69,8 @@ LightSourceConstRef LightSourceDefinitions::GetLightSource(const string &name) c
 
 	if (e == lightsByName.end())
 		throw runtime_error("Reference to an undefined LightSource in LightSourceDefinitions::GetLightSource(): " + name);
-	else
-		return *e->second;
+
+	return *e->second;
 }
 
 LightSourceRef LightSourceDefinitions::GetLightSource(const string &name) {
@@ -79,8 +79,28 @@ LightSourceRef LightSourceDefinitions::GetLightSource(const string &name) {
 
 	if (e == lightsByName.end())
 		throw runtime_error("Reference to an undefined LightSource in LightSourceDefinitions::GetLightSource(): " + name);
-	else
-		return *e->second;
+
+	return *e->second;
+}
+
+LightSourceConstPtr LightSourceDefinitions::GetLightSourcePtr(const string &name) const {
+	// Check if the LightSource has been already defined
+	auto e = lightsByName.find(name);
+
+	if (e == lightsByName.end())
+		throw runtime_error("Reference to an undefined LightSource in LightSourceDefinitions::GetLightSource(): " + name);
+
+	return e->second.get();
+}
+
+LightSourcePtr LightSourceDefinitions::GetLightSourcePtr(const string &name) {
+	// Check if the LightSource has been already defined
+	auto e = lightsByName.find(name);
+
+	if (e == lightsByName.end())
+		throw runtime_error("Reference to an undefined LightSource in LightSourceDefinitions::GetLightSource(): " + name);
+
+	return e->second.get();
 }
 
 TriangleLightConstRef LightSourceDefinitions::GetLightSourceByMeshAndTriIndex(const u_int meshIndex, const u_int triIndex) const {
@@ -132,7 +152,7 @@ void LightSourceDefinitions::DeleteLightSourceByMaterial(MaterialConstRef mat) {
 
 		if (
 			l.GetType() == TYPE_TRIANGLE
-			&& (static_cast<const TriangleLight&>(l)).lightMaterial == std::experimental::make_observer(&mat)
+			&& (static_cast<const TriangleLight&>(l)).lightMaterial == &mat
 		) {
 			nameList.push_back(name);
 		}

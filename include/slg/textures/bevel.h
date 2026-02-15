@@ -53,7 +53,7 @@ public:
 
 	virtual void UpdateTextureReferences(TextureRef oldTex, TextureRef newTex) {
 		if (tex == &oldTex)
-			tex.reset(&newTex);
+			tex = &newTex;
 	}
 
 	bool HasTexture() const { return bool(tex); }

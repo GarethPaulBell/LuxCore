@@ -297,23 +297,23 @@ void Glossy2Material::UpdateTextureReferences(TextureConstRef oldTex, TextureRef
 
 	bool updateGlossiness = false;
 	if (Kd == &oldTex)
-		Kd.reset(&newTex);
+		Kd = &newTex;
 	if (Ks == &oldTex)
-		Ks.reset(&newTex);
+		Ks = &newTex;
 	if (nu == &oldTex) {
-		nu.reset(&newTex);
+		nu = &newTex;
 		updateGlossiness = true;
 	}
 	if (nv == &oldTex) {
-		nv.reset(&newTex);
+		nv = &newTex;
 		updateGlossiness = true;
 	}
 	if (Ka == &oldTex)
-		Ka.reset(&newTex);
+		Ka = &newTex;
 	if (depth == &oldTex)
-		depth.reset(&newTex);
+		depth = &newTex;
 	if (index == &oldTex)
-		index.reset(&newTex);
+		index = &newTex;
 
 	if (updateGlossiness)
 		glossiness = ComputeGlossiness(nu, nv);

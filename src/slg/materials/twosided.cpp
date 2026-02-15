@@ -192,11 +192,11 @@ void TwoSidedMaterial::Pdf(const HitPoint &hitPoint,
 }
 
 void TwoSidedMaterial::UpdateMaterialReferences(MaterialConstRef oldMat, MaterialRef newMat) {
-	if (frontMat == oldMat)
-		frontMat.reset(&newMat);
+	if (frontMat == &oldMat)
+		frontMat = &newMat;
 
-	if (backMat == oldMat)
-		backMat.reset(&newMat);
+	if (backMat == &oldMat)
+		backMat = &newMat;
 
 	// Update volumes too
 	Material::UpdateMaterialReferences(oldMat, newMat);
@@ -205,8 +205,8 @@ void TwoSidedMaterial::UpdateMaterialReferences(MaterialConstRef oldMat, Materia
 }
 
 bool TwoSidedMaterial::IsReferencing(MaterialConstRef mat) const {
-	return frontMat == mat || frontMat->IsReferencing(mat) ||
-		backMat == mat || backMat->IsReferencing(mat);
+	return frontMat == &mat || frontMat->IsReferencing(mat) ||
+		backMat == &mat || backMat->IsReferencing(mat);
 }
 
 void TwoSidedMaterial::AddReferencedMaterials(

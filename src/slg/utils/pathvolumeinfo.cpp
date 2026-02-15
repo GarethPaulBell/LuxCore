@@ -49,7 +49,7 @@ void PathVolumeInfo::AddVolume(VolumeConstRef vol) {
 
 	// Update the current volume. ">=" because I want to catch the last added volume.
 	if (!HasCurrentVolume() || (vol.GetPriority() >= GetCurrentVolume().GetPriority())) {
-		currentVolume.reset(&vol);
+		currentVolume = &vol;
 	}
 
 	// Add the volume to the list
@@ -134,19 +134,19 @@ VolumeConstOPtr PathVolumeInfo::SimulateRemoveVolume(VolumeConstOPtr vol) const 
 	bool found = false;
 	VolumeConstOPtr newCurrentVolume = nullptr;
 	for (u_int i = 0; i < volumeListSize; ++i) {
-		if (!found && GetVolume(i) == vol) {
+		if (!found && &GetVolume(i) == vol) {
 			// Found the volume to remove
 			found = true;
 			continue;
 		}
 
 		if (!newCurrentVolume) {
-			newCurrentVolume.reset(std::addressof(GetVolume(i)));
+			newCurrentVolume = std::addressof(GetVolume(i));
 			continue;
 		}
 
 		if (GetVolume(i).GetPriority() >= newCurrentVolume->GetPriority()) {
-			newCurrentVolume.reset(std::addressof(GetVolume(i)));
+			newCurrentVolume = std::addressof(GetVolume(i));
 			continue;
 		}
 
@@ -240,7 +240,7 @@ void  PathVolumeInfo::SetHitPointVolumes(HitPoint &hitPoint,
 			// if (!material->GetExteriorVolume()) there may be conflict here
 			// between the material definition and the currentVolume value.
 			// The currentVolume value wins.
-			hitPoint.exteriorVolume.reset(&GetCurrentVolume());
+			hitPoint.exteriorVolume = &GetCurrentVolume();
 		}
 
 		if (not hitPoint.exteriorVolume) {
@@ -256,7 +256,7 @@ void  PathVolumeInfo::SetHitPointVolumes(HitPoint &hitPoint,
 			// if (!material->GetInteriorVolume()) there may be conflict here
 			// between the material definition and the currentVolume value.
 			// The currentVolume value wins.
-			hitPoint.interiorVolume.reset(&GetCurrentVolume());
+			hitPoint.interiorVolume = &GetCurrentVolume();
 		}
 
 		if (!hitPoint.interiorVolume) {

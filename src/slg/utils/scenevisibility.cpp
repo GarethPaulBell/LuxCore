@@ -359,7 +359,7 @@ void SceneVisibility<T>::Build() {
 	std::mutex particlesOctreeMutex;
 
 	auto visibilitySobolSharedData =
-		std::make_shared<SobolSamplerSharedData>(131, std::experimental::observer_ptr<Film>());
+		std::make_shared<SobolSamplerSharedData>(131, FilmPtr());
 
 	std::atomic<u_int> globalVisibilityParticlesCount(0);
 	u_int visibilityCacheLookUp = 0;

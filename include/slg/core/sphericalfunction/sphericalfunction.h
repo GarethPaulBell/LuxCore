@@ -73,10 +73,10 @@ public:
 	ImageMapSphericalFunction();
 
 	ImageMapSphericalFunction(ImageMapUPtr&& imgMap);
-	ImageMapSphericalFunction(std::experimental::observer_ptr<const ImageMap> imgMap);
+	ImageMapSphericalFunction(ImageMapConstPtr imgMap);
 
 	void SetImageMap(ImageMapUPtr&& imgMap);
-	void SetImageMap(std::experimental::observer_ptr<ImageMap> imgMap);
+	void SetImageMap(ImageMapPtr imgMap);
 
 	ImageMapConstRef GetImageMap() const { return *imgMap; }
 
@@ -90,7 +90,7 @@ protected:
 	// https://en.cppreference.com/w/cpp/language/initializer_list.html#Initialization_order
 	ImageMapUPtr internalImgMap;  // ImageMapSphericalFunction can have its own ImageMap
 								  //
-	std::experimental::observer_ptr<const ImageMap> imgMap;
+	ImageMapConstPtr imgMap;
 };
 
 /**

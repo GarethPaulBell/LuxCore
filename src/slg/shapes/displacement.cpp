@@ -99,7 +99,7 @@ DisplacementShape::DisplacementShape(luxrays::ExtTriangleMeshRef srcMesh, const 
 		hitPoint.shadeN = hitPoint.interpolatedN;
 
 		hitPoint.defaultUV = srcMesh.HasUVs(params.uvIndex) ? srcMesh.GetUV(i, params.uvIndex) : UV(0.f, 0.f);
-		hitPoint.mesh.reset(&srcMesh);
+		hitPoint.mesh = &srcMesh;
 		hitPoint.triangleIndex = triangleIndex[i];
 		if (i == tris[hitPoint.triangleIndex].v[0]) {
 			// First vertex of the triangle

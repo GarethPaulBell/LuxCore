@@ -124,10 +124,10 @@ void updvol(T volume, const MaterialConstRef oldMat, MaterialRef newMat);
 template<>
 inline void updvol(VolumeConstOPtr volume, MaterialConstRef oldMat, MaterialRef newMat) {
 	auto& oldVol = dynamic_cast<const Volume &>(oldMat);
-	auto& newVol = dynamic_cast<const Volume &>(newMat);
+	auto& newVol = dynamic_cast<Volume &>(newMat);
 
-	if (volume.get() == std::addressof(oldVol)) {
-		volume.reset(std::addressof(newVol));
+	if (volume == &oldVol) {
+		volume = &newVol;
 	}
 }
 

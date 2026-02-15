@@ -35,7 +35,7 @@ public:
 	RenderSession(
 		RenderConfigRef cfg,
 		RenderStateSPtr startState = nullptr,
-		std::experimental::observer_ptr<Film> startFilm = nullptr
+		FilmPtr startFilm = nullptr
 	);
 	~RenderSession();
 

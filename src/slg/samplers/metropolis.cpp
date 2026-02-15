@@ -41,7 +41,7 @@ MetropolisSamplerSharedData::MetropolisSamplerSharedData() : SamplerSharedData()
 std::unique_ptr<SamplerSharedData> MetropolisSamplerSharedData::FromProperties(
 	const Properties &cfg,
 	const RandomGeneratorUPtr & rndGen,
-	std::experimental::observer_ptr<Film> film
+	FilmPtr film
 ) {
 	return std::make_unique<MetropolisSamplerSharedData>();
 }
@@ -73,7 +73,7 @@ void MetropolisSamplerSharedData::Reset() {
 
 MetropolisSampler::MetropolisSampler(
 		const RandomGeneratorUPtr & rnd,
-		std::experimental::observer_ptr<Film> flm,
+		FilmPtr flm,
 		const FilmSampleSplatterUPtr& flmSplatter, const bool imgSamplesEnable,
 		const u_int maxRej, const float pLarge, const float imgRange, const bool addOnlyCstcs,
 		SamplerSharedDataSPtr samplerSharedData) : Sampler(rnd, flm, flmSplatter, imgSamplesEnable),
@@ -473,7 +473,7 @@ PropertiesUPtr MetropolisSampler::ToProperties(const Properties &cfg) {
 }
 
 SamplerUPtr MetropolisSampler::FromProperties(const Properties &cfg, const RandomGeneratorUPtr & rndGen,
-		std::experimental::observer_ptr<Film> film, FilmSampleSplatterRPtr flmSplatter, SamplerSharedDataSPtr sharedData) {
+		FilmPtr film, FilmSampleSplatterRPtr flmSplatter, SamplerSharedDataSPtr sharedData) {
 	const bool imageSamplesEnable = cfg.Get(GetDefaultProps()->Get("sampler.imagesamples.enable")).Get<bool>();
 
 	const float rate = Clamp(cfg.Get(GetDefaultProps()->Get("sampler.metropolis.largesteprate")).Get<double>(), 0.0, 1.0);

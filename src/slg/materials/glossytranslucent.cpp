@@ -376,41 +376,41 @@ void GlossyTranslucentMaterial::UpdateTextureReferences(TextureConstRef oldTex, 
 
 	bool updateGlossiness = false;
 	if (Kd == &oldTex)
-		Kd.reset(&newTex);
+		Kd = &newTex;
 	if (Kt == &oldTex)
-		Kt.reset(&newTex);
+		Kt = &newTex;
 	if (Ks == &oldTex)
-		Ks.reset(&newTex);
+		Ks = &newTex;
 	if (Ks_bf == &oldTex)
-		Ks_bf.reset(&newTex);
+		Ks_bf = &newTex;
 	if (nu == &oldTex) {
-		nu.reset(&newTex);
+		nu = &newTex;
 		updateGlossiness = true;
 	}
 	if (nu_bf == &oldTex) {
-		nu_bf.reset(&newTex);
+		nu_bf = &newTex;
 		updateGlossiness = true;
 	}
 	if (nv == &oldTex) {
-		nv.reset(&newTex);
+		nv = &newTex;
 		updateGlossiness = true;
 	}
 	if (nv_bf == &oldTex) {
-		nv_bf.reset(&newTex);
+		nv_bf = &newTex;
 		updateGlossiness = true;
 	}
 	if (Ka == &oldTex)
-		Ka.reset(&newTex);
+		Ka = &newTex;
 	if (Ka_bf == &oldTex)
-		Ka_bf.reset(&newTex);
+		Ka_bf = &newTex;
 	if (depth == &oldTex)
-		depth.reset(&newTex);
+		depth = &newTex;
 	if (depth_bf == &oldTex)
-		depth_bf.reset(&newTex);
+		depth_bf = &newTex;
 	if (index == &oldTex)
-		index.reset(&newTex);
+		index = &newTex;
 	if (index_bf == &oldTex)
-		index_bf.reset(&newTex);
+		index_bf = &newTex;
 
 	if (updateGlossiness)
 		glossiness = Min(ComputeGlossiness(nu, nv), ComputeGlossiness(nu_bf, nv_bf));

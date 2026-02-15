@@ -114,9 +114,9 @@ void RoughMatteMaterial::UpdateTextureReferences(TextureConstRef oldTex, Texture
 	Material::UpdateTextureReferences(oldTex, newTex);
 
 	if (Kd == &oldTex)
-		Kd.reset(&newTex);
+		Kd = &newTex;
 	if (sigma == &oldTex)
-		sigma.reset(&newTex);
+		sigma = &newTex;
 }
 
 PropertiesUPtr RoughMatteMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
