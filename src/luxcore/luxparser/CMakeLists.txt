@@ -46,4 +46,5 @@ target_link_libraries(luxparser PRIVATE
   embree::embree
   Imath::Imath
   OpenColorIO::OpenColorIO
+  openimageio::openimageio
 )
