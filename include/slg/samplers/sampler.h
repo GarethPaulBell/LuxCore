@@ -117,7 +117,7 @@ public:
 	static SamplerUPtr FromProperties(
 		const luxrays::Properties &cfg,
 		const luxrays::RandomGeneratorUPtr & rndGen,
-		FilmOPtr film,
+		FilmPtr film,
 		const FilmSampleSplatterUPtr& flmSplatter,
 		SamplerSharedDataSPtr sharedData
 	);

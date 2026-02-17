@@ -465,7 +465,7 @@ void BakeCPURenderThread::RenderFunc(std::stop_token stop_token) {
 			lightSampler = Sampler::FromProperties(
 				props,
 				std::cref(rndGen),
-				FilmOPtr(&engine->GetMapFilm()),
+				FilmPtr(&engine->GetMapFilm()),
 				FilmSampleSplatter::Null,
 				engine->lightSamplerSharedData);
 			lightSampler->SetThreadIndex(threadIndex);

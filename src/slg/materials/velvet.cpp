@@ -26,10 +26,10 @@ using namespace slg;
 // Velvet material
 //------------------------------------------------------------------------------
 
-VelvetMaterial::VelvetMaterial(TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
-		TextureConstOPtr emitted, TextureConstOPtr bump,
-		TextureConstOPtr kd, TextureConstOPtr p1, TextureConstOPtr p2, TextureConstOPtr p3,
-		TextureConstOPtr thickness) :
+VelvetMaterial::VelvetMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
+		TextureConstPtr emitted, TextureConstPtr bump,
+		TextureConstPtr kd, TextureConstPtr p1, TextureConstPtr p2, TextureConstPtr p3,
+		TextureConstPtr thickness) :
 			Material(frontTransp, backTransp, emitted, bump), Kd(kd),
 			P1(p1), P2(p2), P3(p3), Thickness(thickness) {
 	glossiness = 1.f;

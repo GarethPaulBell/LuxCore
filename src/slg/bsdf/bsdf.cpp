@@ -51,8 +51,8 @@ void BSDF::Init(
 		material->GetInteriorVolume(hitPoint, hitPoint.passThroughEvent),
 		material->GetExteriorVolume(hitPoint, hitPoint.passThroughEvent),
 		scene.HasDefaultWorldVolume() ?
-		VolumeConstOPtr(&scene.GetDefaultWorldVolume()) :
-		VolumeConstOPtr(nullptr)
+		VolumeConstPtr(&scene.GetDefaultWorldVolume()) :
+		VolumeConstPtr(nullptr)
 	);
 
 	// Check if it is a light source
@@ -104,8 +104,8 @@ void BSDF::Init(
 			material->GetInteriorVolume(hitPoint, hitPoint.passThroughEvent),
 			material->GetExteriorVolume(hitPoint, hitPoint.passThroughEvent),
 			scene.HasDefaultWorldVolume() ?
-				VolumeConstOPtr(&scene.GetDefaultWorldVolume()) :
-				VolumeConstOPtr()
+				VolumeConstPtr(&scene.GetDefaultWorldVolume()) :
+				VolumeConstPtr()
 	);
 
 	// Check if it is a light source

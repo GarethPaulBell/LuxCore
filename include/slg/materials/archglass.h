@@ -28,7 +28,7 @@ namespace slg {
 //------------------------------------------------------------------------------
 
 class ArchGlassMaterial : public Material {
-	using TexRef = TextureConstOPtr;
+	using TexRef = TextureConstPtr;
 public:
 	ArchGlassMaterial(TexRef frontTransp, TexRef backTransp,
 			TexRef emitted, TexRef bump,

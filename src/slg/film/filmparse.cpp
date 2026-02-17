@@ -908,7 +908,7 @@ void Film::Parse(PropertiesRPtr props) {
 			}
 
 			convTest = new FilmConvTest(
-				FilmOPtr(this), haltNoiseThreshold, haltNoiseThresholdWarmUp,
+				FilmPtr(this), haltNoiseThreshold, haltNoiseThresholdWarmUp,
 				haltNoiseThresholdTestStep, haltNoiseThresholdUseFilter,
 				haltNoiseThresholdImagePipelineIndex);
 		}

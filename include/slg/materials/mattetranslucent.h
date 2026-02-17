@@ -29,7 +29,7 @@ namespace slg {
 
 class MatteTranslucentMaterial : public Material {
 public:
-	using TexRef = TextureConstOPtr;
+	using TexRef = TextureConstPtr;
 	MatteTranslucentMaterial(TexRef frontTransp, TexRef backTransp,
 			TexRef emitted, TexRef bump,
 			TexRef refl, TexRef trans);

@@ -26,8 +26,8 @@ using namespace slg;
 // Two-sided material
 //------------------------------------------------------------------------------
 
-TwoSidedMaterial::TwoSidedMaterial(TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
-		TextureConstOPtr emitted, TextureConstOPtr bump,
+TwoSidedMaterial::TwoSidedMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
+		TextureConstPtr emitted, TextureConstPtr bump,
 		MaterialConstRef frontMat, MaterialConstRef backMat) :
 			Material(frontTransp, backTransp, emitted, bump),
 			frontMat(&frontMat), backMat(&backMat) {
@@ -67,7 +67,7 @@ void TwoSidedMaterial::Preprocess() {
 	isDelta = IsDeltaImpl();
 }
 
-VolumeConstOPtr TwoSidedMaterial::GetInteriorVolume(const HitPoint &hitPoint,
+VolumeConstPtr TwoSidedMaterial::GetInteriorVolume(const HitPoint &hitPoint,
 		const float passThroughEvent) const {
 	if (interiorVolume)
 		return interiorVolume;
@@ -79,7 +79,7 @@ VolumeConstOPtr TwoSidedMaterial::GetInteriorVolume(const HitPoint &hitPoint,
 	}
 }
 
-VolumeConstOPtr TwoSidedMaterial::GetExteriorVolume(const HitPoint &hitPoint,
+VolumeConstPtr TwoSidedMaterial::GetExteriorVolume(const HitPoint &hitPoint,
 		const float passThroughEvent) const {
 	if (exteriorVolume)
 		return exteriorVolume;

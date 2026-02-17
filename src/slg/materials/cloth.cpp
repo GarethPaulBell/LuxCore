@@ -27,10 +27,10 @@ using namespace slg;
 // Cloth material
 //------------------------------------------------------------------------------
 
-ClothMaterial::ClothMaterial(TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
-		TextureConstOPtr emitted, TextureConstOPtr bump,
-		const slg::ocl::ClothPreset preset, TextureConstOPtr weft_kd, TextureConstOPtr weft_ks,
-		TextureConstOPtr warp_kd, TextureConstOPtr warp_ks, const float repeat_u, const float repeat_v) :
+ClothMaterial::ClothMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
+		TextureConstPtr emitted, TextureConstPtr bump,
+		const slg::ocl::ClothPreset preset, TextureConstPtr weft_kd, TextureConstPtr weft_ks,
+		TextureConstPtr warp_kd, TextureConstPtr warp_ks, const float repeat_u, const float repeat_v) :
 		    Material(frontTransp, backTransp, emitted, bump), Preset(preset), Weft_Kd(weft_kd), Weft_Ks(weft_ks),
             Warp_Kd(warp_kd), Warp_Ks(warp_ks), Repeat_U(repeat_u), Repeat_V(repeat_v) {
 	SetPreset();
@@ -540,7 +540,7 @@ Spectrum ClothMaterial::Albedo(const HitPoint &hitPoint) const {
 	const UV hitPountUV = hitPoint.GetUV(0);
 	const slg::ocl::Yarn *yarn = GetYarn(hitPountUV.u, hitPountUV.v, &uv, &umax, &scale);
 	
-	TextureConstOPtr kd = yarn->yarn_type == slg::ocl::WARP ? Warp_Kd :  Weft_Kd;
+	TextureConstPtr kd = yarn->yarn_type == slg::ocl::WARP ? Warp_Kd :  Weft_Kd;
 
 	return kd->GetSpectrumValue(hitPoint).Clamp(0.f, 1.f);
 }
@@ -563,8 +563,8 @@ Spectrum ClothMaterial::Evaluate(const HitPoint &hitPoint,
 	
 	scale = scale * EvalSpecular(yarn, uv, umax, localLightDir, localEyeDir);
 	
-	TextureConstOPtr ks = yarn->yarn_type == slg::ocl::WARP ? Warp_Ks :  Weft_Ks;
-	TextureConstOPtr kd = yarn->yarn_type == slg::ocl::WARP ? Warp_Kd :  Weft_Kd;
+	TextureConstPtr ks = yarn->yarn_type == slg::ocl::WARP ? Warp_Ks :  Weft_Ks;
+	TextureConstPtr kd = yarn->yarn_type == slg::ocl::WARP ? Warp_Kd :  Weft_Kd;
 
 	return (kd->GetSpectrumValue(hitPoint).Clamp(0.f, 1.f) + ks->GetSpectrumValue(hitPoint).Clamp(0.f, 1.f) * scale) * INV_PI * fabsf(localLightDir.z);
 }
@@ -592,8 +592,8 @@ Spectrum ClothMaterial::Sample(const HitPoint &hitPoint,
 	else
 	    scale = scale * EvalSpecular(yarn, uv, umax, *localSampledDir, localFixedDir);
 
-	TextureConstOPtr ks = (yarn->yarn_type == slg::ocl::WARP ? Warp_Ks :  Weft_Ks);
-	TextureConstOPtr kd = (yarn->yarn_type == slg::ocl::WARP ? Warp_Kd :  Weft_Kd);
+	TextureConstPtr ks = (yarn->yarn_type == slg::ocl::WARP ? Warp_Ks :  Weft_Ks);
+	TextureConstPtr kd = (yarn->yarn_type == slg::ocl::WARP ? Warp_Kd :  Weft_Kd);
 	
 	return kd->GetSpectrumValue(hitPoint).Clamp(0.f, 1.f) + ks->GetSpectrumValue(hitPoint).Clamp(0.f, 1.f) * scale;
 }

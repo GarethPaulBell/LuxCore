@@ -1737,7 +1737,7 @@ RenderSessionImpl::RenderSessionImpl(
 	renderSession = std::make_unique<slg::RenderSession>(
 		*config.renderConfig,
 		startState->renderState,
-		slg::FilmOPtr(std::addressof(startFilm.GetSLGFilm()))
+		slg::FilmPtr(std::addressof(startFilm.GetSLGFilm()))
 	);
 
 }
@@ -1760,7 +1760,7 @@ RenderSessionImpl::RenderSessionImpl(
 	renderSession = std::make_unique<slg::RenderSession>(
 		rcfg,
 		startState,
-		slg::FilmOPtr(startFilm.get())
+		slg::FilmPtr(startFilm.get())
 	);
 }
 

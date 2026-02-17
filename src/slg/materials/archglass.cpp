@@ -29,16 +29,16 @@ using namespace slg;
 //------------------------------------------------------------------------------
 
 ArchGlassMaterial::ArchGlassMaterial(
-	TextureConstOPtr frontTransp,
-	TextureConstOPtr backTransp,
-	TextureConstOPtr emitted,
-	TextureConstOPtr bump,
-	TextureConstOPtr refl,
-	TextureConstOPtr trans,
-	TextureConstOPtr exteriorIorFact,
-	TextureConstOPtr interiorIorFact,
-	TextureConstOPtr filmThickness,
-	TextureConstOPtr filmIor
+	TextureConstPtr frontTransp,
+	TextureConstPtr backTransp,
+	TextureConstPtr emitted,
+	TextureConstPtr bump,
+	TextureConstPtr refl,
+	TextureConstPtr trans,
+	TextureConstPtr exteriorIorFact,
+	TextureConstPtr interiorIorFact,
+	TextureConstPtr filmThickness,
+	TextureConstPtr filmIor
 ) :
 	Material(frontTransp, backTransp, emitted, bump),
 	Kr(refl),

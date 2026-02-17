@@ -353,7 +353,7 @@ FilmUPtr RenderConfig::AllocFilm() const {
 std::unique_ptr<SamplerSharedData> RenderConfig::AllocSamplerSharedData(
 	const RandomGeneratorUPtr & rndGen, FilmRef film
 ) const {
-	return SamplerSharedData::FromProperties(*cfg, rndGen, FilmOPtr(&film));
+	return SamplerSharedData::FromProperties(*cfg, rndGen, FilmPtr(&film));
 }
 std::unique_ptr<SamplerSharedData> RenderConfig::AllocSamplerSharedData(
 	const RandomGeneratorUPtr & rndGen, FilmPtr film
@@ -384,7 +384,7 @@ std::unique_ptr<Sampler> RenderConfig::AllocSampler(
 	auto& props = *cfg;
 	props << additionalProps;
 
-	return Sampler::FromProperties(props, rndGen, FilmOPtr(&film), flmSplatter, sharedData);
+	return Sampler::FromProperties(props, rndGen, FilmPtr(&film), flmSplatter, sharedData);
 }
 
 RenderEngineUPtr RenderConfig::AllocRenderEngine() {

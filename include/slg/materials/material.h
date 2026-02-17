@@ -62,10 +62,10 @@ class Material : public luxrays::NamedObject
 {
 public:
 	Material(
-		TextureConstOPtr frontTransp,
-		TextureConstOPtr backTransp,
-		TextureConstOPtr emitted,
-		TextureConstOPtr bump
+		TextureConstPtr frontTransp,
+		TextureConstPtr backTransp,
+		TextureConstPtr emitted,
+		TextureConstPtr bump
 	);
 	virtual ~Material();
 
@@ -160,20 +160,20 @@ public:
 	// MixMaterial can have multiple volumes assigned and needs the passThroughEvent
 	// information to be able to return the correct volume
 	void SetInteriorVolume(VolumeConstRef vol);
-	void SetInteriorVolume(VolumeConstOPtr vol);
-	virtual VolumeConstOPtr GetInteriorVolume(
+	void SetInteriorVolume(VolumeConstPtr vol);
+	virtual VolumeConstPtr GetInteriorVolume(
 		const HitPoint &hitPoint,
 		const float passThroughEvent
 	) const;
 	void SetExteriorVolume(VolumeConstRef vol);
-	void SetExteriorVolume(VolumeConstOPtr vol);
-	virtual VolumeConstOPtr GetExteriorVolume(
+	void SetExteriorVolume(VolumeConstPtr vol);
+	virtual VolumeConstPtr GetExteriorVolume(
 		const HitPoint &hitPoint,
 		const float passThroughEvent
 	) const;
 
-	VolumeConstOPtr GetInteriorVolume() const;
-	VolumeConstOPtr GetExteriorVolume() const;
+	VolumeConstPtr GetInteriorVolume() const;
+	VolumeConstPtr GetExteriorVolume() const;
 
 	virtual void Bump(HitPoint *hitPoint) const;
 
@@ -249,9 +249,9 @@ public:
 
 protected:
 	static float ComputeGlossiness(
-		TextureConstOPtr t1 = nullptr,
-		TextureConstOPtr t2 = nullptr,
-		TextureConstOPtr t3 = nullptr
+		TextureConstPtr t1 = nullptr,
+		TextureConstPtr t2 = nullptr,
+		TextureConstPtr t3 = nullptr
 	);
 
 	void UpdateEmittedFactor();
@@ -268,18 +268,18 @@ protected:
 	float emittedTemperature;
 	bool emittedNormalizeTemperature;
 
-	TextureConstOPtr frontTransparencyTex;
-	TextureConstOPtr backTransparencyTex;
+	TextureConstPtr frontTransparencyTex;
+	TextureConstPtr backTransparencyTex;
 	luxrays::Spectrum passThroughShadowTransparency;
 	bool passThroughShadowTransparencyOverride;
-	TextureConstOPtr emittedTex;
-	TextureConstOPtr bumpTex;
+	TextureConstPtr emittedTex;
+	TextureConstPtr bumpTex;
     float bumpSampleDistance;
 
 	ImageMapConstPtr emissionMap;
 	SampleableSphericalFunction *emissionFunc;
 
-	VolumeConstOPtr interiorVolume, exteriorVolume;
+	VolumeConstPtr interiorVolume, exteriorVolume;
 
 	float glossiness, avgPassThroughTransparency;
 
@@ -292,8 +292,8 @@ protected:
 // IOR utilities
 //------------------------------------------------------------------------------
 
-extern float ExtractExteriorIors(const HitPoint &hitPoint, TextureConstOPtr exteriorIor);
-extern float ExtractInteriorIors(const HitPoint &hitPoint, TextureConstOPtr interiorIor);
+extern float ExtractExteriorIors(const HitPoint &hitPoint, TextureConstPtr exteriorIor);
+extern float ExtractInteriorIors(const HitPoint &hitPoint, TextureConstPtr interiorIor);
 
 //------------------------------------------------------------------------------
 // Coating absorption

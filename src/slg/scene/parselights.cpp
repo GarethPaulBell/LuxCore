@@ -190,11 +190,11 @@ ImageMapPtr Scene::CreateEmissionMap(
 		// Add the image map to the cache
 		const string name ="LUXCORE_EMISSIONMAP_MERGEDMAP_" + propName;
 		map->SetName(name);
-		map_ref = ImageMapOPtr(std::addressof(imgMapCache.DefineImageMap(std::move(map))));
+		map_ref = ImageMapPtr(std::addressof(imgMapCache.DefineImageMap(std::move(map))));
 	} else if (imgMap)
 		map_ref = imgMap;  // Already in cache...
 	else if (iesMap) {
-		map_ref = ImageMapOPtr(
+		map_ref = ImageMapPtr(
 			std::addressof(imgMapCache.DefineImageMap(std::move(iesMap)))
 		);
 	}
@@ -270,7 +270,7 @@ LightSourceUPtr Scene::CreateLightSource(const string &name, const luxrays::Prop
 
 		auto il = std::make_unique<InfiniteLight>();
 		il->lightToWorld = light2World;
-		il->imageMap = ImageMapOPtr(std::addressof(imgMap));
+		il->imageMap = ImageMapPtr(std::addressof(imgMap));
 		il->sampleUpperHemisphereOnly = props.Get(Property(propName + ".sampleupperhemisphereonly")(false)).Get<bool>();
 
 		il->SetIndirectDiffuseVisibility(props.Get(Property(propName + ".visibility.indirect.diffuse.enable")(true)).Get<bool>());
@@ -389,7 +389,7 @@ LightSourceUPtr Scene::CreateLightSource(const string &name, const luxrays::Prop
 
 		ImageMapConstPtr imgMap = (imageName == "") ?
 			nullptr :
-			ImageMapConstOPtr(
+			ImageMapConstPtr(
 				std::addressof(
 					imgMapCache.GetImageMap(imageName, ImageMapConfig(props, propName), false)));
 

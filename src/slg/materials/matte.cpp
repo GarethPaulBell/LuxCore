@@ -26,9 +26,9 @@ using namespace slg;
 // Matte material
 //------------------------------------------------------------------------------
 
-MatteMaterial::MatteMaterial(TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
-		TextureConstOPtr emitted, TextureConstOPtr bump,
-		TextureConstOPtr col) : Material(frontTransp, backTransp, emitted, bump), Kd(col) {
+MatteMaterial::MatteMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
+		TextureConstPtr emitted, TextureConstPtr bump,
+		TextureConstPtr col) : Material(frontTransp, backTransp, emitted, bump), Kd(col) {
 }
 
 Spectrum MatteMaterial::Albedo(const HitPoint &hitPoint) const {

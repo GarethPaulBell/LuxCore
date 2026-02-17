@@ -37,7 +37,7 @@ class BSDF;
 
 class Volume : public Material {
 public:
-	Volume(TextureConstRef ior, TextureConstOPtr emission) :
+	Volume(TextureConstRef ior, TextureConstPtr emission) :
 		Material(nullptr, nullptr, nullptr, nullptr),
 		iorTex(ior),
 		volumeEmissionTex(emission),
@@ -84,7 +84,7 @@ protected:
 	std::reference_wrapper<const Texture> iorTex;
 	// This is a different kind of emission texture from the one in
 	// Material class (i.e. is not sampled by direct light).
-	TextureConstOPtr volumeEmissionTex;
+	TextureConstPtr volumeEmissionTex;
 	u_int volumeLightID;
 	int priority;
 };
@@ -122,7 +122,7 @@ template <typename T>
 void updvol(T volume, const MaterialConstRef oldMat, MaterialRef newMat);
 
 template<>
-inline void updvol(VolumeConstOPtr volume, MaterialConstRef oldMat, MaterialRef newMat) {
+inline void updvol(VolumeConstPtr volume, MaterialConstRef oldMat, MaterialRef newMat) {
 	auto& oldVol = dynamic_cast<const Volume &>(oldMat);
 	auto& newVol = dynamic_cast<Volume &>(newMat);
 

@@ -29,10 +29,10 @@ namespace slg {
 
 class Glossy2Material : public Material {
 public:
-	Glossy2Material(TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
-			TextureConstOPtr emitted, TextureConstOPtr bump,
-			TextureConstOPtr kd, TextureConstOPtr ks, TextureConstOPtr u, TextureConstOPtr v,
-			TextureConstOPtr ka, TextureConstOPtr d, TextureConstOPtr i, const bool mbounce, const bool doublesided);
+	Glossy2Material(TextureConstPtr frontTransp, TextureConstPtr backTransp,
+			TextureConstPtr emitted, TextureConstPtr bump,
+			TextureConstPtr kd, TextureConstPtr ks, TextureConstPtr u, TextureConstPtr v,
+			TextureConstPtr ka, TextureConstPtr d, TextureConstPtr i, const bool mbounce, const bool doublesided);
 
 	virtual MaterialType GetType() const { return GLOSSY2; }
 	virtual BSDFEvent GetEventTypes() const { return GLOSSY | REFLECT; }
@@ -55,24 +55,24 @@ public:
 
 	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
-	TextureConstOPtr GetKd() const { return Kd; }
-	TextureConstOPtr GetKs() const { return Ks; }
-	TextureConstOPtr GetNu() const { return nu; }
-	TextureConstOPtr GetNv() const { return nv; }
-	TextureConstOPtr GetKa() const { return Ka; }
-	TextureConstOPtr GetDepth() const { return depth; }
-	TextureConstOPtr GetIndex() const { return index; }
+	TextureConstPtr GetKd() const { return Kd; }
+	TextureConstPtr GetKs() const { return Ks; }
+	TextureConstPtr GetNu() const { return nu; }
+	TextureConstPtr GetNv() const { return nv; }
+	TextureConstPtr GetKa() const { return Ka; }
+	TextureConstPtr GetDepth() const { return depth; }
+	TextureConstPtr GetIndex() const { return index; }
 	const bool IsMultibounce () const { return multibounce; }
 	const bool IsDoubleSided () const { return doublesided; }
 
 private:
-	TextureConstOPtr Kd;
-	TextureConstOPtr Ks;
-	TextureConstOPtr nu;
-	TextureConstOPtr nv;
-	TextureConstOPtr Ka;
-	TextureConstOPtr depth;
-	TextureConstOPtr index;
+	TextureConstPtr Kd;
+	TextureConstPtr Ks;
+	TextureConstPtr nu;
+	TextureConstPtr nv;
+	TextureConstPtr Ka;
+	TextureConstPtr depth;
+	TextureConstPtr index;
 	const bool multibounce;
 	const bool doublesided;
 };

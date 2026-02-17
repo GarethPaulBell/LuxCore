@@ -29,7 +29,7 @@ namespace slg {
 
 class RoughGlassMaterial : public Material {
 public:
-	using TexRef = TextureConstOPtr;
+	using TexRef = TextureConstPtr;
 
 	RoughGlassMaterial(TexRef frontTransp, TexRef backTransp,
 			TexRef emitted, TexRef bump,

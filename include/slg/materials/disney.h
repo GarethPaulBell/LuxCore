@@ -31,24 +31,24 @@ namespace slg {
 class DisneyMaterial : public Material {
 public:
 	DisneyMaterial(
-		TextureConstOPtr frontTransp,
-		TextureConstOPtr backTransp,
-		TextureConstOPtr emitted,
-		TextureConstOPtr bump,
-		TextureConstOPtr baseColor,
-		TextureConstOPtr subsurface,
-		TextureConstOPtr roughness,
-		TextureConstOPtr metallic,
-		TextureConstOPtr specular,
-		TextureConstOPtr specularTint,
-		TextureConstOPtr clearcoat,
-		TextureConstOPtr clearcoatGloss,
-		TextureConstOPtr anisotropic,
-		TextureConstOPtr sheen,
-		TextureConstOPtr sheenTint,
-		TextureConstOPtr filmAmount, 
-		TextureConstOPtr filmThickness, 
-		TextureConstOPtr filmIor
+		TextureConstPtr frontTransp,
+		TextureConstPtr backTransp,
+		TextureConstPtr emitted,
+		TextureConstPtr bump,
+		TextureConstPtr baseColor,
+		TextureConstPtr subsurface,
+		TextureConstPtr roughness,
+		TextureConstPtr metallic,
+		TextureConstPtr specular,
+		TextureConstPtr specularTint,
+		TextureConstPtr clearcoat,
+		TextureConstPtr clearcoatGloss,
+		TextureConstPtr anisotropic,
+		TextureConstPtr sheen,
+		TextureConstPtr sheenTint,
+		TextureConstPtr filmAmount, 
+		TextureConstPtr filmThickness, 
+		TextureConstPtr filmIor
 	);
 
 	virtual MaterialType GetType() const { return DISNEY; }
@@ -98,36 +98,36 @@ public:
 
 	void AddReferencedTextures(std::unordered_set<const Texture *>& referencedTexs) const;
 
-	TextureConstOPtr GetBaseColor() const { return BaseColor; };
-	TextureConstOPtr GetSubsurface() const { return Subsurface; };
-	TextureConstOPtr GetRoughness() const { return Roughness; };
-	TextureConstOPtr GetMetallic() const { return Metallic; };
-	TextureConstOPtr GetSpecular() const { return Specular; };
-	TextureConstOPtr GetSpecularTint() const { return SpecularTint; };
-	TextureConstOPtr GetClearcoat() const { return Clearcoat; };
-	TextureConstOPtr GetClearcoatGloss() const { return ClearcoatGloss; };
-	TextureConstOPtr GetAnisotropic() const { return Anisotropic; };
-	TextureConstOPtr GetSheen() const { return Sheen; };
-	TextureConstOPtr GetSheenTint() const { return SheenTint; };
-	TextureConstOPtr GetFilmAmount() const { return filmAmount; }
-	TextureConstOPtr GetFilmThickness() const { return filmThickness; }
-	TextureConstOPtr GetFilmIOR() const { return filmIor; }
+	TextureConstPtr GetBaseColor() const { return BaseColor; };
+	TextureConstPtr GetSubsurface() const { return Subsurface; };
+	TextureConstPtr GetRoughness() const { return Roughness; };
+	TextureConstPtr GetMetallic() const { return Metallic; };
+	TextureConstPtr GetSpecular() const { return Specular; };
+	TextureConstPtr GetSpecularTint() const { return SpecularTint; };
+	TextureConstPtr GetClearcoat() const { return Clearcoat; };
+	TextureConstPtr GetClearcoatGloss() const { return ClearcoatGloss; };
+	TextureConstPtr GetAnisotropic() const { return Anisotropic; };
+	TextureConstPtr GetSheen() const { return Sheen; };
+	TextureConstPtr GetSheenTint() const { return SheenTint; };
+	TextureConstPtr GetFilmAmount() const { return filmAmount; }
+	TextureConstPtr GetFilmThickness() const { return filmThickness; }
+	TextureConstPtr GetFilmIOR() const { return filmIor; }
 
 private:
-	TextureConstOPtr BaseColor;
-	TextureConstOPtr Subsurface;
-	TextureConstOPtr Roughness;
-	TextureConstOPtr Metallic;
-	TextureConstOPtr Specular;
-	TextureConstOPtr SpecularTint;
-	TextureConstOPtr Clearcoat;
-	TextureConstOPtr ClearcoatGloss;
-	TextureConstOPtr Anisotropic;
-	TextureConstOPtr Sheen;
-	TextureConstOPtr SheenTint;
-	TextureConstOPtr filmAmount;
-	TextureConstOPtr filmThickness;
-	TextureConstOPtr filmIor;
+	TextureConstPtr BaseColor;
+	TextureConstPtr Subsurface;
+	TextureConstPtr Roughness;
+	TextureConstPtr Metallic;
+	TextureConstPtr Specular;
+	TextureConstPtr SpecularTint;
+	TextureConstPtr Clearcoat;
+	TextureConstPtr ClearcoatGloss;
+	TextureConstPtr Anisotropic;
+	TextureConstPtr Sheen;
+	TextureConstPtr SheenTint;
+	TextureConstPtr filmAmount;
+	TextureConstPtr filmThickness;
+	TextureConstPtr filmIor;
 
 	void UpdateGlossiness();
 

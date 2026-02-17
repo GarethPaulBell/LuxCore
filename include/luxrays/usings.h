@@ -39,8 +39,8 @@ using T##RPtr = const std::unique_ptr<T> &;		   /* Reference to unique */\
 using T##ConstRPtr = const std::unique_ptr<const T> &; /* Reference to const unique */\
 using T##SPtr = std::shared_ptr<T>;                /* Shared pointer (OWNING) */\
 using T##ConstSPtr = std::shared_ptr<const T>;     /* Shared const pointer (OWNING) */\
-using T##OPtr = luxrays::observer_ptr<T>;		   /* Raw pointer */\
-using T##ConstOPtr = luxrays::observer_ptr<const T>;   /* Raw const pointer */\
+using T##Ptr = luxrays::observer_ptr<T>;		   /* Raw pointer */\
+using T##ConstPtr = luxrays::observer_ptr<const T>;   /* Raw const pointer */\
 using T##Ptr = luxrays::observer_ptr<T> ;          /* Raw pointer */\
 using T##ConstPtr = luxrays::observer_ptr<const T>;/* Raw const pointer */\
 

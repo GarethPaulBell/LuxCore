@@ -33,7 +33,7 @@ class ClearVolume : public Volume {
 public:
 	ClearVolume(
 		TextureConstRef iorTex,
-		TextureConstOPtr emiTex,
+		TextureConstPtr emiTex,
 		TextureConstRef a
 	);
 

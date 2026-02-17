@@ -29,12 +29,12 @@ using namespace slg;
 // LuxRender GlossyTranslucent material porting.
 //------------------------------------------------------------------------------
 
-GlossyTranslucentMaterial::GlossyTranslucentMaterial(TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
-		TextureConstOPtr emitted, TextureConstOPtr bump,
-		TextureConstOPtr kd, TextureConstOPtr kt, TextureConstOPtr ks, TextureConstOPtr ks2,
-		TextureConstOPtr u, TextureConstOPtr u2, TextureConstOPtr v, TextureConstOPtr v2,
-		TextureConstOPtr ka, TextureConstOPtr ka2, TextureConstOPtr d, TextureConstOPtr d2,
-		TextureConstOPtr i, TextureConstOPtr i2, const bool mbounce, const bool mbounce2) :
+GlossyTranslucentMaterial::GlossyTranslucentMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
+		TextureConstPtr emitted, TextureConstPtr bump,
+		TextureConstPtr kd, TextureConstPtr kt, TextureConstPtr ks, TextureConstPtr ks2,
+		TextureConstPtr u, TextureConstPtr u2, TextureConstPtr v, TextureConstPtr v2,
+		TextureConstPtr ka, TextureConstPtr ka2, TextureConstPtr d, TextureConstPtr d2,
+		TextureConstPtr i, TextureConstPtr i2, const bool mbounce, const bool mbounce2) :
 			Material(frontTransp, backTransp, emitted, bump), Kd(kd), Kt(kt), Ks(ks), Ks_bf(ks2), nu(u), nu_bf(u2),
 			nv(v), nv_bf(v2), Ka(ka), Ka_bf(ka2), depth(d), depth_bf(d2), index(i),
 			index_bf(i2), multibounce(mbounce), multibounce_bf(mbounce2) {

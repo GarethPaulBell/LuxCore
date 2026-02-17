@@ -131,7 +131,7 @@ protected:
 	luxrays::BBox ComputeBBox(const luxrays::Point &orig) const;
 
 	const CameraType type;
-	VolumeConstOPtr volume;
+	VolumeConstPtr volume;
 };
 
 

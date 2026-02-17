@@ -70,7 +70,7 @@ typedef struct HitPoint_t {
 	luxrays::Transform localToWorld;
 	// Interior and exterior volume (this includes volume priority system
 	// computation and scene default world volume)
-	VolumeConstOPtr interiorVolume, exteriorVolume;
+	VolumeConstPtr interiorVolume, exteriorVolume;
 	u_int objectID;
 	bool fromLight, intoObject;
 	// If I got here going trough a shadow transparency. It can be used to disable MIS.

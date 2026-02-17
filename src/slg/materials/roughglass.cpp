@@ -31,12 +31,12 @@ using namespace slg;
 // LuxRender RoughGlass material porting.
 //------------------------------------------------------------------------------
 
-RoughGlassMaterial::RoughGlassMaterial(TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
-		TextureConstOPtr emitted, TextureConstOPtr bump,
-		TextureConstOPtr refl, TextureConstOPtr trans,
-		TextureConstOPtr exteriorIorFact, TextureConstOPtr interiorIorFact,
-		TextureConstOPtr u, TextureConstOPtr v,
-		TextureConstOPtr filmThickness, TextureConstOPtr filmIor) :
+RoughGlassMaterial::RoughGlassMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
+		TextureConstPtr emitted, TextureConstPtr bump,
+		TextureConstPtr refl, TextureConstPtr trans,
+		TextureConstPtr exteriorIorFact, TextureConstPtr interiorIorFact,
+		TextureConstPtr u, TextureConstPtr v,
+		TextureConstPtr filmThickness, TextureConstPtr filmIor) :
 			Material(frontTransp, backTransp, emitted, bump), Kr(refl), Kt(trans),
 			exteriorIor(exteriorIorFact), interiorIor(interiorIorFact), nu(u), nv(v),
 			filmThickness(filmThickness), filmIor(filmIor) {

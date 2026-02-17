@@ -30,12 +30,12 @@ namespace slg {
 
 class Metal2Material : public Material {
 public:
-	Metal2Material(TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
-			TextureConstOPtr emitted, TextureConstOPtr bump,
-			TextureConstOPtr nn, TextureConstOPtr kk, TextureConstOPtr u, TextureConstOPtr v);
-	Metal2Material(TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
-			TextureConstOPtr emitted, TextureConstOPtr bump,
-			FresnelTextureConstPtr ft, TextureConstOPtr u, TextureConstOPtr v);
+	Metal2Material(TextureConstPtr frontTransp, TextureConstPtr backTransp,
+			TextureConstPtr emitted, TextureConstPtr bump,
+			TextureConstPtr nn, TextureConstPtr kk, TextureConstPtr u, TextureConstPtr v);
+	Metal2Material(TextureConstPtr frontTransp, TextureConstPtr backTransp,
+			TextureConstPtr emitted, TextureConstPtr bump,
+			FresnelTextureConstPtr ft, TextureConstPtr u, TextureConstPtr v);
 
 	virtual MaterialType GetType() const { return METAL2; }
 	virtual BSDFEvent GetEventTypes() const { return GLOSSY | REFLECT; };
@@ -59,18 +59,18 @@ public:
 	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 	FresnelTextureConstPtr GetFresnel() const { return fresnelTex; }
-	TextureConstOPtr GetN() const { return n; }
-	TextureConstOPtr GetK() const { return k; }
-	TextureConstOPtr GetNu() const { return nu; }
-	TextureConstOPtr GetNv() const { return nv; }
+	TextureConstPtr GetN() const { return n; }
+	TextureConstPtr GetK() const { return k; }
+	TextureConstPtr GetNu() const { return nu; }
+	TextureConstPtr GetNv() const { return nv; }
 	
 private:
 	FresnelTextureConstPtr fresnelTex;
 	// For compatibility with the past
-	TextureConstOPtr n, k;
+	TextureConstPtr n, k;
 
-	TextureConstOPtr nu;
-	TextureConstOPtr nv;
+	TextureConstPtr nu;
+	TextureConstPtr nv;
 };
 
 }

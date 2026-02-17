@@ -82,7 +82,7 @@ void PathCPURenderThread::RenderFunc(std::stop_token stop_token) {
 
 		lightSampler = Sampler::FromProperties(
 			props, rndGen,
-			FilmOPtr(&engine->GetFilm()),
+			FilmPtr(&engine->GetFilm()),
 			engine->lightSampleSplatter,
 			engine->lightSamplerSharedData
 		);

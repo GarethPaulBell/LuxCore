@@ -117,8 +117,8 @@ void Camera::UpdateAuto(SceneConstRef scene) {
 				material.GetInteriorVolume();
 			if (!volume) {
 				volume = scene.HasDefaultWorldVolume() ?
-					VolumeConstOPtr(&scene.GetDefaultWorldVolume()) :
-					VolumeConstOPtr(nullptr);
+					VolumeConstPtr(&scene.GetDefaultWorldVolume()) :
+					VolumeConstPtr(nullptr);
 			}
 		}
 	}

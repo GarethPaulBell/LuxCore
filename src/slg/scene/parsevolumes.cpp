@@ -106,7 +106,7 @@ void Scene::ParseVolumes(const Properties &props) {
 		auto* v = dynamic_cast<const Volume *>(&m);
 		if (!v)
 			throw runtime_error(volName + " is not a volume and can not be used for default world volume");
-		defaultWorldVolume = VolumeConstOPtr(v);
+		defaultWorldVolume = VolumeConstPtr(v);
 
 		editActions.AddActions(MATERIALS_EDIT | MATERIAL_TYPES_EDIT);
 	}
@@ -121,10 +121,10 @@ VolumeUPtr Scene::CreateVolume(const u_int defaultVolID, const string &volName, 
 
 	auto& iorTex = GetTexture(props.Get(Property(propName + ".ior")(1.f)));
 	auto emissionTex = props.IsDefined(propName + ".emission") ?
-		TextureConstOPtr(
+		TextureConstPtr(
 			&GetTexture(props.Get(Property(propName + ".emission")(0.f, 0.f, 0.f)))
 		) :
-		TextureConstOPtr(nullptr);
+		TextureConstPtr(nullptr);
 	// Required to remove light source while editing the scene
 	if (
 		emissionTex &&

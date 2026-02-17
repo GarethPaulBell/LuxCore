@@ -29,7 +29,7 @@ namespace slg {
 
 class GlassMaterial : public Material {
 public:
-	using TexRef = TextureConstOPtr;
+	using TexRef = TextureConstPtr;
 	GlassMaterial(TexRef frontTransp, TexRef backTransp,
 			TexRef emitted, TexRef bump,
 			TexRef refl, TexRef trans,

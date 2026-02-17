@@ -134,7 +134,7 @@ SobolSampler::SobolSampler(
 	const u_int overlap,
 	SamplerSharedDataSPtr samplerSharedData
 ) :
-	Sampler(rnd, FilmOPtr(std::addressof(flm)), flmSplatter, imgSamplesEnable),
+	Sampler(rnd, FilmPtr(std::addressof(flm)), flmSplatter, imgSamplesEnable),
 	sharedData(static_pointer_cast<SobolSamplerSharedData>(samplerSharedData)),
 	sobolSequence(),
 	adaptiveStrength(adaptiveStr),

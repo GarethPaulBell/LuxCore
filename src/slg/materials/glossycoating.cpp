@@ -28,20 +28,20 @@ using namespace slg;
 //------------------------------------------------------------------------------
 
 GlossyCoatingMaterial::GlossyCoatingMaterial(
-	TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
-	TextureConstOPtr emitted, TextureConstOPtr bump,
+	TextureConstPtr frontTransp, TextureConstPtr backTransp,
+	TextureConstPtr emitted, TextureConstPtr bump,
 	MaterialConstPtr mB,
-	TextureConstOPtr ks, TextureConstOPtr u,
-	TextureConstOPtr v,
-	TextureConstOPtr ka, TextureConstOPtr d,
-	TextureConstOPtr i,
+	TextureConstPtr ks, TextureConstPtr u,
+	TextureConstPtr v,
+	TextureConstPtr ka, TextureConstPtr d,
+	TextureConstPtr i,
 const bool mbounce) :
 			Material(frontTransp, backTransp, emitted, bump), matBase(mB), Ks(ks), nu(u), nv(v),
 			Ka(ka), depth(d), index(i), multibounce(mbounce) {
 	glossiness = Min(ComputeGlossiness(nu, nv), matBase->GetGlossiness());
 }
 
-VolumeConstOPtr GlossyCoatingMaterial::GetInteriorVolume(const HitPoint &hitPoint,
+VolumeConstPtr GlossyCoatingMaterial::GetInteriorVolume(const HitPoint &hitPoint,
 		const float passThroughEvent) const {
 	if (interiorVolume)
 		return interiorVolume;
@@ -49,7 +49,7 @@ VolumeConstOPtr GlossyCoatingMaterial::GetInteriorVolume(const HitPoint &hitPoin
 		return matBase->GetInteriorVolume(hitPoint, passThroughEvent);
 }
 
-VolumeConstOPtr GlossyCoatingMaterial::GetExteriorVolume(const HitPoint &hitPoint,
+VolumeConstPtr GlossyCoatingMaterial::GetExteriorVolume(const HitPoint &hitPoint,
 		const float passThroughEvent) const {
 	if (exteriorVolume)
 		return exteriorVolume;

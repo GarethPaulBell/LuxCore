@@ -53,10 +53,10 @@ void PathVolumeInfo::AddVolume(VolumeConstRef vol) {
 	}
 
 	// Add the volume to the list
-	volumeList[volumeListSize++] = VolumeConstOPtr(&vol);
+	volumeList[volumeListSize++] = VolumeConstPtr(&vol);
 }
 
-void PathVolumeInfo::AddVolume(VolumeConstOPtr vol) {
+void PathVolumeInfo::AddVolume(VolumeConstPtr vol) {
 	if (!vol || volumeListSize == PATHVOLUMEINFO_SIZE) {
 		// Out of space, I just ignore the volume
 		return;
@@ -72,7 +72,7 @@ void PathVolumeInfo::AddVolume(VolumeConstOPtr vol) {
 	volumeList[volumeListSize++] = vol;
 }
 
-void PathVolumeInfo::RemoveVolume(VolumeConstOPtr vol) {
+void PathVolumeInfo::RemoveVolume(VolumeConstPtr vol) {
 	if (!vol || volumeListSize == 0) {
 		// empty volume list
 		return;
@@ -84,7 +84,7 @@ void PathVolumeInfo::RemoveVolume(VolumeConstOPtr vol) {
 	for (u_int i = 0; i < volumeListSize; ++i) {
 		if (found) {
 			// Re-compact the list
-			SetVolume(i - 1, VolumeConstOPtr(&GetVolume(i)));
+			SetVolume(i - 1, VolumeConstPtr(&GetVolume(i)));
 		} else if (volumeList[i] == vol) {
 			// Found the volume to remove
 			found = true;
@@ -104,7 +104,7 @@ void PathVolumeInfo::RemoveVolume(VolumeConstOPtr vol) {
 	--volumeListSize;
 }
 
-VolumeConstOPtr PathVolumeInfo::SimulateAddVolume(VolumeConstOPtr vol) const {
+VolumeConstPtr PathVolumeInfo::SimulateAddVolume(VolumeConstPtr vol) const {
 	// A volume wins over current if and only if it is the same volume or has an
 	// higher priority
 
@@ -114,25 +114,25 @@ VolumeConstOPtr PathVolumeInfo::SimulateAddVolume(VolumeConstOPtr vol) const {
 			auto volPriority = vol->GetPriority();
 			return
 				curPriority > volPriority ?
-				VolumeConstOPtr(&GetCurrentVolume()) :
+				VolumeConstPtr(&GetCurrentVolume()) :
 				vol;
 		} else {
-			return VolumeConstOPtr(&GetCurrentVolume());
+			return VolumeConstPtr(&GetCurrentVolume());
 		}
 	} else return vol;
 }
 
-VolumeConstOPtr PathVolumeInfo::SimulateRemoveVolume(VolumeConstOPtr vol) const {
+VolumeConstPtr PathVolumeInfo::SimulateRemoveVolume(VolumeConstPtr vol) const {
 
 
 	if (not vol || volumeListSize == 0) {
 		// NULL volume or empty volume list
-		return HasCurrentVolume() ? VolumeConstOPtr(&GetCurrentVolume()) : nullptr;
+		return HasCurrentVolume() ? VolumeConstPtr(&GetCurrentVolume()) : nullptr;
 	}
 
 	// Update the current volume
 	bool found = false;
-	VolumeConstOPtr newCurrentVolume = nullptr;
+	VolumeConstPtr newCurrentVolume = nullptr;
 	for (u_int i = 0; i < volumeListSize; ++i) {
 		if (!found && &GetVolume(i) == vol) {
 			// Found the volume to remove
@@ -172,8 +172,8 @@ void PathVolumeInfo::Update(const BSDFEvent eventType, const BSDF &bsdf) {
 }
 
 bool PathVolumeInfo::CompareVolumePriorities(
-	VolumeConstOPtr vol1,
-	VolumeConstOPtr vol2
+	VolumeConstPtr vol1,
+	VolumeConstPtr vol2
 ) {
 	// Special cases: one or both are empty
 	if (not vol1) return false;
@@ -200,7 +200,7 @@ bool PathVolumeInfo::ContinueToTrace(const BSDF &bsdf) const {
 		// 2) I'm exiting an object, the material is NULL and I'm not leaving
 		// the current volume.
 
-		VolumeConstOPtr bsdfInteriorVol = bsdf.GetMaterialInteriorVolume();
+		VolumeConstPtr bsdfInteriorVol = bsdf.GetMaterialInteriorVolume();
 
 		// Condition #1
 		if (bsdf.hitPoint.intoObject && CompareVolumePriorities(currentVolume, bsdfInteriorVol))
@@ -220,9 +220,9 @@ bool PathVolumeInfo::ContinueToTrace(const BSDF &bsdf) const {
 }
 
 void  PathVolumeInfo::SetHitPointVolumes(HitPoint &hitPoint,
-		VolumeConstOPtr matInteriorVolume,
-		VolumeConstOPtr matExteriorVolume,
-		VolumeConstOPtr defaultWorldVolume) const {
+		VolumeConstPtr matInteriorVolume,
+		VolumeConstPtr matExteriorVolume,
+		VolumeConstPtr defaultWorldVolume) const {
 	// Set interior and exterior volumes
 
 	if (hitPoint.intoObject) {

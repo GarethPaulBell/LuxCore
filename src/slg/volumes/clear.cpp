@@ -31,7 +31,7 @@ using namespace slg;
 
 ClearVolume::ClearVolume(
 	TextureConstRef iorTex,
-	TextureConstOPtr emiTex,
+	TextureConstPtr emiTex,
 	TextureConstRef a
 ) : Volume(iorTex, emiTex), sigmaA(a) {}
 

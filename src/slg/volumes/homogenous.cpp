@@ -33,7 +33,7 @@ using namespace slg;
 
 HomogeneousVolume::HomogeneousVolume(
 	TextureConstRef iorTex,
-	TextureConstOPtr emiTex,
+	TextureConstPtr emiTex,
 	TextureConstRef a, TextureConstRef s, TextureConstRef g,
 	const bool multiScat
 ) :

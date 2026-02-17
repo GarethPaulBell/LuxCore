@@ -117,7 +117,7 @@ public:
 	static std::string LightSourceType2String(const LightSourceType type);
 
 	u_int lightSceneIndex;
-	VolumeConstOPtr volume;
+	VolumeConstPtr volume;
 };
 
 //------------------------------------------------------------------------------

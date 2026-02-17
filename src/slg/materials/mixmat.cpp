@@ -27,13 +27,13 @@ using namespace slg;
 //------------------------------------------------------------------------------
 
 MixMaterial::MixMaterial(
-	TextureConstOPtr frontTransp,
-	TextureConstOPtr backTransp,
-	TextureConstOPtr emitted,
-	TextureConstOPtr bump,
+	TextureConstPtr frontTransp,
+	TextureConstPtr backTransp,
+	TextureConstPtr emitted,
+	TextureConstPtr bump,
 	MaterialConstRef mA,
 	MaterialConstRef mB,
-	TextureConstOPtr mix
+	TextureConstPtr mix
 ) :
 	Material(frontTransp, backTransp, emitted, bump),
 	matA(&mA),
@@ -76,7 +76,7 @@ void MixMaterial::Preprocess() {
 	isDelta = IsDeltaImpl();
 }
 
-VolumeConstOPtr MixMaterial::GetInteriorVolume(const HitPoint &hitPoint,
+VolumeConstPtr MixMaterial::GetInteriorVolume(const HitPoint &hitPoint,
 		const float passThroughEvent) const {
 	if (interiorVolume)
 		return interiorVolume;
@@ -91,7 +91,7 @@ VolumeConstOPtr MixMaterial::GetInteriorVolume(const HitPoint &hitPoint,
 	}
 }
 
-VolumeConstOPtr MixMaterial::GetExteriorVolume(const HitPoint &hitPoint,
+VolumeConstPtr MixMaterial::GetExteriorVolume(const HitPoint &hitPoint,
 		const float passThroughEvent) const {
 	if (exteriorVolume)
 		return exteriorVolume;

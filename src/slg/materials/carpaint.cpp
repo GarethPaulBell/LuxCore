@@ -30,10 +30,10 @@ using namespace slg;
 //------------------------------------------------------------------------------
 
 CarPaintMaterial::CarPaintMaterial(
-	TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
-	TextureConstOPtr emitted, TextureConstOPtr bump,
-	TextureConstOPtr kd, TextureConstOPtr ks1, TextureConstOPtr ks2, TextureConstOPtr ks3, TextureConstOPtr m1, TextureConstOPtr m2, TextureConstOPtr m3,
-	TextureConstOPtr r1, TextureConstOPtr r2, TextureConstOPtr r3, TextureConstOPtr ka, TextureConstOPtr d) :
+	TextureConstPtr frontTransp, TextureConstPtr backTransp,
+	TextureConstPtr emitted, TextureConstPtr bump,
+	TextureConstPtr kd, TextureConstPtr ks1, TextureConstPtr ks2, TextureConstPtr ks3, TextureConstPtr m1, TextureConstPtr m2, TextureConstPtr m3,
+	TextureConstPtr r1, TextureConstPtr r2, TextureConstPtr r3, TextureConstPtr ka, TextureConstPtr d) :
 	Material(frontTransp, backTransp, emitted, bump), Kd(kd), Ks1(ks1), Ks2(ks2), Ks3(ks3), M1(m1), M2(m2), M3(m3),
 	R1(r1), R2(r2), R3(r3),	Ka(ka), depth(d) {
 	ComputeGlossiness(M1, M2, M3);

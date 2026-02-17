@@ -26,9 +26,9 @@ using namespace slg;
 // Mirror material
 //------------------------------------------------------------------------------
 
-MirrorMaterial::MirrorMaterial(TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
-		TextureConstOPtr emitted, TextureConstOPtr bump,
-		TextureConstOPtr refl) : Material(frontTransp, backTransp, emitted, bump), Kr(refl) {
+MirrorMaterial::MirrorMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
+		TextureConstPtr emitted, TextureConstPtr bump,
+		TextureConstPtr refl) : Material(frontTransp, backTransp, emitted, bump), Kr(refl) {
 }
 
 Spectrum MirrorMaterial::Evaluate(const HitPoint &hitPoint,

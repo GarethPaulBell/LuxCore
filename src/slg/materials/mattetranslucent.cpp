@@ -26,9 +26,9 @@ using namespace slg;
 // MatteTranslucent material
 //------------------------------------------------------------------------------
 
-MatteTranslucentMaterial::MatteTranslucentMaterial(TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
-		TextureConstOPtr emitted, TextureConstOPtr bump,
-		TextureConstOPtr refl, TextureConstOPtr trans) :
+MatteTranslucentMaterial::MatteTranslucentMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
+		TextureConstPtr emitted, TextureConstPtr bump,
+		TextureConstPtr refl, TextureConstPtr trans) :
 			Material(frontTransp, backTransp, emitted, bump),
 			Kr(refl), Kt(trans) {
 }

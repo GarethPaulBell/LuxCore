@@ -32,8 +32,8 @@ using namespace slg;
 // Material
 //------------------------------------------------------------------------------
 
-Material::Material(TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
-		TextureConstOPtr emitted, TextureConstOPtr bump) :
+Material::Material(TextureConstPtr frontTransp, TextureConstPtr backTransp,
+		TextureConstPtr emitted, TextureConstPtr bump) :
 		NamedObject("material"),
 		matID(0), lightID(0),
 		directLightSamplingType(DLS_AUTO), emittedImportance(1.f),
@@ -82,19 +82,19 @@ void Material::SetEmissionMap(ImageMapConstRef map) {
 }
 
 // Interior volume
-VolumeConstOPtr Material::GetInteriorVolume(const HitPoint &hitPoint,
+VolumeConstPtr Material::GetInteriorVolume(const HitPoint &hitPoint,
 	const float passThroughEvent) const { return interiorVolume; }
-VolumeConstOPtr Material::GetInteriorVolume() const { return interiorVolume; }
-void Material::SetInteriorVolume(VolumeConstOPtr vol) { interiorVolume = vol; }
+VolumeConstPtr Material::GetInteriorVolume() const { return interiorVolume; }
+void Material::SetInteriorVolume(VolumeConstPtr vol) { interiorVolume = vol; }
 void Material::SetInteriorVolume(VolumeConstRef vol) {
 	interiorVolume = std::addressof(vol);
 }
 
 // Exterior Volume
-VolumeConstOPtr Material::GetExteriorVolume(const HitPoint &hitPoint,
+VolumeConstPtr Material::GetExteriorVolume(const HitPoint &hitPoint,
 	const float passThroughEvent) const { return exteriorVolume; }
-VolumeConstOPtr Material::GetExteriorVolume() const { return exteriorVolume; }
-void Material::SetExteriorVolume(VolumeConstOPtr vol) { exteriorVolume = vol; }
+VolumeConstPtr Material::GetExteriorVolume() const { return exteriorVolume; }
+void Material::SetExteriorVolume(VolumeConstPtr vol) { exteriorVolume = vol; }
 void Material::SetExteriorVolume(VolumeConstRef vol) {
 	exteriorVolume = std::addressof(vol);
 }
@@ -104,7 +104,7 @@ void Material::SetExteriorVolume(VolumeConstRef vol) {
 Spectrum Material::GetPassThroughTransparency(const HitPoint &hitPoint,
 		const luxrays::Vector &localFixedDir, const float passThroughEvent,
 		const bool backTracing) const {
-	TextureConstOPtr transparencyTex = (hitPoint.intoObject != backTracing) ? frontTransparencyTex : backTransparencyTex;
+	TextureConstPtr transparencyTex = (hitPoint.intoObject != backTracing) ? frontTransparencyTex : backTransparencyTex;
 	
 	if (transparencyTex) {
 		const float weight = Clamp(transparencyTex->GetFloatValue(hitPoint), 0.f, 1.f);
@@ -356,7 +356,7 @@ string Material::MaterialType2String(const MaterialType type) {
 	}
 }
 
-float Material::ComputeGlossiness(TextureConstOPtr t1, TextureConstOPtr t2, TextureConstOPtr t3) {
+float Material::ComputeGlossiness(TextureConstPtr t1, TextureConstPtr t2, TextureConstPtr t3) {
 	const float glossinessT1 = t1 ? t1->Filter() : 1.f;
 	const float glossinessT2 = t2 ? t2->Filter() : 1.f;
 	const float glossinessT3 = t3 ? t3->Filter() : 1.f;
@@ -368,7 +368,7 @@ float Material::ComputeGlossiness(TextureConstOPtr t1, TextureConstOPtr t2, Text
 // IOR utilities
 //------------------------------------------------------------------------------
 
-float slg::ExtractExteriorIors(const HitPoint &hitPoint, TextureConstOPtr exteriorIor) {
+float slg::ExtractExteriorIors(const HitPoint &hitPoint, TextureConstPtr exteriorIor) {
 	float nc = 1.f;
 	if (exteriorIor)
 		nc = exteriorIor->GetFloatValue(hitPoint);
@@ -378,7 +378,7 @@ float slg::ExtractExteriorIors(const HitPoint &hitPoint, TextureConstOPtr exteri
 	return nc;
 }
 
-float slg::ExtractInteriorIors(const HitPoint &hitPoint, TextureConstOPtr interiorIor) {
+float slg::ExtractInteriorIors(const HitPoint &hitPoint, TextureConstPtr interiorIor) {
 	float nt = 1.f;
 	if (interiorIor)
 		nt = interiorIor->GetFloatValue(hitPoint);

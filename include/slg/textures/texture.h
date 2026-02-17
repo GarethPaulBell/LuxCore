@@ -130,7 +130,7 @@ void updtex(T texture, TextureConstRef oldTex, TextureRef newTex) {}
 
 template<>
 inline void updtex<>(
-	TextureOPtr texture,
+	TexturePtr texture,
 	const TextureConstRef oldTex,
 	TextureRef newTex
 ) {

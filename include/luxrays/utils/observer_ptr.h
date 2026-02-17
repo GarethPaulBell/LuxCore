@@ -15,7 +15,37 @@
  * See the License for the specific language governing permissions and     *
  * limitations under the License.                                          *
  ***************************************************************************/
-// vim: autoindent noexpandtab tabstop=4 shiftwidth=4
+
+/// Observer pointer
+///
+/// "a (not very) smart pointer type that takes no ownership responsibility for
+/// its pointees, i.e., for the objects it observes. As such, it is intended as
+/// a near drop-in replacement for raw pointer types, with the advantage that,
+/// as a vocabulary type, it indicates its intended use without need for
+/// detailed analysis by code readers."
+///
+/// Observer pointer is a non-owning, non-iterator, nullable pointer-like
+/// object.
+///
+/// It has been unfairly criticized and reduced to a simple template<typename
+/// T> using T*, but its capabilities are much greater:
+///
+/// - A default constructed observer_ptr will always be initialized to nullptr;
+///   a regular pointer may or may not be initialized, depending on the context.
+/// - observer_ptr only supports operations which make sense for a reference;
+///   this enforces correct usage:
+///     - operator[] is not implemented for observer_ptr, as this is an array
+///       operation.
+///     - Pointer arithmetic is not possible with observer_ptr, as these are
+///       iterator operations.
+/// - Two observer_ptrs have strict weak ordering on all implementations, which
+///   is not guaranteed for two arbitrary pointers. This is because operator< is
+///   implemented in terms of std::less for observer_ptr (as with std::unique_ptr
+///   and std::shared_ptr).
+/// - observer_ptr<void> appears to be unsupported, which may encourage the use
+///   of safer solutions (e.g. std::any and std::variant)
+
+
 
 #include <cstddef>	// for nullptr_t
 #include <utility>	// for std::swap
@@ -26,6 +56,10 @@ namespace luxrays {
 
 template <typename T>
 class observer_ptr {
+    static_assert(
+        !std::is_void_v<T>,
+        "Template parameter T cannot be void"
+    );
 public:
       using element_type = std::remove_extent_t<T>;
 
@@ -142,16 +176,6 @@ observer_ptr<const T> dynamic_observer_cast(const observer_ptr<const U>& r) noex
     else
         return observer_ptr<const T>{nullptr};
 }
-//template<class T, class U>
-//observer_ptr<T> dynamic_observer_cast( observer_ptr<U> && r ) noexcept
-//{
-    //(void) dynamic_cast< T* >( static_cast< U* >( 0 ) );
-
-    //typedef typename observer_ptr<T>::element_type E;
-
-    //E * p = dynamic_cast< E* >( r.get() );
-    //return p? observer_ptr<T>( std::move(r) ): observer_ptr<T>();
-//}
 
 template<class T, class U>
 observer_ptr<T> static_observer_cast(const observer_ptr<U>& r) noexcept
@@ -175,6 +199,40 @@ observer_ptr<const T> static_observer_cast(const observer_ptr<const U>& r) noexc
 template <typename T>
 void swap(observer_ptr<T>& lhs, observer_ptr<T>& rhs) noexcept {
 	lhs.swap(rhs);
+}
+
+
+// Comparison
+//
+template<typename T, typename U>
+bool
+operator<(observer_ptr<T> p1, observer_ptr<U> p2)
+{
+  using myless_t = std::less<
+      typename std::common_type< typename std::add_pointer<T>::type, typename std::add_pointer<U>::type >::type
+  >;
+  return myless_t{}(p1.get(), p2.get());
+}
+
+template<typename T, typename U>
+bool
+operator>(observer_ptr<T> p1, observer_ptr<U> p2)
+{
+  return p2 < p1;
+}
+
+template<typename T, typename U>
+bool
+operator<=(observer_ptr<T> p1, observer_ptr<U> p2)
+{
+  return !(p2 < p1);
+}
+
+template<typename T, typename U>
+bool
+operator>=(observer_ptr<T> p1, observer_ptr<U> p2)
+{
+  return !(p1 < p2);
 }
 
 } // namespace luxrays
@@ -203,3 +261,5 @@ void serialize(Archive& ar, luxrays::observer_ptr<T>& ptr, const unsigned int ve
 
 } // namespace serialization
 } // namespace boost
+
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

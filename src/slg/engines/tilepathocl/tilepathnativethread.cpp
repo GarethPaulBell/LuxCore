@@ -117,7 +117,7 @@ void TilePathNativeRenderThread::RenderThreadImpl(std::stop_token stop_token) {
 		tileFilm->Reset();
 		if (tileFilm->GetDenoiser().IsEnabled())
 			tileFilm->GetDenoiser().SetReferenceFilm(
-				FilmOPtr(&engine->GetFilm()),
+				FilmPtr(&engine->GetFilm()),
 				tileWork.GetCoord().x,
 				tileWork.GetCoord().y
 			);

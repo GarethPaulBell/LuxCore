@@ -287,7 +287,7 @@ protected:
 
 	Transform trans;
 	bool transSwapsHandedness;
-	TriangleMeshOPtr mesh;
+	TriangleMeshPtr mesh;
 
 	mutable float cachedArea;
 	mutable BBox cachedBBox;
@@ -375,7 +375,7 @@ protected:
 	}
 
 	MotionSystem motionSystem;
-	TriangleMeshOPtr mesh;
+	TriangleMeshPtr mesh;
 
 	mutable float cachedArea;
 	mutable BBox cachedBBox;

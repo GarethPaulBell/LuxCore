@@ -28,11 +28,11 @@ using namespace slg;
 // Glass material
 //------------------------------------------------------------------------------
 
-GlassMaterial::GlassMaterial(TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
-		TextureConstOPtr emitted, TextureConstOPtr bump,
-		TextureConstOPtr refl, TextureConstOPtr trans,
-		TextureConstOPtr exteriorIorFact, TextureConstOPtr interiorIorFact,
-		TextureConstOPtr B, TextureConstOPtr filmThickness, TextureConstOPtr filmIor) :
+GlassMaterial::GlassMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
+		TextureConstPtr emitted, TextureConstPtr bump,
+		TextureConstPtr refl, TextureConstPtr trans,
+		TextureConstPtr exteriorIorFact, TextureConstPtr interiorIorFact,
+		TextureConstPtr B, TextureConstPtr filmThickness, TextureConstPtr filmIor) :
 			Material(frontTransp, backTransp, emitted, bump),
 			Kr(refl), Kt(trans), exteriorIor(exteriorIorFact), interiorIor(interiorIorFact),
 			cauchyB(B), filmThickness(filmThickness), filmIor(filmIor) {

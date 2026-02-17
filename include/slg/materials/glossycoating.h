@@ -31,17 +31,17 @@ namespace slg {
 class GlossyCoatingMaterial : public Material {
 public:
 	GlossyCoatingMaterial(
-		TextureConstOPtr frontTransp,
-		TextureConstOPtr backTransp,
-		TextureConstOPtr emitted,
-		TextureConstOPtr bump,
+		TextureConstPtr frontTransp,
+		TextureConstPtr backTransp,
+		TextureConstPtr emitted,
+		TextureConstPtr bump,
 		MaterialConstPtr mB,
-		TextureConstOPtr ks,
-		TextureConstOPtr u,
-		TextureConstOPtr v,
-		TextureConstOPtr ka,
-		TextureConstOPtr d,
-		TextureConstOPtr i,
+		TextureConstPtr ks,
+		TextureConstPtr u,
+		TextureConstPtr v,
+		TextureConstPtr ka,
+		TextureConstPtr d,
+		TextureConstPtr i,
 		const bool mbounce
 	);
 
@@ -59,9 +59,9 @@ public:
 		const luxrays::Vector &localFixedDir, const float passThroughEvent,
 		const bool backTracing) const;
 
-	virtual VolumeConstOPtr GetInteriorVolume(const HitPoint &hitPoint,
+	virtual VolumeConstPtr GetInteriorVolume(const HitPoint &hitPoint,
 		const float passThroughEvent) const;
-	virtual VolumeConstOPtr GetExteriorVolume(const HitPoint &hitPoint,
+	virtual VolumeConstPtr GetExteriorVolume(const HitPoint &hitPoint,
 		const float passThroughEvent) const;
 
 	virtual float GetEmittedRadianceY(const float oneOverPrimitiveArea) const;
@@ -105,12 +105,12 @@ protected:
 
 private:
 	MaterialConstPtr matBase;
-	TextureConstOPtr Ks;
-	TextureConstOPtr nu;
-	TextureConstOPtr nv;
-	TextureConstOPtr Ka;
-	TextureConstOPtr depth;
-	TextureConstOPtr index;
+	TextureConstPtr Ks;
+	TextureConstPtr nu;
+	TextureConstPtr nv;
+	TextureConstPtr Ka;
+	TextureConstPtr depth;
+	TextureConstPtr index;
 	const bool multibounce;
 };
 

@@ -129,10 +129,10 @@ public:
 	u_int GetMaterialID() const { return material->GetID(); }
 	u_int GetLightID() const { return material->GetLightID(); }
 
-	VolumeConstOPtr GetMaterialInteriorVolume() const {
+	VolumeConstPtr GetMaterialInteriorVolume() const {
 		return material->GetInteriorVolume(hitPoint, hitPoint.passThroughEvent);
 	}
-	VolumeConstOPtr GetMaterialExteriorVolume() const {
+	VolumeConstPtr GetMaterialExteriorVolume() const {
 		return material->GetExteriorVolume(hitPoint, hitPoint.passThroughEvent);
 	}
 

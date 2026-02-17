@@ -269,7 +269,7 @@ protected:
 	//--------------------------------------------------------------------------
 
 	// This volume is (optionally) applied to rays hitting nothing
-	VolumeConstOPtr defaultWorldVolume;
+	VolumeConstPtr defaultWorldVolume;
 
 
 	ExtMeshCache extMeshCache; // Mesh objects cache

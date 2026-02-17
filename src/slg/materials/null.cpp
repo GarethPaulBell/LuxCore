@@ -26,7 +26,7 @@ using namespace slg;
 // Null material
 //------------------------------------------------------------------------------
 
-NullMaterial::NullMaterial(TextureConstOPtr frontTransp, TextureConstOPtr backTransp) :
+NullMaterial::NullMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp) :
 		Material(frontTransp, backTransp, nullptr, nullptr) {
 }
 

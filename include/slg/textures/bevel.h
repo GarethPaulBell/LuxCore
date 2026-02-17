@@ -63,7 +63,7 @@ public:
 	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
-	TextureConstOPtr tex;
+	TextureConstPtr tex;
 	const float radius;
 };
 

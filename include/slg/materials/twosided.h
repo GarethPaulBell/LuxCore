@@ -31,8 +31,8 @@ namespace slg {
 
 class TwoSidedMaterial : public Material {
 public:
-	TwoSidedMaterial(TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
-			TextureConstOPtr emitted, TextureConstOPtr bump,
+	TwoSidedMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
+			TextureConstPtr emitted, TextureConstPtr bump,
 			MaterialConstRef frontMat, MaterialConstRef backMat);
 
 	virtual MaterialType GetType() const { return TWOSIDED; }
@@ -45,9 +45,9 @@ public:
 		const luxrays::Vector &localFixedDir, const float passThroughEvent,
 		const bool backTracing) const;
 
-	virtual VolumeConstOPtr GetInteriorVolume(const HitPoint &hitPoint,
+	virtual VolumeConstPtr GetInteriorVolume(const HitPoint &hitPoint,
 		const float passThroughEvent) const;
-	virtual VolumeConstOPtr GetExteriorVolume(const HitPoint &hitPoint,
+	virtual VolumeConstPtr GetExteriorVolume(const HitPoint &hitPoint,
 		const float passThroughEvent) const;
 
 	virtual float GetEmittedRadianceY(const float oneOverPrimitiveArea) const;

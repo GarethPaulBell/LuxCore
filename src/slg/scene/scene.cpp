@@ -670,10 +670,10 @@ bool Scene::Intersect(IntersectionDevice *device,
 			dataSet->GetAccelerator(ACCEL_EMBREE)->Intersect(ray, rayHit);
 
 		bool bevelContinueToTrace = !hit;
-		VolumeConstOPtr rayVolume =
+		VolumeConstPtr rayVolume =
 			volInfo->HasCurrentVolume() ?
-			VolumeConstOPtr(std::addressof(volInfo->GetCurrentVolume())) :
-			VolumeConstOPtr();
+			VolumeConstPtr(std::addressof(volInfo->GetCurrentVolume())) :
+			VolumeConstPtr();
 		if (hit) {
 			bsdf->Init(
 				fromLight,

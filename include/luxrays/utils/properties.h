@@ -533,6 +533,7 @@ public:
 	Properties& operator=(Properties &&) noexcept;
 
 	Properties() { }
+
 	/*!
 	 * \brief Sets the list of Property from a text file .
 	 * 

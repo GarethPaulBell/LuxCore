@@ -75,7 +75,7 @@ public:
 	) const;
 	SamplerSharedDataUPtr AllocSamplerSharedData(
 		const luxrays::RandomGeneratorUPtr & rndGen,
-		FilmOPtr film
+		FilmPtr film
 	) const;
 
 	SamplerUPtr AllocSampler(

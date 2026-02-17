@@ -27,9 +27,9 @@ using namespace slg;
 //------------------------------------------------------------------------------
 
 RoughMatteTranslucentMaterial::RoughMatteTranslucentMaterial(
-		TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
-		TextureConstOPtr emitted, TextureConstOPtr bump,
-		TextureConstOPtr refl, TextureConstOPtr trans, TextureConstOPtr s) :
+		TextureConstPtr frontTransp, TextureConstPtr backTransp,
+		TextureConstPtr emitted, TextureConstPtr bump,
+		TextureConstPtr refl, TextureConstPtr trans, TextureConstPtr s) :
 			Material(frontTransp, backTransp, emitted, bump), Kr(refl), Kt(trans), sigma(s) {
 }
 

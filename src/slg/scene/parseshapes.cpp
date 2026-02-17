@@ -343,7 +343,7 @@ ExtTriangleMeshUPtr Scene::CreateShape(const string &shapeName, const Properties
 
 		shape = std::make_unique<SubdivShape>(
 			//camera,
-			CameraOPtr(&GetCamera()),
+			CameraPtr(&GetCamera()),
 			static_cast<ExtTriangleMesh&>(extMeshCache.GetExtMesh(sourceMeshName)),
 			maxLevel,
 			maxEdgeScreenSize,
@@ -430,7 +430,7 @@ ExtTriangleMeshUPtr Scene::CreateShape(const string &shapeName, const Properties
 		).Get<bool>();
 
 		shape = std::make_unique<SimplifyShape>(
-			CameraOPtr(&GetCamera()),
+			CameraPtr(&GetCamera()),
 			static_cast<ExtTriangleMesh&>(extMeshCache.GetExtMesh(sourceMeshName)),
 			target,
 			edgeScreenSize,

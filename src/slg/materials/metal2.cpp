@@ -29,14 +29,14 @@ using namespace slg;
 //------------------------------------------------------------------------------
 
 Metal2Material::Metal2Material(
-	TextureConstOPtr frontTransp,
-	TextureConstOPtr backTransp,
-	TextureConstOPtr emitted,
-	TextureConstOPtr bump,
-	TextureConstOPtr nn,
-	TextureConstOPtr kk,
-	TextureConstOPtr u,
-	TextureConstOPtr v
+	TextureConstPtr frontTransp,
+	TextureConstPtr backTransp,
+	TextureConstPtr emitted,
+	TextureConstPtr bump,
+	TextureConstPtr nn,
+	TextureConstPtr kk,
+	TextureConstPtr u,
+	TextureConstPtr v
 ) :
 	Material(frontTransp, backTransp, emitted, bump),
 	fresnelTex(nullptr),
@@ -49,13 +49,13 @@ Metal2Material::Metal2Material(
 }
 
 Metal2Material::Metal2Material(
-	TextureConstOPtr frontTransp,
-	TextureConstOPtr backTransp,
-	TextureConstOPtr emitted,
-	TextureConstOPtr bump,
+	TextureConstPtr frontTransp,
+	TextureConstPtr backTransp,
+	TextureConstPtr emitted,
+	TextureConstPtr bump,
 	FresnelTextureConstPtr ft,
-	TextureConstOPtr u,
-	TextureConstOPtr v)
+	TextureConstPtr u,
+	TextureConstPtr v)
 	:
 	Material(frontTransp, backTransp, emitted, bump),
 	fresnelTex(ft),

@@ -50,15 +50,15 @@ public:
 	VolumeConstRef GetVolume(const u_int i) const { return *volumeList[i]; }
 	const u_int GetListSize() const { return volumeListSize; }
 
-	void AddVolume(VolumeConstOPtr vol);
+	void AddVolume(VolumeConstPtr vol);
 	void AddVolume(VolumeConstRef vol);
-	void RemoveVolume(VolumeConstOPtr vol);
-	void SetCurrentVolume(VolumeConstOPtr vol) { currentVolume = vol; }
+	void RemoveVolume(VolumeConstPtr vol);
+	void SetCurrentVolume(VolumeConstPtr vol) { currentVolume = vol; }
 	void SetCurrentVolume(VolumeConstRef vol) { currentVolume = std::addressof(vol); }
-	void SetVolume(const u_int i, VolumeConstOPtr vol) { volumeList[i] = vol; }
+	void SetVolume(const u_int i, VolumeConstPtr vol) { volumeList[i] = vol; }
 
-	VolumeConstOPtr SimulateRemoveVolume(VolumeConstOPtr vol) const;
-	VolumeConstOPtr SimulateAddVolume(VolumeConstOPtr) const;
+	VolumeConstPtr SimulateRemoveVolume(VolumeConstPtr vol) const;
+	VolumeConstPtr SimulateAddVolume(VolumeConstPtr) const;
 
 	void SetScatteredStart(const bool v) { scatteredStart = v; }
 	bool IsScatteredStart() const { return scatteredStart; }
@@ -68,20 +68,20 @@ public:
 
 	void SetHitPointVolumes(
 		HitPoint &hitPoint,
-		VolumeConstOPtr matInteriorVolume,
-		VolumeConstOPtr matExteriorVolume,
-		VolumeConstOPtr defaultWorldVolume
+		VolumeConstPtr matInteriorVolume,
+		VolumeConstPtr matExteriorVolume,
+		VolumeConstPtr defaultWorldVolume
 	) const;
 
 private:
 	static bool CompareVolumePriorities(
-		VolumeConstOPtr vol1,
-		VolumeConstOPtr vol2
+		VolumeConstPtr vol1,
+		VolumeConstPtr vol2
 	);
 
-	VolumeConstOPtr currentVolume;
+	VolumeConstPtr currentVolume;
 	// Using a fixed array here mostly to have the same code as the OpenCL implementation
-	std::array<VolumeConstOPtr, PATHVOLUMEINFO_SIZE> volumeList;
+	std::array<VolumeConstPtr, PATHVOLUMEINFO_SIZE> volumeList;
 	u_int volumeListSize;
 
 	bool scatteredStart;
