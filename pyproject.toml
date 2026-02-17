@@ -12,7 +12,7 @@ dynamic = ["version"]
 dependencies = [
   "numpy >= 2; python_version > '3.8'",
   "numpy < 2; python_version <= '3.8'",
-  "nvidia-cuda-nvrtc == 13.0.88; sys_platform != 'darwin'",
+  "nvidia-cuda-nvrtc == 13.1.115; sys_platform != 'darwin'",
 ]
 requires-python = ">= 3.10"
 description = "LuxCore Python bindings"
