@@ -460,39 +460,53 @@ def main(
             ],
             capture_output=True,
         )
+        for line in res.stderr.splitlines():
+            logger.info(line)
         logger.info("Integrity check: OK")
 
-        # Installing profiles
+        # Installing profiles in source tree
         logger_step("Installing profiles")
-        run_conan(
+        res = run_conan(
             [
                 "config",
                 "install-pkg",
+                "-vvv",
                 f"luxcoreconf/{release}@luxcore/luxcore",
-            ]
+            ],
+            capture_output=True,
+            cwd = tmpdir
         )
+        for line in res.stderr.splitlines():
+            logger.info(line)
 
-        # Generate & deploy
-        # About release/debug mixing, see
-        # https://github.com/conan-io/conan/issues/12656
-        logger_step("Generating...")
-        generator = "Ninja Multi-Config"
-        # Next line is a workaround to replace {{profile_dir}}, which is
-        # not well handled by deployer...
-        CONAN_ENV["LUX_PROFILE_DIR"] = str(
-            output_dir.absolute() / ".conan2" / "profiles"
-        )
-        logger.info(
-            f"Conan profile directory is %s" % CONAN_ENV["LUX_PROFILE_DIR"]
-        )
-        run_conan = (
+        # Installing in destination (deploy)
+        print()
+        profile_dir = output_dir.absolute() / ".conan2" / "profiles"
+        res = run_conan(
             [
                 "config",
                 "install",
                 "--type=dir",
-                f"--target-folder={str(_conan_home)}",
-            ]
+                f"--target-folder={str(profile_dir)}",
+                "-vvv",
+                conan_home() / "profiles",
+            ],
+            capture_output=True,
         )
+        for line in res.stderr.splitlines():
+            logger.info(line)
+
+        # Generate & deploy
+        logger_step("Generating...")
+        # About release/debug mixing, see
+        # https://github.com/conan-io/conan/issues/12656
+        generator = "Ninja Multi-Config"
+        # Next line is a workaround to replace {{profile_dir}}, which is
+        # not well handled by deployer...
+        profile_dir.mkdir(parents=True, exist_ok=True)
+        CONAN_ENV["LUX_PROFILE_DIR"] = str(profile_dir)
+
+        logger.info(f"Conan profile directory is %s" % profile_dir)
         main_block = [
             "install",
             "--build=missing",
@@ -521,7 +535,7 @@ def main(
                 "MinSizeRel",
             ]
         for build_type in build_types:
-            logger_step("Generating '{build_type}'")
+            logger_step(f"Generating '{build_type}'")
             end_block = [
                 f"--settings=&:build_type={build_type}",
                 Path(
