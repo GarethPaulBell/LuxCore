@@ -11,7 +11,7 @@
 #export CIBW_DEBUG_KEEP_CONTAINER=TRUE
 
 python_version_minor=$(python -c 'import sys; print(sys.version_info[1])')
-python_version_minor=12
+python_version_minor=14
 
 act workflow_dispatch \
   --pull \

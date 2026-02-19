@@ -38,7 +38,7 @@ def logger_step(step):
     """Log a new step."""
     length = 12
     stars = "=" * length
-    print()
+    logger.info("")
     logger.info(stars + "  " + step + "  " + stars)
 
 
@@ -307,6 +307,7 @@ def main(
         "output_dir",
         "out",
     )
+    output_dir = Path(output_dir).absolute()
 
     # Set-up logger
     msg = f"{Colors.OKBLUE}BEGIN{Colors.ENDC}"
@@ -464,7 +465,7 @@ def main(
             logger.info(line)
         logger.info("Integrity check: OK")
 
-        # Installing profiles in source tree
+        # Install profiles in source tree
         logger_step("Installing profiles")
         res = run_conan(
             [
@@ -474,14 +475,17 @@ def main(
                 f"luxcoreconf/{release}@luxcore/luxcore",
             ],
             capture_output=True,
-            cwd = tmpdir
+            cwd=tmpdir,
         )
         for line in res.stderr.splitlines():
             logger.info(line)
 
-        # Installing in destination (deploy)
+        # Install profiles in destination (for deployment)
         print()
+        tmp_profile_dir = tmpdir / ".conan2" / "profiles"
         profile_dir = output_dir.absolute() / ".conan2" / "profiles"
+        profile_dir.mkdir(parents=True, exist_ok=True)
+        logger.info("Deploying profiles from %s to %s", tmp_profile_dir, profile_dir)
         res = run_conan(
             [
                 "config",
@@ -489,7 +493,7 @@ def main(
                 "--type=dir",
                 f"--target-folder={str(profile_dir)}",
                 "-vvv",
-                conan_home() / "profiles",
+                tmp_profile_dir,
             ],
             capture_output=True,
         )
@@ -503,7 +507,6 @@ def main(
         generator = "Ninja Multi-Config"
         # Next line is a workaround to replace {{profile_dir}}, which is
         # not well handled by deployer...
-        profile_dir.mkdir(parents=True, exist_ok=True)
         CONAN_ENV["LUX_PROFILE_DIR"] = str(profile_dir)
 
         logger.info(f"Conan profile directory is %s" % profile_dir)
