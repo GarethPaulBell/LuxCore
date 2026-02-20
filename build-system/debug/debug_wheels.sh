@@ -14,6 +14,7 @@ python_version_minor=$(python -c 'import sys; print(sys.version_info[1])')
 python_version_minor=14
 
 act workflow_dispatch \
+  -P ubuntu-latest=catthehacker/ubuntu:act-latest \
   --pull \
   --action-offline-mode \
   --workflows ".github/workflows/wheel-builder.yml" \

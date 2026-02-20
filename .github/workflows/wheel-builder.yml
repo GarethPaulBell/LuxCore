@@ -82,14 +82,14 @@ jobs:
 
       - name: Checkout main repository (standard context)
         if: ${{ !env.ACT }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ inputs.repository }}
           ref: ${{ inputs.ref }}
 
       - name: Checkout main repository (act context)
         if: env.ACT
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Get current commit
         id: current-commit
@@ -119,7 +119,7 @@ jobs:
             echo "CONAN_HOME=${_conan_home}" >> $GITHUB_ENV
 
       - name: Configure ccache
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const workspace = String.raw`${{ github.workspace }}`;
@@ -146,7 +146,7 @@ jobs:
           sudo apt-get update -y
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+        uses: hendrikmuhs/ccache-action@v1
         with:
           create-symlink: false
           variant: ${{ env.cache-variant }}
@@ -174,7 +174,7 @@ jobs:
 
       - name: Set MacOS deployment target and other set-ups
         if: runner.os == 'macOS'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           # Minimum targets driven by:
           # Intel: libomp
@@ -230,7 +230,7 @@ jobs:
       # I found to pass a calculated environment var to CMake build step
       - name: Set M4 env var
         if: runner.os != 'Windows'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             if ('${{ runner.arch }}' == 'X64') {
@@ -271,7 +271,7 @@ jobs:
 
       # Build wheel
       - name: Build wheels
-        uses: pypa/cibuildwheel@v3.3.1
+        uses: pypa/cibuildwheel@v3.1.1
         env:
           CIBW_BUILD_FRONTEND: build
           CIBW_BUILD_VERBOSITY: 1
@@ -392,7 +392,7 @@ jobs:
       - name: Save dependency cache
         if: always()
         id: cache-deps-save
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: conan-cache
           key: deps-${{ matrix.os }}-${{ matrix.python-minor}}-${{ hashFiles('**/conan-cache') }}
@@ -402,7 +402,7 @@ jobs:
         #uses: mxschmitt/action-tmate@v3
 
       # Upload artifacts
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         id: upload
         with:
           name: cibw-wheels-${{ matrix.os }}-${{ matrix.python-minor }}
@@ -418,7 +418,7 @@ jobs:
       attestation-url: ${{ steps.attestation-step.outputs.attestation-url }}
 
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         if: ${{ !env.ACT }}
         with:
           pattern: cibw-wheels-*
@@ -428,6 +428,6 @@ jobs:
       - name: Generate artifact attestations
         id: attestation-step
         if: ${{ !env.ACT }}
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v3
         with:
           subject-path: ${{ github.workspace }}/dist/*
