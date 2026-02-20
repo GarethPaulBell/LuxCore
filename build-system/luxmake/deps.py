@@ -37,7 +37,7 @@ URL_SUFFIXES = {
 def logger_step(step):
     """Log a new step."""
     length = 12
-    stars = "=" * length
+    stars = "*" * length
     logger.info("")
     logger.info(stars + "  " + step + "  " + stars)
 
@@ -313,8 +313,8 @@ def main(
     msg = f"{Colors.OKBLUE}BEGIN{Colors.ENDC}"
     logger.info(msg)
 
-    # Get settings
-    logger_step("Reading settings")
+    # Get settings & ensure requirements
+    logger_step("Checking requirements")
     with open(
         "build-system/build-settings.json",
         encoding="utf-8",
@@ -465,8 +465,9 @@ def main(
             logger.info(line)
         logger.info("Integrity check: OK")
 
-        # Install profiles in source tree
+        # Install profiles in conan home
         logger_step("Installing profiles")
+
         res = run_conan(
             [
                 "config",
@@ -475,17 +476,16 @@ def main(
                 f"luxcoreconf/{release}@luxcore/luxcore",
             ],
             capture_output=True,
-            cwd=tmpdir,
         )
         for line in res.stderr.splitlines():
             logger.info(line)
 
-        # Install profiles in destination (for deployment)
-        print()
-        tmp_profile_dir = tmpdir / ".conan2" / "profiles"
+        # Install profiles into destination ("deploy")
+        src_profile_dir = conan_home() / "profiles"
         profile_dir = output_dir.absolute() / ".conan2" / "profiles"
         profile_dir.mkdir(parents=True, exist_ok=True)
-        logger.info("Deploying profiles from %s to %s", tmp_profile_dir, profile_dir)
+        logger.info("")
+        logger.info("Deploying profiles from %s to %s", src_profile_dir, profile_dir)
         res = run_conan(
             [
                 "config",
@@ -493,7 +493,7 @@ def main(
                 "--type=dir",
                 f"--target-folder={str(profile_dir)}",
                 "-vvv",
-                tmp_profile_dir,
+                src_profile_dir,
             ],
             capture_output=True,
         )
@@ -547,16 +547,21 @@ def main(
                     "conanfile.py",
                 ),
             ]
-            run_conan(main_block + end_block)
+            res = run_conan(main_block + end_block, capture_output=True)
+            for line in res.stderr.splitlines():
+                logger.info(line)
 
         # Show presets
-        subprocess.run(
+        res = subprocess.run(
             [
                 "cmake",
                 "--list-presets=build",
             ],
             check=False,
+            capture_output=True,
         )
+        for line in res.stderr.splitlines():
+            logger.info(line)
         print(
             "",
             flush=True,
