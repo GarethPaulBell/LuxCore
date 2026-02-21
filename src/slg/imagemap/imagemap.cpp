@@ -1001,7 +1001,7 @@ void ImageMap::Init(
 
 	// Read image
 	bool res = in->read_image(
-		0, bestMipmapIndex, 0, channelCount, td, pixelStorage->ToSpan()
+		0, bestMipmapIndex, 0, channelCount, td, pixelStorage->GetPixelsData()
 	);
 	if (not res) {
 		auto error = in->geterror();
