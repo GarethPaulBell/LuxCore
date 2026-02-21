@@ -85,7 +85,7 @@ bool luxrays::SetThreadRRPriority(const luxrays::JThreadUPtr& thread, int pri) {
 
 
 void luxrays::SetThreadName(const luxrays::JThreadUPtr& thread, const std::string name) {
-#if defined (__GNUC__) || defined (__APPLE__) || defined(__CYGWIN__) || defined(__OpenBSD__) || defined(__FreeBSD__)
+#if defined (__linux__)
 	{
 		auto handle = thread->native_handle();
 		assert(name.size() < 16);
@@ -98,6 +98,12 @@ void luxrays::SetThreadName(const luxrays::JThreadUPtr& thread, const std::strin
 		std::wstring stemp = std::wstring(name.begin(), name.end());
 		LPCWSTR sw = stemp.c_str();
 		HRESULT hr = SetThreadDescription(handle, sw);
+	}
+#elif defined (__APPLE__) || defined(__OpenBSD__) || defined(__FreeBSD__)
+	{
+		assert(name.size() < 16);
+		int rc = pthread_setname_np(name.c_str());
+		assert(!rc);
 	}
 #endif
 }
