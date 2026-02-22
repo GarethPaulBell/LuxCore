@@ -94,7 +94,7 @@ def ensure_conan_app():
     """Ensure Conan is installed."""
     if not (res := shutil.which("conan")):
         fail("Conan not found!")
-    return res
+    return Path(res)
 
 
 def run_conan(
@@ -103,22 +103,15 @@ def run_conan(
 ):
     """Run conan statement."""
     conan_app = ensure_conan_app()
-    if "env" not in kwargs:
-        kwargs["env"] = CONAN_ENV
-    else:
-        kwargs["env"].update(CONAN_ENV)
-    kwargs["env"].update(os.environ)
-    kwargs["text"] = kwargs.get(
-        "text",
-        True,
-    )
+    kwargs["env"] = os.environ.update(CONAN_ENV)
+    kwargs["text"] = kwargs.get("text", True)
     args = [conan_app] + args
     logger.debug(args)
     res = subprocess.run(
         args,
         shell=False,
         check=False,
-        **kwargs,
+        **kwargs
     )
     if res.returncode:
         fail("Error while executing conan:\n%s\n%s", res.stdout, res.stderr)
@@ -260,7 +253,6 @@ def install(
 
 def conan_home():
     """Get Conan home path."""
-    conan_app = ensure_conan_app()
     res = run_conan(
         ["config", "home"],
         capture_output=True,
@@ -288,13 +280,9 @@ def copy_global_conf(
     )
 
 
-def set_global_conf(
-    cache_dir,
-):
+def set_global_conf(cache_dir):
     """Set global.conf file."""
-    home = Path(CONAN_ENV["CONAN_HOME"])
-    home.mkdir(parents=True, exist_ok=True)
-    global_conf = home / "global.conf"
+    global_conf = conan_home() / "global.conf"
     global_conf.touch()
 
     logger.info("Writing configuration file: '%s'", str(global_conf))
@@ -388,12 +376,18 @@ def main(
     # Check requirements
     check_requirements()
 
+    # Workaround: in Windows, conan home and deployment cannot be in
+    # different drives...
+    preset_dir = output_dir.absolute() if os.name == "nt" else None
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     # Process
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(dir=preset_dir) as tmpdir:
 
         tmpdir = Path(tmpdir)
 
         _conan_home = tmpdir / ".conan2"
+        _conan_home.mkdir(parents=True, exist_ok=True)
 
         CONAN_ENV.update(
             {
@@ -403,10 +397,11 @@ def main(
                 "BUILD_TYPE": "Release",
             }
         )
+        os.putenv("CONAN_HOME", str(_conan_home))
         del _conan_home
 
         logger_step("Checking conan home")
-        logger.info("Conan home is %s", str(conan_home()))
+        logger.info("Temporary conan home is %s", str(conan_home()))
 
         # Set global.conf
         logger_step("Setting conan configuration")
