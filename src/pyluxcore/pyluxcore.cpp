@@ -614,45 +614,6 @@ static PropertyUPtr Property_InitWithList(const py::str &name, const py::list &l
 // Glue for Properties class
 //------------------------------------------------------------------------------
 
-static py::list Properties_GetAllNamesRE(luxrays::PropertiesRPtr props, const std::string &pattern) {
-  py::list l;
-  const std::vector<std::string> keys = props->GetAllNamesRE(pattern);
-  for(const std::string key: keys) {
-    l.append(key);
-  }
-
-  return l;
-}
-
-static py::list Properties_GetAllNames1(luxrays::PropertiesRPtr props) {
-  py::list l;
-  const std::vector<std::string> keys = props->GetAllNames();
-  for(const std::string key: keys) {
-    l.append(key);
-  }
-
-  return l;
-}
-
-static py::list Properties_GetAllNames2(luxrays::PropertiesRPtr props, const std::string &prefix) {
-  py::list l;
-  const std::vector<std::string> keys = props->GetAllNames(prefix);
-  for(const std::string key: keys) {
-    l.append(key);
-  }
-
-  return l;
-}
-
-static py::list Properties_GetAllUniqueSubNames(luxrays::PropertiesRPtr props, const std::string prefix) {
-  py::list l;
-  const std::vector<std::string> keys = props->GetAllUniqueSubNames(prefix);
-  for(const auto key: keys) {
-    l.append(key);
-  }
-
-  return l;
-}
 
 static luxrays::Property Properties_GetWithDefaultValues(luxrays::PropertiesRPtr props,
     const std::string &name, const py::list &l) {
@@ -681,17 +642,6 @@ static luxrays::Property Properties_GetWithDefaultValues(luxrays::PropertiesRPtr
   return props->Get(luxrays::Property(name, values));
 }
 
-void Properties_DeleteAll(luxrays::PropertiesRPtr props, const py::list &l) {
-  const py::ssize_t size = len(l);
-  for (py::ssize_t i = 0; i < size; ++i) {
-    const std::string objType = py::cast<std::string>((l[i].attr("__class__")).attr("__name__"));
-
-    if (objType == "str")
-      props->Delete(py::cast<std::string>(l[i]));
-    else
-      throw std::runtime_error("Unsupported data type included in Properties.DeleteAll() list: " + objType);
-  }
-}
 
 //------------------------------------------------------------------------------
 // Glue for Film class
@@ -2399,10 +2349,24 @@ PYBIND11_MODULE(pyluxcore, m) {
     .def("SetFromString", &luxrays::Properties::SetFromString)
 
     .def("Clear", &luxrays::Properties::Clear)
-    .def("GetAllNamesRE", &Properties_GetAllNamesRE)
-    .def("GetAllNames", &Properties_GetAllNames1)
-    .def("GetAllNames", &Properties_GetAllNames2)
-    .def("GetAllUniqueSubNames", &Properties_GetAllUniqueSubNames)
+    .def("GetAllNamesRE", &luxrays::Properties::GetAllNamesRE)
+    .def(
+		"GetAllNames",
+		py::overload_cast<>( &luxrays::Properties::GetAllNames, py::const_)
+	)
+    .def(
+		"GetAllNames",
+		py::overload_cast<const std::string &>(
+			&luxrays::Properties::GetAllNames, py::const_
+		)
+	)
+    .def(
+		"GetAllUniqueSubNames",
+		&luxrays::Properties::GetAllUniqueSubNames,
+		"Get all unique subnames given a prefix",
+		py::arg("prefix"),
+		py::arg("sorted")=false
+	)
     .def("HaveNames", &luxrays::Properties::HaveNames)
     .def("HaveNamesRE", &luxrays::Properties::HaveNamesRE)
     .def("GetAllProperties", &luxrays::Properties::GetAllProperties)
@@ -2415,7 +2379,7 @@ PYBIND11_MODULE(pyluxcore, m) {
 
     .def("IsDefined", &luxrays::Properties::IsDefined)
     .def("Delete", &luxrays::Properties::Delete)
-    .def("DeleteAll", &Properties_DeleteAll)
+    .def("DeleteAll", &luxrays::Properties::DeleteAll)
     .def("ToString", &luxrays::Properties::ToString)
 
     .def("__str__", &luxrays::Properties::ToString)

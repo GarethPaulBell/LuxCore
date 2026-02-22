@@ -845,7 +845,7 @@ std::vector<std::string> Properties::GetAllNames() const {
 	return res;
 }
 
-vector<string> Properties::GetAllNames(const string &prefix) const {
+std::vector<string> Properties::GetAllNames(const string &prefix) const {
 	std::lock_guard lk(mtx);
 	vector<string> namesSubset;
 	for(const string name: names) {
