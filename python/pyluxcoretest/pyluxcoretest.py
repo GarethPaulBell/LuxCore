@@ -911,8 +911,8 @@ def main():
         ExtractConfiguration()
         StrandsRender()
         ImagePipelineEdit()
-        SaveResumeRenderingM()
-        SaveResumeRenderingS()
+        # SaveResumeRenderingS()
+        # SaveResumeRenderingM()
         ExternalOidn()
 
         print("Copying results", flush=True)
