@@ -60,10 +60,14 @@ public:
 
 	void GetImageMaps(std::vector<std::reference_wrapper<const ImageMap>> &ims) const;
 
-	auto GetImageMaps() const {
+	auto ViewImageMaps() const {
 		// Create and return a view of references to the values
 		return maps | std::views::transform([](const auto& ptr) -> const ImageMap&
 				{ return *ptr; });
+	}
+	auto GetImageMaps() const {
+		auto view = ViewImageMaps();
+		return std::vector<std::reference_wrapper<const ImageMap>>(view.begin(), view.end());
 	}
 
 

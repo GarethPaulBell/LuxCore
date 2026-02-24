@@ -41,7 +41,7 @@ MaterialDefinitions::DefineMaterial(MaterialUPtr&& mat) {
 	if (oldMatPtr) {  // An object was replaced
 		auto& oldMatRef = *oldMatPtr;
 		// Update all references
-		for(auto& o: mats.GetObjs()) {
+		for(NamedObjectRef o: mats.ViewObjs()) {
 			// Update all references in material/volume (note: volume is also a material)
 			auto& m = dynamic_cast<MaterialRef>(o);
 			m.UpdateMaterialReferences(oldMatRef, newMatRef);
@@ -53,7 +53,7 @@ MaterialDefinitions::DefineMaterial(MaterialUPtr&& mat) {
 
 void MaterialDefinitions::UpdateTextureReferences(
 	TextureConstRef oldTex, TextureRef newTex) {
-	for(auto& mat: mats.GetObjs())
+	for(NamedObjectRef mat: mats.GetObjs())
 		dynamic_cast<MaterialRef>(mat).UpdateTextureReferences(oldTex, newTex);
 }
 

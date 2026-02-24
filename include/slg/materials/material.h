@@ -95,7 +95,7 @@ public:
 	virtual BSDFEvent GetEventTypes() const = 0;
 
 	virtual bool IsLightSource() const {
-		return bool(emittedTex);
+		return static_cast<bool>(emittedTex);
 	}
 
 	void SetPhotonGIEnabled(const bool v) { isPhotonGIEnabled = v; }

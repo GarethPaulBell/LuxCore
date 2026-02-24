@@ -27,6 +27,7 @@
 
 #include "slg/engines/bidircpu/bidircpu.h"
 #include "slg/cameras/camera.h"
+#include "slg/lights/light.h"
 
 using namespace std;
 using namespace luxrays;
@@ -577,7 +578,7 @@ void BiDirCPURenderThread::DirectHitLight(
 		BiDirCPURenderEngine *engine = (BiDirCPURenderEngine *)renderEngine;
 		auto& scene = engine->renderConfig.GetScene();
 
-		for(auto& el: scene.GetLightSources().GetEnvLightSources()) {
+		for(EnvLightSource& el: scene.GetLightSources().GetEnvLightSources()) {
 			const Spectrum lightRadiance = el.GetRadiance(scene,
 					(eyeVertex.depth == 1) ? nullptr : &eyeVertex.bsdf,
 					eyeVertex.bsdf.hitPoint.fixedDir, &directPdfA, &emissionPdfW);

@@ -20,6 +20,7 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 
+#include "slg/lights/light.h"
 #include "slg/scene/scene.h"
 #include "slg/lights/trianglelight.h"
 #include "slg/lights/strategies/logpower.h"
@@ -259,6 +260,8 @@ void LightSourceDefinitions::Preprocess(SceneConstRef scene, const bool useRTMod
 	const u_int meshCount = scene.GetObjects().GetSize();
 	for (u_int meshIndex = 0; meshIndex < meshCount; ++meshIndex) {
 		auto& so = scene.GetObjects().GetSceneObject(meshIndex);
+		auto& mat = so.GetMaterial();
+		bool isLightSource = mat.IsLightSource();
 
 		if (so.GetMaterial().IsLightSource()) {
 			lightIndexOffsetByMeshIndex[meshIndex] = lightIndexByTriIndex.size();
@@ -346,7 +349,7 @@ void LightSourceDefinitions::Preprocess(SceneConstRef scene, const bool useRTMod
 
 void LightSourceDefinitions::UpdateVisibilityMaps(SceneConstRef scene, const bool useRTMode) {
 	// Build visibility maps for Env. lights
-	for (auto& envLight : GetEnvLightSources())
+	for (EnvLightSource& envLight : GetEnvLightSources())
 		envLight.UpdateVisibilityMap(scene, useRTMode);
 }
 // vim: autoindent noexpandtab tabstop=4 shiftwidth=4

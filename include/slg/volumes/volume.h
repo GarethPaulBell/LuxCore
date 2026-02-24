@@ -25,6 +25,7 @@
 #include "slg/textures/texture.h"
 #include "slg/usings.h"
 #include <functional>
+#include <typeinfo>
 
 namespace slg {
 
@@ -123,12 +124,18 @@ void updvol(T volume, const MaterialConstRef oldMat, MaterialRef newMat);
 
 template<>
 inline void updvol(VolumeConstPtr volume, MaterialConstRef oldMat, MaterialRef newMat) {
-	auto& oldVol = dynamic_cast<const Volume &>(oldMat);
-	auto& newVol = dynamic_cast<Volume &>(newMat);
 
-	if (volume == &oldVol) {
-		volume = &newVol;
+	// Check
+	try {
+		auto& oldVol = dynamic_cast<const Volume &>(oldMat);
+		if (volume != &oldVol) return;  // Old material was not this volume
+	} catch (std::bad_cast&) {
+		return;  // Old material was not a volume
 	}
+
+	// Replace
+	auto& newVol = dynamic_cast<Volume &>(newMat);
+	volume = &newVol;
 }
 
 template<>

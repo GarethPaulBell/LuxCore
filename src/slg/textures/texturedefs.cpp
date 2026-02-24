@@ -17,6 +17,7 @@
  ***************************************************************************/
 
 #include "slg/textures/texturedefs.h"
+#include "luxrays/usings.h"
 #include "slg/usings.h"
 
 using namespace std;
@@ -35,7 +36,7 @@ TextureDefinitions::DefineTexture(TextureUPtr&& tex) {
 	if (oldTexPtr) {  // This is a replacement
 		auto& oldTexRef = *oldTexPtr;
 		// Update all references
-		for(auto& o: texs.GetObjs()) {
+		for(NamedObjectRef o: texs.GetObjs()) {
 			auto& t = dynamic_cast<Texture&>(o);
 			t.UpdateTextureReferences(oldTexRef, newTexRef);
 		}

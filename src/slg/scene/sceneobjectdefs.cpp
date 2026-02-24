@@ -18,6 +18,7 @@
 
 #include <boost/lexical_cast.hpp>
 
+#include "luxrays/usings.h"
 #include "slg/scene/scene.h"
 #include "slg/lights/trianglelight.h"
 #include "slg/usings.h"
@@ -85,7 +86,7 @@ void SceneObjectDefinitions::DefineIntersectableLights
 
 void SceneObjectDefinitions::UpdateMaterialReferences(MaterialConstRef oldMat, MaterialRef newMat) {
 	// Replace old material direct references with new ones
-	for (auto& o : objs.GetObjs())
+	for (NamedObjectRef o : objs.GetObjs())
 		dynamic_cast<SceneObjectRef>(o).UpdateMaterialReferences(oldMat, newMat);
 }
 

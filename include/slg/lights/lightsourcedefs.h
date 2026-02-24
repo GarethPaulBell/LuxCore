@@ -19,6 +19,7 @@
 #ifndef _SLG_LIGHTSOURCEDEFINITIONS_H
 #define	_SLG_LIGHTSOURCEDEFINITIONS_H
 
+#include <functional>
 #include <robin_hood.h>
 
 #include "luxrays/utils/properties.h"
@@ -76,27 +77,37 @@ public:
 		return std::addressof(lights[n].get());
 	}
 
-	auto GetEnvLightSources() {
+	auto ViewEnvLightSources() {
 		// Returns a view of references to the objects
 		return envLightSources |
 			std::views::transform([](const auto& obj) -> EnvLightSourceRef {
 			return obj.get();
 		});
 	}
-	auto GetEnvLightSources() const {
+	auto ViewEnvLightSources() const {
 		// Returns a view of references to the objects
 		return envLightSources |
 			std::views::transform([](const auto& obj) -> const EnvLightSourceRef {
 			return obj.get();
 		});
 	}
-	auto GetIntersectableLightSources() const {
+	auto GetEnvLightSources() const {
+		auto view = ViewEnvLightSources();
+		return std::vector<std::reference_wrapper<EnvLightSource>>(view.begin(), view.end());
+	}
+
+	auto ViewIntersectableLightSources() const {
 		// Returns a view of references to the objects
 		return intersectableLightSources |
 			std::views::transform([](const auto& obj) -> const TriangleLightRef {
 			return obj.get();
 		});
 	}
+	auto GetIntersectableLightSources() const {
+		auto view = ViewIntersectableLightSources();
+		return std::vector<std::reference_wrapper<IntersectableLightSource>>(view.begin(), view.end());
+	}
+
 	const std::vector<u_int> &GetLightIndexOffsetByMeshIndex() const {
 		return lightIndexOffsetByMeshIndex;
 	}

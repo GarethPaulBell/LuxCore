@@ -109,18 +109,26 @@ public:
 	const std::string &GetName(NamedObjectConstRef o) const;
 
 	u_int GetSize()const;
-	auto GetNames() const {
+
+	auto ViewNames() const {
 		// Returns a view of references to the object names
 		return objs | std::views::transform([](const auto& obj) -> const std::string & {
 			return obj->GetName();
 		});
 	}
-	//void GetNames(std::vector<std::string> &names) const;
-	auto GetObjs() {
+	auto GetNames() const {
+		auto view = ViewNames();
+		return std::vector<std::string>(view.begin(), view.end());
+	}
+	auto ViewObjs() {
 		// Returns a view of references to the objects
 		return objs | std::views::transform([](const auto& obj) -> NamedObjectRef {
 			return *obj;
 		});
+	}
+	auto GetObjs() {
+		auto view = ViewObjs();
+		return std::vector<std::reference_wrapper<NamedObject>>(view.begin(), view.end());
 	}
 
 	void DeleteObj(const std::string &name);

@@ -118,10 +118,10 @@ void Scene::ParseMaterials(const Properties &props) {
 			// The mat should not be a volume: let's check it
 			try {
 				dynamic_cast<const Volume&>(oldMatRef);
-			} catch(std::bad_cast&) {
 				throw runtime_error(
 					"You can not replace a material with the volume: " + matName
 				);
+			} catch(std::bad_cast&) {
 			}
 
 			// If old material was emitting light, delete all TriangleLight
@@ -132,7 +132,7 @@ void Scene::ParseMaterials(const Properties &props) {
 			objDefs.UpdateMaterialReferences(oldMatRef, newMatRef);
 
 			// If new material is emitting light, create all TriangleLight
-			if (newMat->IsLightSource())
+			if (newMatRef.IsLightSource())
 				objDefs.DefineIntersectableLights(lightDefs, newMatRef);
 
 			// Check if the old material was or the new material is a light source

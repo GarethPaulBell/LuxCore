@@ -46,6 +46,7 @@
 #include "slg/textures/constfloat.h"
 #include "slg/textures/constfloat3.h"
 #include "slg/textures/imagemaptex.h"
+#include "slg/usings.h"
 #include "slg/utils/pathinfo.h"
 #include "slg/cameras/camera.h"
 
@@ -402,18 +403,21 @@ void Scene::Parse(PropertiesRPtr props) {
 	// Read all textures
 	//--------------------------------------------------------------------------
 
+	SDL_LOG("Parsing textures");
 	ParseTextures(*props);
 
 	//--------------------------------------------------------------------------
 	// Read all volumes
 	//--------------------------------------------------------------------------
 
+	SDL_LOG("Parsing volumes");
 	ParseVolumes(*props);
 
 	//--------------------------------------------------------------------------
 	// Read all materials
 	//--------------------------------------------------------------------------
 
+	SDL_LOG("Parsing materials");
 	ParseMaterials(*props);
 
 	//--------------------------------------------------------------------------
@@ -422,24 +426,28 @@ void Scene::Parse(PropertiesRPtr props) {
 	// note: doing the parsing after volumes because it may reference a volume
 	//--------------------------------------------------------------------------
 
+	SDL_LOG("Parsing cameras");
 	ParseCamera(*props);
 
 	//--------------------------------------------------------------------------
 	// Read all shapes
 	//--------------------------------------------------------------------------
 
+	SDL_LOG("Parsing shapes");
 	ParseShapes(*props);
 
 	//--------------------------------------------------------------------------
 	// Read all objects
 	//--------------------------------------------------------------------------
 
+	SDL_LOG("Parsing objects");
 	ParseObjects(*props);
 
 	//--------------------------------------------------------------------------
 	// Read all env. lights
 	//--------------------------------------------------------------------------
 
+	SDL_LOG("Parsing lights");
 	ParseLights(*props);
 }
 
@@ -469,7 +477,7 @@ void Scene::RemoveUnusedImageMaps() {
 	
 	// Get the list of all defined image maps
 	bool deleted = false;
-	for(auto& im: imgMapCache.GetImageMaps()) {
+	for(ImageMapConstRef im: imgMapCache.GetImageMaps()) {
 		if (referencedImgMaps.count(&im) == 0) {
 			SDL_LOG("Deleting unreferenced image map: " << im.GetName());
 			imgMapCache.DeleteImageMap(im);
@@ -527,12 +535,7 @@ void Scene::RemoveUnusedMaterials() {
 		referencedMats.insert(defaultWorldVolume);
 
 	for (u_int i = 0; i < objDefs.GetSize(); ++i) {
-		auto& obj = objDefs.GetSceneObject(i);
-		try {
-			auto& mat = dynamic_cast<const Material &>(obj);
-			mat.AddReferencedMaterials(referencedMats);
-		}
-		catch (std::bad_cast&) {}
+		objDefs.GetSceneObject(i).AddReferencedMaterials(referencedMats);
 	}
 
 	// Get the list of all defined materials

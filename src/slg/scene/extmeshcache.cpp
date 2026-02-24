@@ -21,6 +21,8 @@
 
 #include "slg/scene/extmeshcache.h"
 #include "luxrays/core/exttrianglemesh.h"
+#include "luxrays/core/namedobject.h"
+#include "luxrays/usings.h"
 
 using namespace std;
 using namespace luxrays;
@@ -35,7 +37,7 @@ ExtMeshCache::ExtMeshCache() {
 }
 
 ExtMeshCache::~ExtMeshCache() {
-	for(auto& obj: meshes.GetObjs()) {
+	for(NamedObjectRef obj: meshes.GetObjs()) {
 		auto& mesh = static_cast<ExtMesh &>(obj);
 
 		if (deleteMeshData)
@@ -82,7 +84,7 @@ ExtMeshCache::DefineExtMesh(ExtMeshUPtr&& mesh) {
 			auto& nm = dynamic_cast<ExtTriangleMesh&>(newMeshRef);
 			auto& om = dynamic_cast<ExtTriangleMesh&>(*oldMeshPtr);
 
-			for(auto& no: meshes.GetObjs()) {
+			for(NamedObjectRef no: meshes.GetObjs()) {
 				auto& meshobj = static_cast<ExtMesh&>(no);
 
 				switch (meshobj.GetType()) {

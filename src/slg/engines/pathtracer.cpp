@@ -18,6 +18,7 @@
 
 
 #include "luxrays/utils/properties.h"
+#include "slg/lights/light.h"
 #include "slg/usings.h"
 #include "slg/engines/pathtracer.h"
 #include "slg/engines/caches/photongi/photongicache.h"
@@ -323,7 +324,7 @@ void PathTracer::DirectHitInfiniteLight(SceneConstRef scene,
 	if (bsdf && bsdf->hitPoint.throughShadowTransparency)
 		return;
 
-	for(auto& envLight: scene.GetLightSources().GetEnvLightSources()) {
+	for(EnvLightSource& envLight: scene.GetLightSources().GetEnvLightSources()) {
 		// Check if the light source is visible according the settings
 		if (!CheckDirectHitVisibilityFlags(envLight, pathInfo.depth, pathInfo.lastBSDFEvent))
 			continue;

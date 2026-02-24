@@ -96,7 +96,7 @@ public:
 	constexpr T* operator->() const noexcept { return ptr; }
 
 	// Conversion to bool (for boolean context)
-	explicit constexpr operator bool() const noexcept { return ptr != nullptr; }
+	explicit operator bool() const noexcept { return ptr != nullptr; }
 
 	// Get the raw pointer
 	constexpr T* get() const noexcept { return ptr; }
