@@ -94,6 +94,23 @@ public:
 		return std::make_tuple(std::ref(newDerivedRef), std::move(oldDerivedPtr));
 	}
 
+	/// Delete a named object from the container.
+	///
+	/// Please not the name object is just removed, not
+	/// destroyed. The object holder (unique_ptr) is returned
+	/// to caller for further finalization
+	template<typename T>
+	std::unique_ptr<T> DeleteObj(const std::string &name) {
+
+		auto oldObjPtr = DeleteObj<NamedObject>(name);
+		auto oldDerivedPtr = oldObjPtr ?
+			dynamic_uptr_cast<T>(std::move(oldObjPtr)) :
+			std::unique_ptr<T>();
+		return std::move(oldDerivedPtr);
+
+	}
+
+	void DeleteObjs(const std::vector<std::string> &names);
 
 	bool IsObjDefined(const std::string &name) const;
 
@@ -131,8 +148,6 @@ public:
 		return std::vector<std::reference_wrapper<NamedObject>>(view.begin(), view.end());
 	}
 
-	void DeleteObj(const std::string &name);
-	void DeleteObjs(const std::vector<std::string> &names);
 
 	std::string ToString() const;
 
@@ -164,7 +179,11 @@ template<>
 std::tuple< NamedObject&, std::unique_ptr<NamedObject> >
 NamedObjectVector::DefineObj(std::unique_ptr<NamedObject>&& obj);
 
-}
+
+template<>
+NamedObjectUPtr NamedObjectVector::DeleteObj(const std::string &name);
+
+}  // Namespace luxrays
 
 #endif	/* _LUXRAYS_NAMEDOBJECTVECTOR_H */
 // vim: autoindent noexpandtab tabstop=4 shiftwidth=4

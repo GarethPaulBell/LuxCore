@@ -80,8 +80,8 @@ public:
 		std::unordered_set<const SceneObject *> &modifiedObjsList
 	);
 
-	void DeleteSceneObject(const std::string &name) {
-		objs.DeleteObj(name);
+	SceneObjectUPtr DeleteSceneObject(const std::string &name) {
+		return objs.DeleteObj<SceneObject>(name);
 	}
 
 	void DeleteSceneObjects(const std::vector<std::string> &names) {

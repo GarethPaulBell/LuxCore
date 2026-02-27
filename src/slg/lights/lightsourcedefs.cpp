@@ -24,6 +24,7 @@
 #include "slg/scene/scene.h"
 #include "slg/lights/trianglelight.h"
 #include "slg/lights/strategies/logpower.h"
+#include "slg/usings.h"
 
 using namespace std;
 using namespace luxrays;
@@ -45,18 +46,27 @@ LightSourceDefinitions::LightSourceDefinitions() :
 LightSourceDefinitions::~LightSourceDefinitions() {
 }
 
-void LightSourceDefinitions::DefineLightSource(LightSourceUPtr&& newLight) {
+/// Insert a new light source in the container
+///
+/// If a light source with the same name already exists in the container,
+/// it is extracted and returned.
+LightSourceUPtr LightSourceDefinitions::DefineLightSource(LightSourceUPtr&& newLight) {
 	const string &name = newLight->GetName();
 
-	if (IsLightSourceDefined(name)) {
-		auto& oldLight = GetLightSource(name);
+	auto e = lightsByName.find(name);
+
+	if (e != lightsByName.end()) {
+		// Light source already exists
+		auto oldLight = std::move(e->second);
 
 		// Update name/LightSource definition
-		lightsByName.erase(name);
+		lightsByName.erase(e);
 		lightsByName[name] = std::move(newLight);
+		return oldLight;
 	} else {
 		// Add the new LightSource
 		lightsByName[name] = std::move(newLight);
+		return LightSourceUPtr();
 	}
 }
 
@@ -120,19 +130,26 @@ vector<string> LightSourceDefinitions::GetLightSourceNames() const {
 	return names;
 }
 
-void LightSourceDefinitions::DeleteLightSource(const string &name) {
+LightSourceUPtr LightSourceDefinitions::DeleteLightSource(const string &name) {
 	auto e = lightsByName.find(name);
 
 	if (e == lightsByName.end())
 		throw runtime_error("Reference to an undefined LightSource in LightSourceDefinitions::DeleteLightSource(): " + name);
-	else {
-		lightsByName.erase(name);
-	}
+
+
+	auto oldLight = std::move(e->second);
+	lightsByName.erase(e);
+	return oldLight;
 }
 
-void LightSourceDefinitions::DeleteLightSourceStartWith(const string &namePrefix) {
+
+std::vector<LightSourceUPtr> LightSourceDefinitions::DeleteLightSourceStartWith(
+	const string &namePrefix
+) {
+	std::vector<LightSourceUPtr> oldLights;
+
 	// Build the list of lights to delete
-	vector<string> nameList;
+	std::vector<string> nameList;
 	for (auto const &e : lightsByName) {
 		const string &name = e.first;
 
@@ -140,11 +157,20 @@ void LightSourceDefinitions::DeleteLightSourceStartWith(const string &namePrefix
 			nameList.push_back(name);
 	}
 
-	for (auto const &name : nameList)
-		DeleteLightSource(name);
+	// Remove the lights from the container and return the removed lights
+	for (auto const &name : nameList) {
+		auto oldLight = DeleteLightSource(name);
+		oldLights.push_back(std::move(oldLight));
+	}
+	return oldLights;
 }
 
-void LightSourceDefinitions::DeleteLightSourceByMaterial(MaterialConstRef mat) {
+
+std::vector<LightSourceUPtr> LightSourceDefinitions::DeleteLightSourceByMaterial(
+	MaterialConstRef mat
+) {
+	std::vector<LightSourceUPtr> oldLights;
+
 	// Build the list of lights to delete
 	std::vector<string> nameList;
 	for (auto const &e : lightsByName) {
@@ -159,8 +185,12 @@ void LightSourceDefinitions::DeleteLightSourceByMaterial(MaterialConstRef mat) {
 		}
 	}
 
-	for (auto const &name : nameList)
-		DeleteLightSource(name);
+	// Remove the lights from the container and return the removed lights
+	for (auto const &name : nameList) {
+		auto oldLight = DeleteLightSource(name);
+		oldLights.push_back(std::move(oldLight));
+	}
+	return oldLights;
 }
 
 void LightSourceDefinitions::SetLightStrategy(const luxrays::Properties &props) {

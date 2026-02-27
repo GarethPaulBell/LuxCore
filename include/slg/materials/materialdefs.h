@@ -75,8 +75,8 @@ public:
 		return mats.GetNames();
 	}
 
-	void DeleteMaterial(const std::string &name) {
-		mats.DeleteObj(name);
+	MaterialUPtr DeleteMaterial(const std::string &name) {
+		return mats.DeleteObj<Material>(name);
 	}
 
 	void UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex);

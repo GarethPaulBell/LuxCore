@@ -130,10 +130,12 @@ void Scene::ParseTextures(const Properties &props) {
 
 			auto [newTexRef, oldTexPtr] = texDefs.DefineTexture(std::move(std::move(tex)));
 			matDefs.UpdateTextureReferences(*oldTexPtr, newTexRef);
+			moveToTrash(std::move(oldTexPtr));
 
 		} else {
 			// Only a new texture
 			auto [newTexRef, oldTexPtr] = texDefs.DefineTexture(std::move(std::move(tex)));
+			moveToTrash(std::move(oldTexPtr));
 		}
 	}
 
@@ -718,6 +720,7 @@ TextureRef Scene::GetTexture(const luxrays::Property &prop) {
 						tex->SetName(NamedObject::GetUniqueName("Implicit-ConstFloatTexture"));
 						auto [newTexRef, oldTexPtr] = texDefs.DefineTexture(std::move(tex));
 
+						moveToTrash(std::move(oldTexPtr));
 						return newTexRef;
 					} else if (prop.GetSize() == 4) {
 						Spectrum c(prop.Get<double>(1), prop.Get<double>(2), prop.Get<double>(3));
@@ -727,6 +730,7 @@ TextureRef Scene::GetTexture(const luxrays::Property &prop) {
 						tex->SetName(NamedObject::GetUniqueName("Implicit-ConstFloatTexture3"));
 						auto [newTexRef, oldTexPtr] = texDefs.DefineTexture(std::move(tex));
 
+						moveToTrash(std::move(oldTexPtr));
 						return newTexRef;
 					} else
 						throw runtime_error("Wrong number of arguments in the implicit definition of a constant texture with a color space: " + prop.ToString());
@@ -740,6 +744,7 @@ TextureRef Scene::GetTexture(const luxrays::Property &prop) {
 						tex->SetName(NamedObject::GetUniqueName("Implicit-ConstFloatTexture"));
 						auto [newTexRef, oldTexPtr] = texDefs.DefineTexture(std::move(tex));
 
+						moveToTrash(std::move(oldTexPtr));
 						return newTexRef;
 					} else if (prop.GetSize() == 5) {
 						const float gamma = prop.Get<double>(1);
@@ -750,6 +755,7 @@ TextureRef Scene::GetTexture(const luxrays::Property &prop) {
 						tex->SetName(NamedObject::GetUniqueName("Implicit-ConstFloatTexture3"));
 						auto [newTexRef, oldTexPtr] = texDefs.DefineTexture(std::move(tex));
 
+						moveToTrash(std::move(oldTexPtr));
 						return newTexRef;
 					} else
 						throw runtime_error("Wrong number of arguments in the implicit definition of a constant texture with a color space: " + prop.ToString());
@@ -764,6 +770,7 @@ TextureRef Scene::GetTexture(const luxrays::Property &prop) {
 						tex->SetName(NamedObject::GetUniqueName("Implicit-ConstFloatTexture"));
 						auto [newTexRef, oldTexPtr] = texDefs.DefineTexture(std::move(tex));
 
+						moveToTrash(std::move(oldTexPtr));
 						return newTexRef;
 					} else if (prop.GetSize() == 6) {
 						const string configName = prop.Get<string>(1);
@@ -775,6 +782,7 @@ TextureRef Scene::GetTexture(const luxrays::Property &prop) {
 						tex->SetName(NamedObject::GetUniqueName("Implicit-ConstFloatTexture3"));
 						auto [newTexRef, oldTexPtr] = texDefs.DefineTexture(std::move(tex));
 
+						moveToTrash(std::move(oldTexPtr));
 						return newTexRef;
 					} else
 						throw runtime_error("Wrong number of arguments in the implicit definition of a constant texture with a color space: " + prop.ToString());
@@ -798,12 +806,14 @@ TextureRef Scene::GetTexture(const luxrays::Property &prop) {
 				tex->SetName(NamedObject::GetUniqueName("Implicit-ConstFloatTexture"));
 				auto [newTexRef, oldTexPtr] = texDefs.DefineTexture(std::move(tex));
 
+				moveToTrash(std::move(oldTexPtr));
 				return newTexRef;
 			} else if (floats.size() == 3) {
 				auto tex= std::make_unique<ConstFloat3Texture>(Spectrum(floats.at(0), floats.at(1), floats.at(2)));
 				tex->SetName(NamedObject::GetUniqueName("Implicit-ConstFloatTexture3"));
 				auto [newTexRef, oldTexPtr] = texDefs.DefineTexture(std::move(tex));
 
+				moveToTrash(std::move(oldTexPtr));
 				return newTexRef;
 			} else
 				throw runtime_error("Wrong number of arguments in the implicit definition of a constant texture: " +

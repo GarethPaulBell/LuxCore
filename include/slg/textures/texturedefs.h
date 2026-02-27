@@ -71,8 +71,8 @@ public:
 		return texs.GetNames();
 	}
 
-	void DeleteTexture(const std::string &name) {
-		texs.DeleteObj(name);
+	TextureUPtr DeleteTexture(const std::string &name) {
+		return std::move(texs.DeleteObj<Texture>(name));
 	}
 
 	const std::vector<std::string> GetTextureSortedNames() const;

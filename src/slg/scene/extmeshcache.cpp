@@ -136,12 +136,12 @@ void ExtMeshCache::SetMeshTriangleAOV(const string &meshName,
 	triMesh.SetTriAOV(index, data);
 }
 
-void ExtMeshCache::DeleteExtMesh(const string &meshName) {
+ExtMeshUPtr ExtMeshCache::DeleteExtMesh(const string &meshName) {
 	if (deleteMeshData) {
 		auto& mesh = static_cast<ExtMesh&>(meshes.GetObj(meshName));
 		mesh.Delete();
 	}
-	meshes.DeleteObj(meshName);
+	return meshes.DeleteObj<ExtMesh>(meshName);
 }
 
 u_int ExtMeshCache::GetSize() const {

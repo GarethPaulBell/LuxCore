@@ -159,59 +159,56 @@ u_int NamedObjectVector::GetSize()const {
 		//names[i] = GetName(i);
 //}
 
-void NamedObjectVector::DeleteObj(const string &name) {
+template<>
+NamedObjectUPtr NamedObjectVector::DeleteObj(const string &name) {
 	// We swap remove target and last object, and pop back
+	if (objs.empty()) throw("Trying to delete an object in an empty container");
 
-	if (objs.size() > 0)
+	// Record index
+	auto removeObjIndex = GetIndex(name);
+	auto lastObjIndex = objs.size() - 1;
+
+	// Record names
+	const std::string removeObjName{objs[removeObjIndex]->GetName()};
+	const std::string lastObjName{objs[lastObjIndex]->GetName()};
+
+	if (lastObjIndex != removeObjIndex)
 	{
-		// Record index
-		auto removeObjIndex = GetIndex(name);
-		auto lastObjIndex = objs.size() - 1;
 
-		// Record names
-		const string removeObjName{objs[removeObjIndex]->GetName()};
-		const string lastObjName{objs[lastObjIndex]->GetName()};
+		std::swap(objs[removeObjIndex], objs[lastObjIndex]);
 
-		if (lastObjIndex != removeObjIndex)
-		{
+		// redo links
+		name2index.left.erase(removeObjName);
+		name2index.left.erase(lastObjName);
+		name2index.insert(Name2IndexType::value_type(lastObjName, removeObjIndex));
 
-			std::swap(objs[removeObjIndex], objs[lastObjIndex]);
+		index2obj.left.erase(lastObjIndex);
+		index2obj.left.erase(removeObjIndex);
+		index2obj.insert(
+			Index2ObjType::value_type(
+				removeObjIndex, std::ref(*objs[removeObjIndex])
+			)
+		);
 
-			//TODO
-			//NamedObject* lastObj = objs[lastIndex];
-			////int newIndex = index;
-			//objs[index] = lastObj;
-
-			// redo links
-			name2index.left.erase(removeObjName);
-			name2index.left.erase(lastObjName);
-			name2index.insert(Name2IndexType::value_type(lastObjName, removeObjIndex));
-
-			index2obj.left.erase(lastObjIndex);
-			index2obj.left.erase(removeObjIndex);
-			index2obj.insert(
-				Index2ObjType::value_type(
-					removeObjIndex, std::ref(*objs[removeObjIndex])
-				)
-			);
-
-		}
-		else
-		{
-			// last
-			name2index.left.erase(removeObjName);
-			index2obj.left.erase(removeObjIndex);
-		}
+	}
+	else
+	{
+		// last
+		name2index.left.erase(removeObjName);
+		index2obj.left.erase(removeObjIndex);
 	}
 
 	// remove last
+	NamedObjectUPtr ret = std::move(objs.back());
 	objs.pop_back();
+	return std::move(ret);
 }
+
 
 void NamedObjectVector::DeleteObjs(const std::vector<string> &names) {
 
 	for (const string& name : names) {
-		DeleteObj(name);
+		DeleteObj<NamedObject>(name);
 	}
 }
 

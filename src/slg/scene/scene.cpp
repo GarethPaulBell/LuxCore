@@ -362,7 +362,8 @@ void Scene::SetMeshTriangleAOV(const string &meshName,
 	extMeshCache.SetMeshTriangleAOV(meshName, index, data);
 }
 
-void Scene::DefineStrands(const string &shapeName, const slg::cyHairFile &strandsFile,
+Scene::ReturnType<ExtTriangleMesh>
+Scene::DefineStrands(const string &shapeName, const slg::cyHairFile &strandsFile,
 		const StrendsShape::TessellationType tesselType,
 		const u_int adaptiveMaxDepth, const float adaptiveError,
 		const u_int solidSideCount, const bool solidCapBottom, const bool solidCapTop,
@@ -375,9 +376,10 @@ void Scene::DefineStrands(const string &shapeName, const slg::cyHairFile &strand
 
 	auto mesh = shape.Refine(*this);
 	mesh->SetName(shapeName);
-	DefineMesh(std::move(mesh));
 
 	editActions.AddAction(GEOMETRY_EDIT);
+
+	return DefineMesh(std::move(mesh));
 }
 
 bool Scene::IsTextureDefined(const string &texName) const {
@@ -451,6 +453,21 @@ void Scene::Parse(PropertiesRPtr props) {
 	ParseLights(*props);
 }
 
+
+void Scene::moveToTrash(NamedObjectUPtr&& oldObj) {
+	if (!oldObj) return;
+	std::lock_guard lk(trashMtx);
+	trashBin.push_back(std::move(oldObj));
+	SDL_LOG("Moving object to trash: " << trashBin.back()->GetName());
+}
+
+
+void Scene::emptyTrash() {
+	std::lock_guard lk(trashMtx);
+	trashBin.clear();
+}
+
+
 void Scene::RemoveUnusedImageMaps() {
 	// Build a list of all referenced image maps
 	std::unordered_set<const ImageMap *> referencedImgMaps;
@@ -511,7 +528,7 @@ void Scene::RemoveUnusedTextures() {
 
 		if (referencedTexs.count(&t) == 0) {
 			SDL_LOG("Deleting unreferenced texture: " << texName);
-			texDefs.DeleteTexture(texName);
+			moveToTrash(texDefs.DeleteTexture(texName));
 			deleted = true;
 		}
 	}
@@ -545,7 +562,8 @@ void Scene::RemoveUnusedMaterials() {
 
 		if (referencedMats.count(&m) == 0) {
 			SDL_LOG("Deleting unreferenced material: " << matName);
-			matDefs.DeleteMaterial(matName);
+			auto oldMatPtr = matDefs.DeleteMaterial(matName);
+			moveToTrash(std::move(oldMatPtr));
 			deleted = true;
 		}
 	}
@@ -569,7 +587,7 @@ void Scene::RemoveUnusedMeshes() {
 
 		if (referencedMesh.count(&mesh) == 0) {
 			SDL_LOG("Deleting unreferenced mesh: " << extMeshName);
-			extMeshCache.DeleteExtMesh(extMeshName);
+			moveToTrash(extMeshCache.DeleteExtMesh(extMeshName));
 			deleted = true;
 		}
 	}
@@ -594,7 +612,7 @@ void Scene::DeleteObject(const string &objName) {
 				lightDefs.DeleteLightSource(prefix + ToString(i));
 		}
 
-		objDefs.DeleteSceneObject(objName);
+		moveToTrash(objDefs.DeleteSceneObject(objName));
 
 		editActions.AddAction(GEOMETRY_EDIT);
 	}
@@ -617,7 +635,7 @@ void Scene::DeleteObjects(std::vector<string> &objNames) {
 					oldObj.GetName()
 				);
 				for (u_int i = 0; i < mesh.GetTotalTriangleCount(); ++i)
-					lightDefs.DeleteLightSource(prefix + ToString(i));
+					moveToTrash(lightDefs.DeleteLightSource(prefix + ToString(i)));
 			}
 		}
 	}
@@ -629,7 +647,7 @@ void Scene::DeleteObjects(std::vector<string> &objNames) {
 
 void Scene::DeleteLight(const string &lightName) {
 	if (lightDefs.IsLightSourceDefined(lightName)) {
-		lightDefs.DeleteLightSource(lightName);
+		moveToTrash(lightDefs.DeleteLightSource(lightName));
 
 		editActions.AddActions(LIGHTS_EDIT | LIGHT_TYPES_EDIT);
 	}

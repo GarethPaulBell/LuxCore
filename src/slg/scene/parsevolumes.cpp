@@ -95,6 +95,8 @@ void Scene::ParseVolumes(const Properties &props) {
 			// Check if the old material was or the new material is a light source
 			//if (wasLightSource || newMat->IsLightSource())
 			//	editActions.AddAction(LIGHTS_EDIT);
+
+			moveToTrash(std::move(oldMatPtr));
 		} else {
 			// Only a new Material
 			matDefs.DefineMaterial(std::move(newMat));

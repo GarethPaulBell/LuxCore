@@ -138,11 +138,13 @@ void Scene::ParseMaterials(const Properties &props) {
 			// Check if the old material was or the new material is a light source
 			if (cachedIsLightSource[&oldMatRef] || newMatRef.IsLightSource())
 				editActions.AddActions(LIGHTS_EDIT | LIGHT_TYPES_EDIT);
+
+			moveToTrash(std::move(oldMatPtr));
 		} else {
-			// Add to material list
-			auto [newMatRef, oldMatPtr] = matDefs.DefineMaterial(std::move(newMat));
 
 			// Only a new Material
+			auto [newMatRef, oldMatPtr] = matDefs.DefineMaterial(std::move(newMat));
+			assert(!oldMatPtr);
 			// Check if the new material is a light source
 			if (newMatRef.IsLightSource())
 				editActions.AddActions(LIGHTS_EDIT | LIGHT_TYPES_EDIT);
@@ -269,6 +271,7 @@ MaterialUPtr Scene::CreateMaterial(
 
 			auto [newTexRef, oldTexPtr] = texDefs.DefineTexture(std::move(implBumpTex));
             bumpTex = TextureConstPtr(&newTexRef);
+			moveToTrash(std::move(oldTexPtr));
         }
     }
 
@@ -439,6 +442,7 @@ MaterialUPtr Scene::CreateMaterial(
 				nu,
 				nv
 			);
+			moveToTrash(std::move(oldTexPtr));
 		} else if (isDefined("fresnel")) {
 			auto tex = parseTex("fresnel", {5.f});
 			if (!dynamic_cast<const FresnelTexture *>(tex.get()))

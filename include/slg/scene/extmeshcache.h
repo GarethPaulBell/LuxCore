@@ -26,6 +26,7 @@
 #include "luxrays/core/context.h"
 #include "luxrays/core/exttrianglemesh.h"
 #include "luxrays/core/namedobjectvector.h"
+#include "luxrays/usings.h"
 #include "luxrays/utils/serializationutils.h"
 #include "slg/core/sdl.h"
 
@@ -52,7 +53,7 @@ public:
 
 	// Note: before calls to DeleteExtMesh, be sure to not have any instance referencing
 	// the geometry
-	void DeleteExtMesh(const std::string &meshName);
+	ExtMeshUPtr DeleteExtMesh(const std::string &meshName);
 
 	u_int GetSize() const;
 	auto GetExtMeshNames() const {

@@ -23,6 +23,7 @@
 
 #include "luxrays/luxrays.h"
 #include "slg/usings.h"
+#include "slg/slg.h"
 
 /*!
  * \namespace slg

@@ -26,6 +26,7 @@
 #include "slg/lights/light.h"
 #include "slg/lights/trianglelight.h"
 #include "slg/lights/strategies/lightstrategy.h"
+#include "slg/usings.h"
 
 namespace slg {
 
@@ -45,7 +46,7 @@ public:
 
 	void UpdateVisibilityMaps(SceneConstRef scene, const bool useRTMode);
 
-	void DefineLightSource(LightSourceUPtr&& l);
+	LightSourceUPtr DefineLightSource(LightSourceUPtr&& l);
 	bool IsLightSourceDefined(const std::string &name) const;
 
 	LightSourceRef GetLightSource(const std::string &name);
@@ -56,9 +57,9 @@ public:
 	u_int GetSize() const { return static_cast<u_int>(lightsByName.size()); }
 	std::vector<std::string> GetLightSourceNames() const;
 
-	void DeleteLightSource(const std::string &name);
-	void DeleteLightSourceStartWith(const std::string &namePrefix);
-	void DeleteLightSourceByMaterial(MaterialConstRef mat);
+	LightSourceUPtr DeleteLightSource(const std::string &name);
+	std::vector<LightSourceUPtr> DeleteLightSourceStartWith(const std::string &namePrefix);
+	std::vector<LightSourceUPtr> DeleteLightSourceByMaterial(MaterialConstRef mat);
 
 	void UpdateVolumeReferences(VolumeConstRef oldVol, VolumeRef newVol);
 

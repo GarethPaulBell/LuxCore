@@ -25,6 +25,7 @@
 
 #include "luxrays/core/exttrianglemesh.h"
 #include "luxrays/core/geometry/bsphere.h"
+#include "luxrays/core/namedobjectvector.h"
 #include "luxrays/usings.h"
 #include "slg/imagemap/imagemap.h"
 #include "slg/usings.h"
@@ -183,7 +184,8 @@ public:
 		const unsigned int index, float *data);
 
 	// Strands shape
-	void DefineStrands(const std::string &shapeName, const luxrays::cyHairFile &strandsFile,
+	Scene::ReturnType<ExtTriangleMesh> DefineStrands(
+		const std::string &shapeName, const luxrays::cyHairFile &strandsFile,
 		const StrendsShape::TessellationType tesselType,
 		const u_int adaptiveMaxDepth, const float adaptiveError,
 		const u_int solidSideCount, const bool solidCapBottom, const bool solidCapTop,
@@ -259,11 +261,16 @@ public:
 
 	void SetEnableParsePrint(bool status) { enableParsePrint = status; }
 
+	void moveToTrash(luxrays::NamedObjectUPtr&&);
+	void emptyTrash();
+
 	// Serialization
 	static SceneUPtr LoadSerialized(const std::string &fileName);
 	static void SaveSerialized(const std::string &fileName, SceneUPtr&& scene);
 
 	static std::string EncodeTriangleLightNamePrefix(const std::string &objectName);
+
+	// 
 
 protected:
 	//--------------------------------------------------------------------------
@@ -280,9 +287,17 @@ protected:
 	SceneObjectDefinitions objDefs; // SceneObject definitions
 	LightSourceDefinitions lightDefs; // LightSource definitions
 
-	// DataSet ownership is not very clear, we keep a shared at
-	// the moment
+	// The trash bin container collects items that are pending deletion, in
+	// order to avoid dangling references in real time rendering when the scene
+	// is updated while the render engine is running. Trash bin allows to keep
+	// the deleted objects alive while they are still in use in rendering. It
+	// is up to the rendering engine to empty trash bin.
+	std::vector<luxrays::NamedObjectUPtr> trashBin;
+	mutable std::mutex trashMtx;
+
+	// DataSet ownership is not very clear, we keep it shared
 	luxrays::DataSetSPtr dataSet;
+
 	// The bounding sphere of the scene (including the camera)
 	luxrays::BSphere sceneBSphere;
 
