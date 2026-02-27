@@ -109,6 +109,9 @@ public:
 		return std::move(oldDerivedPtr);
 
 	}
+	
+	template<>
+	NamedObjectUPtr DeleteObj<NamedObject>(const std::string &name);
 
 	void DeleteObjs(const std::vector<std::string> &names);
 
@@ -180,8 +183,6 @@ std::tuple< NamedObject&, std::unique_ptr<NamedObject> >
 NamedObjectVector::DefineObj(std::unique_ptr<NamedObject>&& obj);
 
 
-template<>
-NamedObjectUPtr NamedObjectVector::DeleteObj(const std::string &name);
 
 }  // Namespace luxrays
 

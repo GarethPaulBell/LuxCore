@@ -160,7 +160,7 @@ u_int NamedObjectVector::GetSize()const {
 //}
 
 template<>
-NamedObjectUPtr NamedObjectVector::DeleteObj(const string &name) {
+NamedObjectUPtr NamedObjectVector::DeleteObj<NamedObject>(const string &name) {
 	// We swap remove target and last object, and pop back
 	if (objs.empty()) throw("Trying to delete an object in an empty container");
 
