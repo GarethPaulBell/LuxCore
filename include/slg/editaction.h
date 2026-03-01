@@ -61,7 +61,7 @@ public:
 	friend std::ostream &operator<<(std::ostream &os, const EditActionList &eal);
 
 private:
-	u_int actions;
+	std::atomic<u_int> actions;
 };
 
 inline std::ostream &operator<<(std::ostream &os, const EditActionList &eal) {

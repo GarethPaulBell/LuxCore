@@ -298,12 +298,13 @@ void RTPathOCLRenderThread::RenderThreadImpl(std::stop_token stop_token) {
 
                                 // Check if we are in pause mode
                                 if (engine->pauseMode) {
-                                        if (requestedStop)
-                                                break;
+									if (requestedStop)
+											break;
 
-                                        std::this_thread::sleep_for(100ms);
-                                } else
-                                        break;
+									std::this_thread::sleep_for(100ms);
+                                } else {
+									break;
+								}
                         }
 
                         // Re-initialize the tile queue for the next frame

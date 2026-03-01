@@ -210,7 +210,7 @@ protected:
 	RenderStateSPtr startRenderState;
 	FilmPtr startFilm;
 
-	bool started, editMode, pauseMode;
+	std::atomic<bool> started, editMode, pauseMode;
 
 	FilterRPtr GetPixelFilter() const { return pixelFilter; }
 

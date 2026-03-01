@@ -126,12 +126,12 @@ protected:
 
 	// Used by RTPathOCLRenderEngine code to sync. with render thread 0
 	std::barrier<completion_t> *syncBarrier;
-	RTPathOCLSyncType syncType;
+	std::atomic<RTPathOCLSyncType> syncType;
 
 	// Used by all render threads to sync.
 	std::barrier<completion_t> *frameBarrier;
 
-	double frameTime;
+	std::atomic<double> frameTime;
 };
 
 }
