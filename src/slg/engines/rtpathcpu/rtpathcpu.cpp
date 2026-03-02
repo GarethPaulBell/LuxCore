@@ -19,8 +19,6 @@
 #include "slg/slg.h"
 #include "slg/samplers/rtpathcpusampler.h"
 #include <memory>
-#include <barrier>
-#include <csignal>
 #include "slg/engines/rtpathcpu/rtpathcpu.h"
 
 using namespace std;
@@ -31,25 +29,14 @@ using namespace slg;
 // RTPathCPURenderEngine
 //------------------------------------------------------------------------------
 
-
 RTPathCPURenderEngine::RTPathCPURenderEngine(RenderConfigRef rcfg) :
 		PathCPURenderEngine(rcfg) {
-
-	auto nullHandler = [&]() noexcept {
-	};
-
-	auto onPause = [&]() noexcept {
-		renderConfig.GetScene().EmptyTrash();
-	};
-
-	threadsSyncBarrier = std::make_unique<std::barrier<CompletionFunction>>(
-		renderThreads.size() + 1, nullHandler
-	);
-	threadsPauseBarrier = std::make_unique<std::barrier<CompletionFunction>>(
-		renderThreads.size() + 1, onPause
-	);
+	threadsSyncBarrier = new std::barrier(renderThreads.size() + 1, completion_t());
 }
 
+RTPathCPURenderEngine::~RTPathCPURenderEngine() {
+	delete threadsSyncBarrier;
+}
 
 void RTPathCPURenderEngine::StartLockLess() {
 	auto& cfg = renderConfig.GetConfig();
@@ -83,7 +70,7 @@ void RTPathCPURenderEngine::PauseThreads() {
 	threadsPauseMode = true;
 
 	// Wait for the threads
-	threadsPauseBarrier->arrive_and_wait();
+	threadsSyncBarrier->arrive_and_wait();
 }
 
 void RTPathCPURenderEngine::ResumeThreads() {
