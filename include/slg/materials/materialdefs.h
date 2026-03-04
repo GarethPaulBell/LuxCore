@@ -40,7 +40,7 @@ public:
 	bool IsMaterialDefined(const std::string &name) const {
 		return mats.IsObjDefined(name);
 	}
-	std::tuple<MaterialRef&, MaterialUPtr> DefineMaterial(MaterialUPtr&& m);
+	std::tuple<MaterialRef, MaterialUPtr> DefineMaterial(MaterialUPtr&& m);
 
 	// References
 	auto& GetMaterial(const std::string &name) const {
