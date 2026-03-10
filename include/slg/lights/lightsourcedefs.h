@@ -75,7 +75,7 @@ public:
 
 	LightSourceRef GetLightSource(size_t n) const { return lights[n]; }
 	LightSourcePtr GetLightSourcePtr(size_t n) const {
-		return std::addressof(lights[n].get());
+		return LightSourcePtr(std::addressof(lights[n].get()));
 	}
 
 	auto ViewEnvLightSources() {

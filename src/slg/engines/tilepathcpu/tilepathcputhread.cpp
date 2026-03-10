@@ -108,7 +108,7 @@ void TilePathCPURenderThread::RenderFunc(std::stop_token stop_token) {
 		// Render the tile
 		//----------------------------------------------------------------------
 
-		sampler.Init(&tileWork, tileFilm.get());
+		sampler.Init(&tileWork, FilmPtr(tileFilm.get()));
 
 		for (u_int y = 0; y < tileWork.GetCoord().height && !interruptionRequested; ++y) {
 			for (u_int x = 0; x < tileWork.GetCoord().width && !interruptionRequested; ++x) {

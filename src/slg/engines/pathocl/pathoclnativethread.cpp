@@ -89,7 +89,7 @@ FilmPtr PathOCLNativeRenderThread::GetThreadFilmPtr() {
 	auto * thread0 = static_cast<PathOCLNativeRenderThread *>(
 		engine->renderNativeThreads[0]
 	);
-	return thread0->threadFilm.get();
+	return FilmPtr(thread0->threadFilm.get());
 }
 
 FilmRef PathOCLNativeRenderThread::GetThreadFilm() {

@@ -101,7 +101,7 @@ LightSourceConstPtr LightSourceDefinitions::GetLightSourcePtr(const string &name
 	if (e == lightsByName.end())
 		throw runtime_error("Reference to an undefined LightSource in LightSourceDefinitions::GetLightSource(): " + name);
 
-	return e->second.get();
+	return LightSourceConstPtr(e->second.get());
 }
 
 LightSourcePtr LightSourceDefinitions::GetLightSourcePtr(const string &name) {
@@ -111,7 +111,7 @@ LightSourcePtr LightSourceDefinitions::GetLightSourcePtr(const string &name) {
 	if (e == lightsByName.end())
 		throw runtime_error("Reference to an undefined LightSource in LightSourceDefinitions::GetLightSource(): " + name);
 
-	return e->second.get();
+	return LightSourcePtr(e->second.get());
 }
 
 TriangleLightConstRef LightSourceDefinitions::GetLightSourceByMeshAndTriIndex(const u_int meshIndex, const u_int triIndex) const {

@@ -61,14 +61,14 @@ class observer_ptr {
         "Template parameter T cannot be void"
     );
 public:
-      using element_type = std::remove_extent_t<T>;
+	using element_type = std::remove_extent_t<T>;
 
 	// Default constructor: initialize to nullptr
 	constexpr observer_ptr() noexcept : ptr(nullptr) {}
 	constexpr observer_ptr(std::nullptr_t) noexcept : ptr(nullptr) {}
 
 	// Constructor from raw pointer (implicit conversions allowed)
-	constexpr observer_ptr(T* p) noexcept : ptr(p) {}
+	constexpr explicit observer_ptr(T* p) noexcept : ptr(p) {}
 
 	// Copy constructor and assignment
 	constexpr observer_ptr(const observer_ptr&) noexcept = default;
