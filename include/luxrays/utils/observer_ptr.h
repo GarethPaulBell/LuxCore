@@ -160,39 +160,47 @@ private:
 
 // Free function for dynamic casting observer_ptr<B> to observer_ptr<A>
 template<class T, class U>
-observer_ptr<T> dynamic_observer_cast(const observer_ptr<U>& r) noexcept
+inline observer_ptr<T>
+dynamic_observer_cast(const observer_ptr<U>& r) noexcept
 {
-    if (auto p = dynamic_cast<typename observer_ptr<T>::element_type*>(r.get()))
-        return observer_ptr<T>(r);
-    else
-        return observer_ptr<T>{nullptr};
+	auto* p = dynamic_cast<typename observer_ptr<T>::element_type*>(r.get());
+
+	if (p) return observer_ptr<T>(p);
+
+	return observer_ptr<T>{nullptr};
 }
 
 template<class T, class U>
-observer_ptr<const T> dynamic_observer_cast(const observer_ptr<const U>& r) noexcept
+inline observer_ptr<const T>
+dynamic_observer_cast(const observer_ptr<const U>& r) noexcept
 {
-    if (auto p = dynamic_cast<const typename observer_ptr<const T>::element_type*>(r.get()))
-        return observer_ptr<const T>(p);
-    else
-        return observer_ptr<const T>{nullptr};
+	const auto* p = dynamic_cast<const typename observer_ptr<const T>::element_type*>(r.get());
+
+	if (p) return observer_ptr<const T>(p);
+
+	return observer_ptr<const T>{nullptr};
+	}
+
+template<class T, class U>
+inline observer_ptr<T>
+static_observer_cast(const observer_ptr<U>& r) noexcept
+{
+	auto* p = static_cast<typename observer_ptr<T>::element_type*>(r.get());
+
+	if (p) return observer_ptr<T>(p);
+
+	return observer_ptr<T>{nullptr};
 }
 
 template<class T, class U>
-observer_ptr<T> static_observer_cast(const observer_ptr<U>& r) noexcept
+inline observer_ptr<const T>
+static_observer_cast(const observer_ptr<const U>& r) noexcept
 {
-    if (auto p = static_cast<typename observer_ptr<T>::element_type*>(r.get()))
-        return observer_ptr<T>(r);
-    else
-        return observer_ptr<T>{nullptr};
-}
+	const auto* p = static_cast<const typename observer_ptr<const T>::element_type*>(r.get());
 
-template<class T, class U>
-observer_ptr<const T> static_observer_cast(const observer_ptr<const U>& r) noexcept
-{
-    if (auto p = static_cast<const typename observer_ptr<const T>::element_type*>(r.get()))
-        return observer_ptr<const T>(p);
-    else
-        return observer_ptr<const T>{nullptr};
+	if (p) return observer_ptr<const T>(p);
+
+	return observer_ptr<const T>{nullptr};
 }
 
 // Non-member swap
