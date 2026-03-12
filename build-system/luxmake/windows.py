@@ -51,10 +51,6 @@ def win_recompose(args):
         namever = parsed_filename.group("namever")
         unpacked_wheel_path = Path(tmpdir) / namever
 
-        # Rename and move oidnDenoise
-        logger.info("Renaming oidnDenoise.pyd into oidnDenoise.exe")
-        _rename(unpacked_wheel_path, "oidnDenoise.pyd", "oidnDenoise.exe")
-
         # Rename and move OpenImageDenoise_device_cpu
         logger.info(
             "Renaming OpenImageDenoise_device_cpu.pyd "

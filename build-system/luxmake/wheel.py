@@ -167,13 +167,6 @@ def make_wheel(args):
             wheeltree / "pyluxcore.libs",
             dirs_exist_ok=True,
         )
-        oidn_path = INSTALL_DIR / "pyluxcore.oidn"
-        oidn_path.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(
-            INSTALL_DIR / "pyluxcore.oidn",
-            wheeltree / "pyluxcore.oidn",
-            dirs_exist_ok=True,
-        )
 
         # Pack wheel
         logger.info("Packing wheel")
