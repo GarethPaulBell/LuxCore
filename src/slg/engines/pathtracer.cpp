@@ -734,6 +734,7 @@ void PathTracer::ConnectToEye(IntersectionDevice *device,
 			0.f,
 			eyeDistance,
 			time);
+		// Do not clamp the ray here because of the check inside ProjectToImage
 		sampleSuccess = scene.GetCamera().ProjectToImage(&eyeRay, &filmX, &filmY);
 	} else {
 		eyeDir = Vector(bsdf.hitPoint.p - lensPoint);
@@ -744,6 +745,7 @@ void PathTracer::ConnectToEye(IntersectionDevice *device,
 			0.f,
 			eyeDistance,
 			time);
+		// Do not clamp the ray here because of the check inside GetSamplePosition
 		sampleSuccess = scene.GetCamera().GetSamplePosition(&eyeRay, &filmX, &filmY);
 	}
 
@@ -756,6 +758,7 @@ void PathTracer::ConnectToEye(IntersectionDevice *device,
 			// the information inside PathVolumeInfo are about the path from
 			// the light toward the camera (i.e. ray.o would be in the wrong
 			// place).
+			scene.GetCamera().ClampRay(&eyeRay); // Clamp the ray here (see comment above)
 			Ray traceRay(bsdf.GetRayOrigin(-eyeRay.d), -eyeRay.d,
 					eyeDistance - eyeRay.maxt,
 					eyeDistance - eyeRay.mint,
