@@ -92,7 +92,7 @@ public:
 
 	// Preprocess/update methods
 	virtual void Update(const u_int filmWidth, const u_int filmHeight, const u_int *filmSubRegion);
-	virtual void UpdateAuto(const Scene *scene) { };
+	virtual void UpdateAuto(SceneConstRef scene) { };
 
 	// Rendering methods
 	virtual void GenerateRay(const float time,
@@ -109,7 +109,7 @@ public:
 		const float filmX, const float filmY,
 		float *pdfW, float *fluxToRadianceFactor) const;
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 	float screenOffsetX, screenOffsetY;
 	float degrees;
@@ -143,3 +143,4 @@ private:
 }
 #endif	/* _SLG_ENVIRONMENT_CAMERA_H */
 
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

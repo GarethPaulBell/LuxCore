@@ -264,7 +264,7 @@ namespace bcd
 					uImage->set(line, col, z,
 							i_rImage.get(p1, z) + i_rImage.get(p2, z) + i_rImage.get(p3, z) + i_rImage.get(p4, z));
 			}
-		return move(uImage);
+		return std::move(uImage);
 	}
 
 	unique_ptr< Deepimf > MultiscaleDenoiser::downscaleAverage(const Deepimf& i_rImage)

@@ -19,6 +19,7 @@
 #ifndef _SLG_PATHOCL_H
 #define	_SLG_PATHOCL_H
 
+#include <functional>
 #if !defined(LUXRAYS_DISABLE_OPENCL)
 
 #include "slg/engines/pathoclbase/pathoclbase.h"
@@ -43,7 +44,7 @@ public:
 
 protected:
 	virtual void GetThreadFilmSize(u_int *filmWidth, u_int *filmHeight, u_int *filmSubRegion);
-	virtual void RenderThreadImpl();
+	virtual void RenderThreadImpl(std::stop_token stop_token);
 };
 
 //------------------------------------------------------------------------------
@@ -58,15 +59,18 @@ public:
 
 	virtual void Start();
 
+	FilmRef GetThreadFilm();
+	FilmPtr GetThreadFilmPtr();
+
 	friend class PathOCLRenderEngine;
 
 protected:
 	virtual void StartRenderThread();
-	virtual void RenderThreadImpl();
-	
-	// Only the first thread allocate a film. It is than used by all
+	virtual void RenderThreadImpl(std::stop_token stop_token);
+
+	// Only the first thread allocate a film. It is then used by all
 	// other threads too.
-	Film *threadFilm;
+	FilmUPtr threadFilm;
 };
 
 //------------------------------------------------------------------------------
@@ -75,13 +79,13 @@ protected:
 
 class PathOCLRenderEngine : public PathOCLBaseRenderEngine {
 public:
-	PathOCLRenderEngine(const RenderConfig *cfg);
+	PathOCLRenderEngine(RenderConfigRef cfg);
 	virtual ~PathOCLRenderEngine();
 
 	virtual RenderEngineType GetType() const { return GetObjectType(); }
 	virtual std::string GetTag() const { return GetObjectTag(); }
 
-	virtual RenderState *GetRenderState();
+	virtual RenderStateSPtr GetRenderState();
 
 	//--------------------------------------------------------------------------
 	// Static methods used by RenderEngineRegistry
@@ -89,14 +93,14 @@ public:
 
 	static RenderEngineType GetObjectType() { return PATHOCL; }
 	static std::string GetObjectTag() { return "PATHOCL"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static RenderEngine *FromProperties(const RenderConfig *rcfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static RenderEngine *FromProperties(RenderConfigRef rcfg);
 
 	friend class PathOCLOpenCLRenderThread;
 	friend class PathOCLNativeRenderThread;
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	virtual PathOCLBaseOCLRenderThread *CreateOCLThread(const u_int index,
 			luxrays::HardwareIntersectionDevice *device);
@@ -112,10 +116,9 @@ protected:
 	void UpdateTaskCount();
 
 	u_int GetTotalEyeSPP() const;
-	
-	FilmSampleSplatter *lightSampleSplatter;
-	SamplerSharedData *eyeSamplerSharedData;
-	SamplerSharedData *lightSamplerSharedData;
+
+	FilmSampleSplatterUPtr lightSampleSplatter;
+	std::shared_ptr<SamplerSharedData> eyeSamplerSharedData;
 
 	bool hasStartFilm, allRenderingThreadsStarted;
 };
@@ -125,3 +128,4 @@ protected:
 #endif
 
 #endif	/* _SLG_PATHOCL_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

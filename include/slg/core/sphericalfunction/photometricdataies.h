@@ -23,7 +23,7 @@
 #include <sstream>
 #include <cstring>
 
-#include <boost/unordered_map.hpp>
+#include <unordered_map>
 
 namespace slg {
 
@@ -49,7 +49,7 @@ public:
 	//--------------------------------------------------------------------------
 
 	std::string m_Version;
-	boost::unordered_map<std::string, std::string> m_Keywords;
+	std::unordered_map<std::string, std::string> m_Keywords;
 
 	//--------------------------------------------------------------------------
 	// Light data.
@@ -99,3 +99,4 @@ private:
 }
 
 #endif // _SLG_PHOTOMETRICDATAIES_H
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

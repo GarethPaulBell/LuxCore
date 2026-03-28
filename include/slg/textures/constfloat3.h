@@ -42,7 +42,7 @@ public:
 
 	const luxrays::Spectrum &GetColor() const { return color; };
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
 	luxrays::Spectrum color;
@@ -51,3 +51,4 @@ private:
 }
 
 #endif	/* _SLG_CONSTFLOAT3TEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

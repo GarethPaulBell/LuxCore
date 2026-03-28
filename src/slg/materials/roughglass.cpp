@@ -19,6 +19,7 @@
 #include "slg/textures/fresnel/fresneltexture.h"
 #include "slg/materials/roughglass.h"
 #include "slg/materials/thinfilmcoating.h"
+#include "slg/usings.h"
 
 using namespace std;
 using namespace luxrays;
@@ -30,12 +31,12 @@ using namespace slg;
 // LuxRender RoughGlass material porting.
 //------------------------------------------------------------------------------
 
-RoughGlassMaterial::RoughGlassMaterial(const Texture *frontTransp, const Texture *backTransp,
-		const Texture *emitted, const Texture *bump,
-		const Texture *refl, const Texture *trans,
-		const Texture *exteriorIorFact, const Texture *interiorIorFact,
-		const Texture *u, const Texture *v,
-		const Texture *filmThickness, const Texture *filmIor) :
+RoughGlassMaterial::RoughGlassMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
+		TextureConstPtr emitted, TextureConstPtr bump,
+		TextureConstPtr refl, TextureConstPtr trans,
+		TextureConstPtr exteriorIorFact, TextureConstPtr interiorIorFact,
+		TextureConstPtr u, TextureConstPtr v,
+		TextureConstPtr filmThickness, TextureConstPtr filmIor) :
 			Material(frontTransp, backTransp, emitted, bump), Kr(refl), Kt(trans),
 			exteriorIor(exteriorIorFact), interiorIor(interiorIorFact), nu(u), nv(v),
 			filmThickness(filmThickness), filmIor(filmIor) {
@@ -333,7 +334,7 @@ void RoughGlassMaterial::Pdf(const HitPoint &hitPoint,
 	}
 }
 
-void RoughGlassMaterial::AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+void RoughGlassMaterial::AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 	Material::AddReferencedTextures(referencedTexs);
 
 	Kr->AddReferencedTextures(referencedTexs);
@@ -350,53 +351,54 @@ void RoughGlassMaterial::AddReferencedTextures(boost::unordered_set<const Textur
 		filmIor->AddReferencedTextures(referencedTexs);
 }
 
-void RoughGlassMaterial::UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
+void RoughGlassMaterial::UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
 	Material::UpdateTextureReferences(oldTex, newTex);
 
 	bool updateGlossiness = false;
-	if (Kr == oldTex)
-		Kr = newTex;
-	if (Kt == oldTex)
-		Kt = newTex;
-	if (exteriorIor == oldTex)
-		exteriorIor = newTex;
-	if (interiorIor == oldTex)
-		interiorIor = newTex;
-	if (nu == oldTex) {
-		nu = newTex;
+	if (Kr == &oldTex)
+		Kr = &newTex;
+	if (Kt == &oldTex)
+		Kt = &newTex;
+	if (exteriorIor == &oldTex)
+		exteriorIor = &newTex;
+	if (interiorIor == &oldTex)
+		interiorIor = &newTex;
+	if (nu == &oldTex) {
+		nu = &newTex;
 		updateGlossiness = true;
 	}
-	if (nv == oldTex) {
-		nv = newTex;
+	if (nv == &oldTex) {
+		nv = &newTex;
 		updateGlossiness = true;
 	}
-	if (filmThickness == oldTex)
-		filmThickness = newTex;
-	if (filmIor == oldTex)
-		filmIor = newTex;
+	if (filmThickness == &oldTex)
+		filmThickness = &newTex;
+	if (filmIor == &oldTex)
+		filmIor = &newTex;
 
 	if (updateGlossiness)
 		glossiness = ComputeGlossiness(nu, nv);
 }
 
-Properties RoughGlassMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
-	Properties props;
+PropertiesUPtr RoughGlassMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.materials." + name + ".type")("roughglass"));
-	props.Set(Property("scene.materials." + name + ".kr")(Kr->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".kt")(Kt->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".type")("roughglass"));
+	props->Set(Property("scene.materials." + name + ".kr")(Kr->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".kt")(Kt->GetSDLValue()));
 	if (exteriorIor)
-		props.Set(Property("scene.materials." + name + ".exteriorior")(exteriorIor->GetSDLValue()));
+		props->Set(Property("scene.materials." + name + ".exteriorior")(exteriorIor->GetSDLValue()));
 	if (interiorIor)
-		props.Set(Property("scene.materials." + name + ".interiorior")(interiorIor->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".uroughness")(nu->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".vroughness")(nv->GetSDLValue()));
+		props->Set(Property("scene.materials." + name + ".interiorior")(interiorIor->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".uroughness")(nu->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".vroughness")(nv->GetSDLValue()));
 	if (filmThickness)
-		props.Set(Property("scene.materials." + name + ".filmthickness")(filmThickness->GetSDLValue()));
+		props->Set(Property("scene.materials." + name + ".filmthickness")(filmThickness->GetSDLValue()));
 	if (filmIor)
-		props.Set(Property("scene.materials." + name + ".filmior")(filmIor->GetSDLValue()));
-	props.Set(Material::ToProperties(imgMapCache, useRealFileName));
+		props->Set(Property("scene.materials." + name + ".filmior")(filmIor->GetSDLValue()));
+	props->Set(Material::ToProperties(imgMapCache, useRealFileName));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

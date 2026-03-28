@@ -24,10 +24,10 @@ using namespace std;
 using namespace luxrays;
 using namespace slg;
 
-Properties Film::ToProperties(const Properties &cfg) {
-	Properties props;
+PropertiesUPtr Film::ToProperties(const Properties &cfg) {
+	auto props = std::make_unique<Properties>();
 	
-	props <<
+	*props <<
 			cfg.Get(Property("film.width")(640u)) <<
 			cfg.Get(Property("film.height")(480u)) <<
 			cfg.Get(Property("film.safesave")(true)) <<
@@ -44,8 +44,8 @@ Properties Film::ToProperties(const Properties &cfg) {
 			FilmOutputs::ToProperties(cfg);
 
 	// Add also all image pipeline definitions
-	props << cfg.GetAllProperties("film.imagepipeline.");
-	props << cfg.GetAllProperties("film.imagepipelines.");
+	*props << *cfg.GetAllProperties("film.imagepipeline.");
+	*props << *cfg.GetAllProperties("film.imagepipelines.");
 
 	return props;
 }
@@ -102,43 +102,44 @@ bool Film::GetFilmSize(const Properties &cfg,
 	return subRegionUsed;
 }
 
-Film *Film::FromProperties(const Properties &cfg) {
+FilmUPtr Film::FromProperties(PropertiesRPtr cfg) {
 	//--------------------------------------------------------------------------
 	// Create the Film
 	//--------------------------------------------------------------------------
 
 	u_int filmFullWidth, filmFullHeight, filmSubRegion[4];
-	const bool filmSubRegionUsed = GetFilmSize(cfg, &filmFullWidth, &filmFullHeight, filmSubRegion);
+	const bool filmSubRegionUsed = GetFilmSize(*cfg, &filmFullWidth, &filmFullHeight, filmSubRegion);
 
 	SLG_LOG("Film resolution: " << filmFullWidth << "x" << filmFullHeight);
 	if (filmSubRegionUsed)
 		SLG_LOG("Film sub-region: " << filmSubRegion[0] << " " << filmSubRegion[1] << filmSubRegion[2] << " " << filmSubRegion[3]);
-	unique_ptr<Film> film(new Film(filmFullWidth, filmFullHeight,
-			filmSubRegionUsed ? filmSubRegion : NULL));
+
+	FilmUPtr film = Film::Create(filmFullWidth, filmFullHeight,
+			filmSubRegionUsed ? filmSubRegion : nullptr);
 
 	// For compatibility with the past
-	if (cfg.IsDefined("film.alphachannel.enable")) {
+	if (cfg->IsDefined("film.alphachannel.enable")) {
 		SLG_LOG("WARNING: deprecated property film.alphachannel.enable");
 
-		if (cfg.Get(Property("film.alphachannel.enable")(false)).Get<bool>())
+		if (cfg->Get(Property("film.alphachannel.enable")(false)).Get<bool>())
 			film->AddChannel(Film::ALPHA);
 		else
 			film->RemoveChannel(Film::ALPHA);
 	}
 
-	film->hwEnable = cfg.Get(Property("film.hw.enable")(
-			cfg.Get(Property("film.opencl.enable")(true)).Get<bool>()
+	film->hwEnable = cfg->Get(Property("film.hw.enable")(
+			cfg->Get(Property("film.opencl.enable")(true)).Get<bool>()
 			)).Get<bool>();
-	film->hwDeviceIndex = cfg.Get(Property("film.hw.device")(
+	film->hwDeviceIndex = cfg->Get(Property("film.hw.device")(
 			// For compatibility with the past
-			cfg.Get(Property("film.opencl.device")(-1)).Get<int>()
+			cfg->Get(Property("film.opencl.device")(-1)).Get<int>()
 			)).Get<int>();
 
 	//--------------------------------------------------------------------------
 	// Add the default image pipeline
 	//--------------------------------------------------------------------------
 
-	unique_ptr<ImagePipeline> imagePipeline(new ImagePipeline());
+	auto imagePipeline = std::make_unique<ImagePipeline>();
 	imagePipeline->AddPlugin(new AutoLinearToneMap());
 	imagePipeline->AddPlugin(new GammaCorrectionPlugin(2.2f));
 
@@ -148,9 +149,11 @@ Film *Film::FromProperties(const Properties &cfg) {
 	// Add the default output
 	//--------------------------------------------------------------------------
 
-	film->Parse(Properties() << 
-			Property("film.outputs.0.type")("RGB_IMAGEPIPELINE") <<
-			Property("film.outputs.0.filename")("image.png"));
+	auto filmProps = std::make_unique<Properties>();
+	*filmProps <<
+		Property("film.outputs.0.type")("RGB_IMAGEPIPELINE") <<
+		Property("film.outputs.0.filename")("image.png");
+	film->Parse(filmProps);
 
 	//--------------------------------------------------------------------------
 	// Create the image pipeline, initialize radiance channel scales
@@ -159,5 +162,5 @@ Film *Film::FromProperties(const Properties &cfg) {
 
 	film->Parse(cfg);
 
-	return film.release();
-}
+	return film;
+}// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

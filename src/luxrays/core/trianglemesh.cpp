@@ -19,6 +19,8 @@
 #include <cassert>
 #include <deque>
 
+#include <boost/serialization/shared_ptr.hpp>
+
 #include "luxrays/core/trianglemesh.h"
 #include "luxrays/core/exttrianglemesh.h"
 
@@ -62,10 +64,13 @@ TriangleMesh::TriangleMesh(const u_int meshVertCount,
 
 void TriangleMesh::Preprocess() {
 	// Compute mesh area
-	area = 0.f;
-	for (u_int i = 0; i < triCount; ++i)
-		area += tris[i].Area(vertices);
+	float local_area = 0.f;
 
+	#pragma omp parallel for reduction(+:local_area)
+	for (int i = 0; i < static_cast<int>(triCount); ++i)
+		local_area += tris[i].Area(vertices);
+
+	area = local_area;
 	cachedBBoxValid = false;
 }
 
@@ -92,7 +97,7 @@ void TriangleMesh::ApplyTransform(const Transform &trans) {
 	Preprocess();
 }
 
-TriangleMesh *TriangleMesh::Merge(
+TriangleMeshUPtr TriangleMesh::Merge(
 	const deque<const Mesh *> &meshes,
 	TriangleMeshID **preprocessedMeshIDs,
 	TriangleID **preprocessedMeshTriangleIDs) {
@@ -146,11 +151,12 @@ TriangleMesh *TriangleMesh::Merge(
 		}
 	}
 
-	return new TriangleMesh(totalVertexCount, totalTriangleCount, v, i);
+	return std::make_unique<TriangleMesh>(totalVertexCount, totalTriangleCount, v, i);
 }
 
-u_int TriangleMesh::GetUniqueVerticesMapping(vector<u_int> &uniqueVertices,
-			bool (*CompareVertices)(const TriangleMesh &mesh,
+u_int TriangleMesh::GetUniqueVerticesMapping(
+		vector<u_int> &uniqueVertices,
+		bool (*CompareVertices)(const TriangleMesh& mesh,
 				const u_int vertIndex1, const u_int vertIndex2)) const {
 	const u_int originalVertCount = GetTotalVertexCount();
 
@@ -225,12 +231,11 @@ u_int TriangleMesh::GetUniqueVerticesMapping(vector<u_int> &uniqueVertices,
 
 BOOST_CLASS_EXPORT_IMPLEMENT(luxrays::InstanceTriangleMesh)
 
-InstanceTriangleMesh::InstanceTriangleMesh(TriangleMesh *m, const Transform &t) {
-	assert (m != NULL);
-	
+InstanceTriangleMesh::InstanceTriangleMesh(TriangleMeshRef m, const Transform &t) {
+
 	trans = t;
 	transSwapsHandedness = t.SwapsHandedness();
-	mesh = m;
+	mesh = &m;
 
 	// The mesh area is compute on demand and cached
 	cachedArea = -1.f;
@@ -253,11 +258,10 @@ BBox InstanceTriangleMesh::GetBBox() const {
 
 BOOST_CLASS_EXPORT_IMPLEMENT(luxrays::MotionTriangleMesh)
 
-MotionTriangleMesh::MotionTriangleMesh(TriangleMesh *m, const MotionSystem &ms) {
-	assert (m != NULL);
-
+MotionTriangleMesh::MotionTriangleMesh(TriangleMeshRef m, const MotionSystem &ms) {
+	
 	motionSystem = ms;
-	mesh = m;
+	mesh = &m;
 
 	// The mesh area is compute on demand and cached
 	cachedArea = -1.f;
@@ -282,3 +286,4 @@ void MotionTriangleMesh::ApplyTransform(const Transform &trans) {
 
 	cachedBBoxValid = false;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -55,8 +55,8 @@ set(LUXCOREUI_SRCS
 
 add_executable(luxcoreui ${LUXCOREUI_SRCS})
 target_link_libraries(luxcoreui PRIVATE
-  luxrays
   boost::boost
+  luxrays
   luxcore
   imgui::imgui
   imguifiledialog::imguifiledialog
@@ -72,9 +72,26 @@ install(
   FRAMEWORK
       DESTINATION luxcore
   OPTIONAL
+  PERMISSIONS
+    OWNER_WRITE OWNER_READ OWNER_EXECUTE
+    GROUP_READ GROUP_EXECUTE
+    WORLD_READ WORLD_EXECUTE
 )
 install(RUNTIME_DEPENDENCY_SET LUXUI_DEPS
   PRE_EXCLUDE_REGEXES ${DEP_EXCLUDE}
   POST_EXCLUDE_REGEXES ${INSTALL_EXCLUDE_REGEXES}
   DIRECTORIES "${CONAN_RUNTIME_LIB_DIRS}"
+  PERMISSIONS
+    OWNER_WRITE OWNER_READ OWNER_EXECUTE
+    GROUP_READ GROUP_EXECUTE
+    WORLD_READ WORLD_EXECUTE
 )
+# Install pdb file (if msvc and debug)
+if(MSVC)
+  install(FILES "$<$<CONFIG:Debug>:$<TARGET_PDB_FILE:luxcoreui>>"
+    COMPONENT luxcoreui
+    DESTINATION bin
+    OPTIONAL
+  )
+endif()
+

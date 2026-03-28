@@ -31,22 +31,30 @@ class DistributionLightStrategy : public LightStrategy {
 public:
 	virtual ~DistributionLightStrategy() { delete lightsDistribution; }
 
-	virtual void Preprocess(const Scene *scn, const LightStrategyTask taskType) { scene = scn; }
+	virtual void Preprocess(SceneConstRef scn, const LightStrategyTask taskType) {
+		scene = &scn;
+	}
 
 	// Used for direct light sampling
-	virtual LightSource *SampleLights(const float u,
+	virtual LightSourcePtr SampleLights(
+			SceneConstRef scene,
+			const float u,
 			const luxrays::Point &p, const luxrays::Normal &n,
 			const bool isVolume,
-			float *pdf) const;
-	virtual float SampleLightPdf(const LightSource *light,
+			float *pdf) const override;
+	virtual float SampleLightPdf(
+			LightSourceConstRef light,
 			const luxrays::Point &p, const luxrays::Normal &n,
-			const bool isVolume) const;
+			const bool isVolume
+	) const override;
 
 	// Used for light emission
-	virtual LightSource *SampleLights(const float u, float *pdf) const;
+	virtual LightSourcePtr SampleLights(
+			SceneConstRef scene, const float u, float *pdf
+	) const override;
 	
 	// Transform the current object in Properties
-	virtual luxrays::Properties ToProperties() const;
+	virtual luxrays::PropertiesUPtr ToProperties() const;
 	
 	const luxrays::Distribution1D *GetLightsDistribution() const { return lightsDistribution; }
 	
@@ -59,3 +67,4 @@ protected:
 }
 
 #endif	/* _SLG_DISTRIBUTION_LIGHTSTRATEGY_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -20,13 +20,14 @@
 #define	_SLG_TRACEPHOTONSTHREAD_H
 
 #include <vector>
-#include <boost/thread.hpp>
 
 #include "luxrays/utils/utils.h"
+#include "luxrays/usings.h"
 
 #include "slg/slg.h"
 
 namespace slg {
+
 
 //------------------------------------------------------------------------------
 // TracePhotonsThread
@@ -52,9 +53,9 @@ public:
 	TracePhotonsThread(PhotonGICache &pgic, const u_int index,
 		const u_int seedBase, const u_int photonTracedCount,
 		const bool indirectCacheDone, const bool causticCacheDone,
-		boost::atomic<u_int> &gPhotonsCounter, boost::atomic<u_int> &gIndirectPhotonsTraced,
-		boost::atomic<u_int> &gCausticPhotonsTraced, boost::atomic<u_int> &gIndirectSize,
-		boost::atomic<u_int> &gCausticSize);
+		std::atomic<u_int> &gPhotonsCounter, std::atomic<u_int> &gIndirectPhotonsTraced,
+		std::atomic<u_int> &gCausticPhotonsTraced, std::atomic<u_int> &gIndirectSize,
+		std::atomic<u_int> &gCausticSize);
 	virtual ~TracePhotonsThread();
 
 	void Start();
@@ -79,18 +80,18 @@ private:
 			const std::vector<RadiancePhotonEntry> &newIndirectPhotons,
 			const std::vector<Photon> &newCausticPhotons);
 
-	void RenderFunc();
+	void RenderFunc(std::stop_token stop_token);
 
 	PhotonGICache &pgic;
 	const u_int threadIndex, seedBase, photonTracedCount;
 
-	boost::atomic<u_int> &globalPhotonsCounter;
-	boost::atomic<u_int> &globalIndirectPhotonsTraced;
-	boost::atomic<u_int> &globalCausticPhotonsTraced;
-	boost::atomic<u_int> &globalIndirectSize;
-	boost::atomic<u_int> &globalCausticSize;
+	std::atomic<u_int> &globalPhotonsCounter;
+	std::atomic<u_int> &globalIndirectPhotonsTraced;
+	std::atomic<u_int> &globalCausticPhotonsTraced;
+	std::atomic<u_int> &globalIndirectSize;
+	std::atomic<u_int> &globalCausticSize;
 
-	boost::thread *renderThread;
+	luxrays::JThreadUPtr renderThread;
 
 	u_int sampleBootSize, sampleStepSize, sampleSize;
 	bool indirectDone, causticDone;
@@ -99,3 +100,4 @@ private:
 }
 
 #endif	/* _SLG_TRACEPHOTONSTHREAD_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

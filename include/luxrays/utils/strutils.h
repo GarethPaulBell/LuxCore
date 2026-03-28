@@ -95,3 +95,4 @@ inline std::string ToMemString(const size_t size) {
 }
 
 #endif	/* _LUXRAYS_STRUTILS_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

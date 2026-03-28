@@ -29,7 +29,7 @@ namespace slg {
 
 class RoundingTexture : public Texture {
 public:
-    RoundingTexture(const Texture *t, const Texture *i) : texture(t), increment(i) { }
+    RoundingTexture(TextureRef t, TextureRef i) : texture(t), increment(i) { }
     virtual ~RoundingTexture() { }
 
     virtual TextureType GetType(void) const { return ROUNDING_TEX; }
@@ -39,38 +39,35 @@ public:
     virtual float Y() const { return 1.f; }
     virtual float Filter() const { return 1.f; }
 
-    virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+    virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
         Texture::AddReferencedTextures(referencedTexs);
 
-        texture->AddReferencedTextures(referencedTexs);
-        increment->AddReferencedTextures(referencedTexs);
+        GetTexture().AddReferencedTextures(referencedTexs);
+        GetIncrement().AddReferencedTextures(referencedTexs);
     }
 
-    virtual void AddReferencedImageMaps(boost::unordered_set<const ImageMap *> referencedImgMaps) const {
-        texture->AddReferencedImageMaps(referencedImgMaps);
-        increment->AddReferencedImageMaps(referencedImgMaps);
+    virtual void AddReferencedImageMaps(std::unordered_set<const ImageMap * > referencedImgMaps) const {
+        GetTexture().AddReferencedImageMaps(referencedImgMaps);
+        GetIncrement().AddReferencedImageMaps(referencedImgMaps);
     }
 
-    virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
-        if(texture == oldTex) {
-            texture = newTex;
-        }
-        if(increment == oldTex) {
-            increment = newTex;
-        }
+    virtual void UpdateTextureReferences(TextureRef oldTex, TextureRef newTex) {
+		updtex(texture, oldTex, newTex);
+		updtex(increment, oldTex, newTex);
     }
 
-    const Texture *GetTexture() const { return texture; }
-    const Texture *GetIncrement() const { return increment; }
+    TextureConstRef GetTexture() const { return texture; }
+    TextureConstRef GetIncrement() const { return increment; }
 
-    virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+    virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
-    const Texture *texture;
-    const Texture *increment;
+    std::reference_wrapper<Texture> texture;
+    std::reference_wrapper<Texture> increment;
 
     float round(float value, float increment) const;
 };
 }
 
 #endif  /* _SLG_ROUNDTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

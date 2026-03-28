@@ -21,6 +21,7 @@
 #include "luxrays/core/intersectiondevice.h"
 #include "slg/slg.h"
 #include "slg/engines/pathoclbase/pathoclbase.h"
+#include "luxrays/utils/thread.h"
 
 using namespace std;
 using namespace luxrays;
@@ -57,7 +58,7 @@ void PathOCLBaseNativeRenderThread::Start() {
 
 void PathOCLBaseNativeRenderThread::Interrupt() {
 	if (renderThread)
-		renderThread->interrupt();
+		renderThread->request_stop();
 }
 
 void PathOCLBaseNativeRenderThread::Stop() {
@@ -71,17 +72,18 @@ void PathOCLBaseNativeRenderThread::Stop() {
 
 void PathOCLBaseNativeRenderThread::StartRenderThread() {
 	threadDone = false;
-	
+
 	// Create the thread for the rendering
-	renderThread = new boost::thread(&PathOCLBaseNativeRenderThread::RenderThreadImpl, this);
+	renderThread = std::make_unique<luxrays::JThread>(
+		std::bind_front(&PathOCLBaseNativeRenderThread::RenderThreadImpl, this)
+	);
+	SetThreadName(renderThread, "LxPathOCLNative");
 }
 
 void PathOCLBaseNativeRenderThread::StopRenderThread() {
 	if (renderThread) {
-		renderThread->interrupt();
+		renderThread->request_stop();
 		renderThread->join();
-		delete renderThread;
-		renderThread = NULL;
 	}
 }
 
@@ -106,3 +108,4 @@ void PathOCLBaseNativeRenderThread::WaitForDone() const {
 }
 
 #endif
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

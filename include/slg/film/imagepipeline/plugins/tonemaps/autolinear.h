@@ -74,3 +74,4 @@ BOOST_CLASS_VERSION(slg::AutoLinearToneMap, 1)
 BOOST_CLASS_EXPORT_KEY(slg::AutoLinearToneMap)
 
 #endif	/* _SLG_AUTOLINEAR_TONEMAP_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -31,7 +31,7 @@ class LightStrategyUniform : public DistributionLightStrategy {
 public:
 	LightStrategyUniform() : DistributionLightStrategy(TYPE_UNIFORM) { }
 
-	virtual void Preprocess(const Scene *scene, const LightStrategyTask taskType,
+	virtual void Preprocess(SceneConstRef scene, const LightStrategyTask taskType,
 			const bool useRTMode);
 
 	virtual LightStrategyType GetType() const { return GetObjectType(); }
@@ -43,13 +43,15 @@ public:
 
 	static LightStrategyType GetObjectType() { return TYPE_UNIFORM; }
 	static std::string GetObjectTag() { return "UNIFORM"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static LightStrategy *FromProperties(const luxrays::Properties &cfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	//static LightStrategy *FromProperties(const luxrays::Properties &cfg);
+	static LightStrategyUPtr FromProperties(const luxrays::Properties &cfg);
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 };
 
 }
 
 #endif	/* _SLG_LIGHTSTRATEGY_UNIFORM_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

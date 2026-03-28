@@ -20,6 +20,7 @@
 #define	_SLG_HSVTEX_H
 
 #include "slg/textures/texture.h"
+#include <functional>
 
 namespace slg {
 
@@ -29,8 +30,8 @@ namespace slg {
 
 class HsvTexture : public Texture {
 public:
-	HsvTexture(const Texture *t, const Texture *h, 
-			const Texture *s, const Texture *v) : tex(t), hue(h), sat(s), val(v) { }
+	HsvTexture(TextureRef t, TextureRef h, 
+			TextureRef s, TextureRef v) : tex(t), hue(h), sat(s), val(v) { }
 	virtual ~HsvTexture() { }
 
 	virtual TextureType GetType() const { return HSV_TEX; }
@@ -39,38 +40,32 @@ public:
 	virtual float Y() const;
 	virtual float Filter() const;
 
-	virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 		Texture::AddReferencedTextures(referencedTexs);
 
-		tex->AddReferencedTextures(referencedTexs);
-		hue->AddReferencedTextures(referencedTexs);
-		sat->AddReferencedTextures(referencedTexs);
-		val->AddReferencedTextures(referencedTexs);
+		GetTexture().AddReferencedTextures(referencedTexs);
+		GetHue().AddReferencedTextures(referencedTexs);
+		GetSaturation().AddReferencedTextures(referencedTexs);
+		GetValue().AddReferencedTextures(referencedTexs);
 	}
-	virtual void AddReferencedImageMaps(boost::unordered_set<const ImageMap *> &referencedImgMaps) const {
-		tex->AddReferencedImageMaps(referencedImgMaps);
-		hue->AddReferencedImageMaps(referencedImgMaps);
-		sat->AddReferencedImageMaps(referencedImgMaps);
-		val->AddReferencedImageMaps(referencedImgMaps);
-	}
-
-	virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
-		if (tex == oldTex)
-			tex = newTex;
-		if (hue == oldTex)
-			hue = newTex;
-		if (sat == oldTex)
-			sat = newTex;
-		if (val == oldTex)
-			val = newTex;
+	virtual void AddReferencedImageMaps(std::unordered_set<const ImageMap * > &referencedImgMaps) const {
+		GetTexture().AddReferencedImageMaps(referencedImgMaps);
+		GetHue().AddReferencedImageMaps(referencedImgMaps);
+		GetSaturation().AddReferencedImageMaps(referencedImgMaps);
+		GetValue().AddReferencedImageMaps(referencedImgMaps);
 	}
 
-	const Texture *GetTexture() const { return tex; }
-	const Texture *GetHue() const { return hue; }
-	const Texture *GetSaturation() const { return sat; }
-	const Texture *GetValue() const { return val; }
+	virtual void UpdateTextureReferences(TextureRef oldTex, TextureRef newTex) {
+		for (auto& t : std::array{tex, hue, sat, val})
+			updtex(t, oldTex, newTex);
+	}
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	TextureConstRef GetTexture() const { return tex; }
+	TextureConstRef GetHue() const { return hue; }
+	TextureConstRef GetSaturation() const { return sat; }
+	TextureConstRef GetValue() const { return val; }
+
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
 	luxrays::Spectrum RgbToHsv(const luxrays::Spectrum &rgb) const;
@@ -79,12 +74,13 @@ private:
 			const float &hueHitpoint, const float &satHitpoint,
 			const float &valHitpoint) const;
 
-	const Texture *tex;
-	const Texture *hue;
-	const Texture *sat;
-	const Texture *val;
+	std::reference_wrapper<Texture> tex;
+	std::reference_wrapper<Texture> hue;
+	std::reference_wrapper<Texture> sat;
+	std::reference_wrapper<Texture> val;
 };
 
 }
 
 #endif	/* _SLG_HSVTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

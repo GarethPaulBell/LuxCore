@@ -12,10 +12,12 @@
  * Unless required by applicable law or agreed to in writing, software     *
  * distributed under the License is distributed on an "AS IS" BASIS,       *
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.*
+ *
  * See the License for the specific language governing permissions and     *
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include <cassert>
 #include <boost/format.hpp>
 
 #include "luxrays/utils/thread.h"
@@ -26,6 +28,7 @@
 #include "slg/engines/caches/photongi/tracephotonsthread.h"
 #include "slg/utils/pathdepthinfo.h"
 #include "slg/utils/pathinfo.h"
+#include "slg/cameras/camera.h"
 
 using namespace std;
 using namespace luxrays;
@@ -38,9 +41,9 @@ using namespace slg;
 TracePhotonsThread::TracePhotonsThread(PhotonGICache &cache, const u_int index,
 		const u_int seed, const u_int photonCount,
 		const bool indirectCacheDone, const bool causticCacheDone,
-		boost::atomic<u_int> &gPhotonsCounter, boost::atomic<u_int> &gIndirectPhotonsTraced,
-		boost::atomic<u_int> &gCausticPhotonsTraced, boost::atomic<u_int> &gIndirectSize,
-		boost::atomic<u_int> &gCausticSize) :
+		std::atomic<u_int> &gPhotonsCounter, std::atomic<u_int> &gIndirectPhotonsTraced,
+		std::atomic<u_int> &gCausticPhotonsTraced, std::atomic<u_int> &gIndirectSize,
+		std::atomic<u_int> &gCausticSize) :
 	pgic(cache), threadIndex(index), seedBase(seed), photonTracedCount(photonCount),
 	globalPhotonsCounter(gPhotonsCounter),
 	globalIndirectPhotonsTraced(gIndirectPhotonsTraced),
@@ -59,15 +62,15 @@ void TracePhotonsThread::Start() {
 	indirectPhotons.clear();
 	causticPhotons.clear();
 
-	renderThread = new boost::thread(&TracePhotonsThread::RenderFunc, this);
+	renderThread = std::make_unique<luxrays::JThread>(
+		std::bind_front(&TracePhotonsThread::RenderFunc, this)
+	);
+	SetThreadName(renderThread, "LxTracePhotons");
 }
 
 void TracePhotonsThread::Join() {
-	if (renderThread) {
+	if (renderThread and renderThread->joinable()) {
 		renderThread->join();
-
-		delete renderThread;
-		renderThread = nullptr;
 	}
 }
 
@@ -113,29 +116,29 @@ bool TracePhotonsThread::TracePhotonPath(RandomGenerator &rndGen,
 	newIndirectPhotons.clear();
 	newCausticPhotons.clear();
 	vector<u_int> allNearEntryIndices;
-	
-	const Scene *scene = pgic.scene;
-	const Camera *camera = scene->camera;
+
+	SceneConstRef scene = pgic.scene;
+	auto& camera = scene.GetCamera();
 
 	bool usefulPath = false;
-	
+
 	Spectrum lightPathFlux;
 
 	const float timeSample = samples[0];
 	const float time = (pgic.params.photon.timeStart <= pgic.params.photon.timeEnd) ?
 		Lerp(timeSample, pgic.params.photon.timeStart, pgic.params.photon.timeEnd) :
-		camera->GenerateRayTime(timeSample);
+		camera.GenerateRayTime(timeSample);
 
 	// Select one light source
 	float lightPickPdf;
-	const LightSource *light = scene->lightDefs.GetEmitLightStrategy()->
-			SampleLights(samples[1], &lightPickPdf);
+	auto light = scene.GetLightSources().GetEmitLightStrategy().
+			SampleLights(scene, samples[1], &lightPickPdf);
 
 	if (light) {
 		// Initialize the light path
 		float lightEmitPdfW;
 		Ray nextEventRay;
-		lightPathFlux = light->Emit(*scene,
+		lightPathFlux = light->Emit(scene,
 				time, samples[2], samples[3], samples[4], samples[5], samples[6],
 				nextEventRay, lightEmitPdfW);
 
@@ -154,7 +157,7 @@ bool TracePhotonsThread::TracePhotonPath(RandomGenerator &rndGen,
 				RayHit nextEventRayHit;
 				BSDF bsdf;
 				Spectrum connectionThroughput;
-				const bool hit = scene->Intersect(nullptr, LIGHT_RAY | GENERIC_RAY, &pathInfo.volume, samples[sampleOffset],
+				const bool hit = scene.Intersect(nullptr, LIGHT_RAY | GENERIC_RAY, &pathInfo.volume, samples[sampleOffset],
 						&nextEventRay, &nextEventRayHit, &bsdf,
 						&connectionThroughput);
 
@@ -280,7 +283,7 @@ void TracePhotonsThread::AddPhotons(const float currentPhotonsScale,
 //  "Robust Adaptive Photon Tracing using Photon Path Visibility"
 //  by TOSHIYA HACHISUKA and HENRIK WANN JENSEN
 
-void TracePhotonsThread::RenderFunc() {
+void TracePhotonsThread::RenderFunc(std::stop_token stop_token) {
 	const u_int workSize = 4096;
 
 	//--------------------------------------------------------------------------
@@ -318,7 +321,7 @@ void TracePhotonsThread::RenderFunc() {
 	const double startTime = WallClockTime();
 	double lastPrintTime = startTime;
 	bool foundUsefulFirstPrint = true;
-	while(!boost::this_thread::interruption_requested()) {
+	while(!stop_token.stop_requested()) {
 		// Get some work to do
 		u_int workCounter;
 		do {
@@ -389,7 +392,7 @@ void TracePhotonsThread::RenderFunc() {
 
 #ifdef WIN32
 				// Work around Windows bad scheduling
-				renderThread->yield();
+                std::this_thread::yield();
 #endif
 			}
 
@@ -409,7 +412,7 @@ void TracePhotonsThread::RenderFunc() {
 				u_int mutatedCount = 1;
 				u_int uniformCount = 1;
 				u_int workToDoIndex = workToDo;
-				while (workToDoIndex-- && !boost::this_thread::interruption_requested()) {
+				while (workToDoIndex-- && !stop_token.stop_requested()) {
 					UniformMutate(rndGen, uniformPathSamples);
 
 					if (TracePhotonPath(rndGen, uniformPathSamples, uniformIndirectPhotons,
@@ -454,7 +457,7 @@ void TracePhotonsThread::RenderFunc() {
 
 #ifdef WIN32
 					// Work around Windows bad scheduling
-					renderThread->yield();
+                    std::this_thread::yield();
 #endif
 				}
 
@@ -481,7 +484,7 @@ void TracePhotonsThread::RenderFunc() {
 			// Trace light paths
 
 			u_int workToDoIndex = workToDo;
-			while (workToDoIndex-- && !boost::this_thread::interruption_requested()) {
+			while (workToDoIndex-- && !stop_token.stop_requested()) {
 				UniformMutate(rndGen, currentPathSamples);
 
 				TracePhotonPath(rndGen, currentPathSamples, currentIndirectPhotons, currentCausticPhotons);
@@ -491,11 +494,11 @@ void TracePhotonsThread::RenderFunc() {
 
 #ifdef WIN32
 				// Work around Windows bad scheduling
-				renderThread->yield();
+                std::this_thread::yield();
 #endif
 			}
 		} else
-			throw runtime_error("Unknown sampler type in TracePhotonsThread::RenderFunc(): " + ToString(pgic.params.samplerType));
+			throw runtime_error("Unknown sampler type in TracePhotonsThread::RenderFunc(std::stop_token stop_token): " + ToString(pgic.params.samplerType));
 
 		//----------------------------------------------------------------------
 		
@@ -504,3 +507,4 @@ void TracePhotonsThread::RenderFunc() {
 		globalCausticSize += causticPhotons.size() - causticPhotonsStart;
 	}
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

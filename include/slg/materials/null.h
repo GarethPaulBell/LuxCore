@@ -29,7 +29,7 @@ namespace slg {
 
 class NullMaterial : public Material {
 public:
-	NullMaterial(const Texture *frontTransp, const Texture *backTransp);
+	NullMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp);
 
 	virtual MaterialType GetType() const { return NULLMAT; }
 	virtual BSDFEvent GetEventTypes() const { return SPECULAR | TRANSMIT; };
@@ -57,7 +57,7 @@ public:
 			*reversePdfW = 0.f;
 	}
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 protected:
 	virtual void UpdateAvgPassThroughTransparency();
@@ -66,3 +66,4 @@ protected:
 }
 
 #endif	/* _SLG_NULLMAT_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

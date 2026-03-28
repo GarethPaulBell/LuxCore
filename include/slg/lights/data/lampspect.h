@@ -428,3 +428,4 @@ static float lampspectrum_Zn_AP[250] = {0.00241327, 0.00241327, 0.00331825, 0.00
 }//namespace lux
 
 #endif // _SLG_LAMP_SPECT_H
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

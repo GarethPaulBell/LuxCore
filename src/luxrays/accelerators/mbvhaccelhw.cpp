@@ -25,8 +25,6 @@
 #include <algorithm>
 #include <limits>
 
-#include <boost/foreach.hpp>
-
 #include "luxrays/core/context.h"
 #include "luxrays/core/exttrianglemesh.h"
 #include "luxrays/core/hardwareintersectiondevice.h"
@@ -48,7 +46,7 @@ public:
 		//const Context *deviceContext = device.GetContext();
 		//const std::string &deviceName(device.GetName());
 
-		const BufferType memTypeFlags = device.GetContext()->GetUseOutOfCoreBuffers() ?
+		const BufferType memTypeFlags = device.GetContext().GetUseOutOfCoreBuffers() ?
 			((BufferType)(BUFFER_TYPE_READ_ONLY | BUFFER_TYPE_OUT_OF_CORE)) :
 			BUFFER_TYPE_READ_ONLY;
 
@@ -87,7 +85,7 @@ public:
 				const u_int tmpLeftVertCount = pageVertCount - tmpVertIndex;
 
 				// Check if there is enough space in the temporary buffer for all vertices
-				const Mesh *currentMesh = mbvh.uniqueLeafs[currentLeafIndex]->meshes[currentMeshIndex];
+				auto currentMesh = mbvh.uniqueLeafs[currentLeafIndex]->meshes[currentMeshIndex];
 				const u_int toCopy = currentMesh->GetTotalVertexCount() - currentMeshVertIndex;
 				if (tmpLeftVertCount >= toCopy) {
 					// There is enough space for all mesh vertices
@@ -141,7 +139,7 @@ public:
 		if (mbvh.uniqueLeafsTransform.size() > 0) {
 			// Transform CPU data structures in OpenCL data structures
 			vector<Matrix4x4> mats;
-			BOOST_FOREACH(const Transform *t, mbvh.uniqueLeafsTransform)
+			for(const Transform *t: mbvh.uniqueLeafsTransform)
 				mats.push_back(t->mInv);
 
 			// Allocate the transformation buffer
@@ -156,11 +154,11 @@ public:
 			
 			vector<luxrays::ocl::MotionSystem> motionSystems;
 			vector<luxrays::ocl::InterpolatedTransform> interpolatedTransforms;
-			BOOST_FOREACH(const MotionSystem *ms, mbvh.uniqueLeafsMotionSystem) {
+			for(const MotionSystem *ms: mbvh.uniqueLeafsMotionSystem) {
 				luxrays::ocl::MotionSystem oclMotionSystem;
 
 				oclMotionSystem.interpolatedTransformFirstIndex = interpolatedTransforms.size();
-				BOOST_FOREACH(const InterpolatedTransform &it, ms->interpolatedTransforms) {
+				for(const InterpolatedTransform &it: ms->interpolatedTransforms) {
 					// Here, I assume that luxrays::ocl::InterpolatedTransform and
 					// luxrays::InterpolatedTransform are the same
 					interpolatedTransforms.push_back(*((const luxrays::ocl::InterpolatedTransform *)&it));
@@ -283,7 +281,7 @@ public:
 	}
 
 	void UpdateBVHNodes();
-	virtual void Update(const DataSet *newDataSet);
+	virtual void Update(DataSetConstSPtr newDataSet) override;
 	virtual void EnqueueTraceRayBuffer(HardwareDeviceBuffer *rayBuff,
 			HardwareDeviceBuffer *rayHitBuff, const unsigned int rayCount);
 
@@ -439,7 +437,7 @@ void MBVHKernel::UpdateBVHNodes() {
 	}
 }
 
-void MBVHKernel::Update(const DataSet *newDataSet) {
+void MBVHKernel::Update(DataSetConstSPtr newDataSet) {
 	if (!mbvh.nRootNodes)
 		return;
 
@@ -449,14 +447,14 @@ void MBVHKernel::Update(const DataSet *newDataSet) {
 	// I have to update kernel arguments changed inside UpdateBVHNodes()
 	SetIntersectionKernelArgs();
 
-	const Context *deviceContext = device.GetContext();
+	const Context & deviceContext = device.GetContext();
 	const std::string &deviceName = device.GetName();
 	LR_LOG(deviceContext, "[HardwareIntersectionDevice::" << deviceName << "] Updating DataSet transformations");
 
 	// Transform CPU data structures in OpenCL data structures
 	vector<Matrix4x4> mats;
 	mats.reserve(mbvh.uniqueLeafsTransform.size());
-	BOOST_FOREACH(const Transform *t, mbvh.uniqueLeafsTransform)
+	for(const Transform *t: mbvh.uniqueLeafsTransform)
 		mats.push_back(t->mInv);
 
 	device.AllocBufferRO(&uniqueLeafsTransformBuff, &mats[0], sizeof(luxrays::ocl::Matrix4x4) * mats.size(),
@@ -512,3 +510,4 @@ HardwareIntersectionKernel *MBVHAccel::NewHardwareIntersectionKernel(HardwareInt
 }
 
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

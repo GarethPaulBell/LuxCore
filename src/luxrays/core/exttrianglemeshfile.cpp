@@ -21,7 +21,6 @@
 #include <cstring>
 
 #include <boost/format.hpp>
-#include <boost/filesystem.hpp>
 
 #include "luxrays/core/exttrianglemesh.h"
 #include "luxrays/utils/ply/rply.h"
@@ -256,7 +255,7 @@ static int TriAOVCB(p_ply_argument argument) {
 	return 1;
 }
 
-ExtTriangleMesh *ExtTriangleMesh::LoadPly(const string &fileName) {
+ExtTriangleMeshUPtr ExtTriangleMesh::LoadPly(const string &fileName) {
 	p_ply plyfile = ply_open(fileName.c_str(), nullptr);
 	if (!plyfile) {
 		stringstream ss;
@@ -422,7 +421,7 @@ ExtTriangleMesh *ExtTriangleMesh::LoadPly(const string &fileName) {
 	Triangle *tris = TriangleMesh::AllocTrianglesBuffer(vi.size());
 	copy(vi.begin(), vi.end(), tris);
 
-	ExtTriangleMesh *mesh = new ExtTriangleMesh(plyNbVerts, vi.size(), p, tris, n, &uvs, &cols, &alphas);
+	auto mesh = std::make_unique<ExtTriangleMesh>(plyNbVerts, vi.size(), p, tris, n, &uvs, &cols, &alphas);
 	for (u_int i = 0; i < EXTMESH_MAX_DATA_COUNT; ++i) {
 		mesh->SetVertexAOV(i, vertexAOVs[i]);
 		mesh->SetTriAOV(i, TriAOVs[i]);
@@ -435,8 +434,8 @@ ExtTriangleMesh *ExtTriangleMesh::LoadPly(const string &fileName) {
 // ExtTriangleMesh Load
 //------------------------------------------------------------------------------
 
-ExtTriangleMesh *ExtTriangleMesh::Load(const string &fileName) {
-	const boost::filesystem::path ext = boost::filesystem::path(fileName).extension();
+ExtTriangleMeshUPtr ExtTriangleMesh::Load(const string &fileName) {
+	const std::filesystem::path ext = std::filesystem::path(fileName).extension();
 	if (ext == ".ply")
 		return LoadPly(fileName);
 	else if (ext == ".bpy")
@@ -450,7 +449,7 @@ ExtTriangleMesh *ExtTriangleMesh::Load(const string &fileName) {
 //------------------------------------------------------------------------------
 
 void ExtTriangleMesh::Save(const string &fileName) const {
-	const boost::filesystem::path ext = boost::filesystem::path(fileName).extension();
+	const std::filesystem::path ext = std::filesystem::path(fileName).extension();
 	if (ext == ".ply")
 		SavePly(fileName);
 	else if (ext == ".bpy")
@@ -460,12 +459,12 @@ void ExtTriangleMesh::Save(const string &fileName) const {
 }
 
 void ExtTriangleMesh::SavePly(const string &fileName) const {
-	// The use of boost::filesystem::path is required for UNICODE support: fileName
+	// The use of std::filesystem::path is required for UNICODE support: fileName
 	// is supposed to be UTF-8 encoded.
-	boost::filesystem::ofstream plyFile(boost::filesystem::path(fileName),
-			boost::filesystem::ofstream::out |
-			boost::filesystem::ofstream::binary |
-			boost::filesystem::ofstream::trunc);
+	std::ofstream plyFile(std::filesystem::path(fileName),
+			std::ofstream::out |
+			std::ofstream::binary |
+			std::ofstream::trunc);
 	if(!plyFile.is_open())
 		throw runtime_error("Unable to open: " + fileName);
 
@@ -562,3 +561,4 @@ void ExtTriangleMesh::SavePly(const string &fileName) const {
 
 	plyFile.close();
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

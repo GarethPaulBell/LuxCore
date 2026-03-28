@@ -31,7 +31,7 @@ namespace slg {
 
 class FresnelApproxNTexture : public Texture {
 public:
-	FresnelApproxNTexture(const Texture *t) : tex(t) { }
+	FresnelApproxNTexture(TextureRef t) : tex(t) { }
 	virtual ~FresnelApproxNTexture() { }
 
 	virtual TextureType GetType() const { return FRESNEL_APPROX_N; }
@@ -40,31 +40,31 @@ public:
 	virtual float Y() const;
 	virtual float Filter() const;
 
-	virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 		Texture::AddReferencedTextures(referencedTexs);
 
-		tex->AddReferencedTextures(referencedTexs);
+		GetTexture().AddReferencedTextures(referencedTexs);
 	}
-	virtual void AddReferencedImageMaps(boost::unordered_set<const ImageMap *> &referencedImgMaps) const {
-		tex->AddReferencedImageMaps(referencedImgMaps);
+	virtual void AddReferencedImageMaps(std::unordered_set<const ImageMap * > &referencedImgMaps) const {
+		GetTexture().AddReferencedImageMaps(referencedImgMaps);
 	}
 
-	virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
-		if (tex == oldTex)
+	virtual void UpdateTextureReferences(TextureRef oldTex, TextureRef newTex) {
+		if (&tex.get() == &oldTex)
 			tex = newTex;
 	}
 
-	const Texture *GetTexture() const { return tex; }
+	TextureConstRef GetTexture() const { return tex; }
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
-	const Texture *tex;
+	std::reference_wrapper<Texture> tex;
 };
 
 class FresnelApproxKTexture : public Texture {
 public:
-	FresnelApproxKTexture(const Texture *t) : tex(t) { }
+	FresnelApproxKTexture(TextureRef t) : tex(t) { }
 	virtual ~FresnelApproxKTexture() { }
 
 	virtual TextureType GetType() const { return FRESNEL_APPROX_K; }
@@ -73,28 +73,29 @@ public:
 	virtual float Y() const;
 	virtual float Filter() const;
 
-	virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 		Texture::AddReferencedTextures(referencedTexs);
 
-		tex->AddReferencedTextures(referencedTexs);
+		GetTexture().AddReferencedTextures(referencedTexs);
 	}
-	virtual void AddReferencedImageMaps(boost::unordered_set<const ImageMap *> &referencedImgMaps) const {
-		tex->AddReferencedImageMaps(referencedImgMaps);
+	virtual void AddReferencedImageMaps(std::unordered_set<const ImageMap * > &referencedImgMaps) const {
+		GetTexture().AddReferencedImageMaps(referencedImgMaps);
 	}
 
-	virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
-		if (tex == oldTex)
+	virtual void UpdateTextureReferences(TextureRef oldTex, TextureRef newTex) {
+		if (tex == &oldTex)
 			tex = newTex;
 	}
 
-	const Texture *GetTexture() const { return tex; }
+	TextureConstRef GetTexture() const { return tex; }
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
-	const Texture *tex;
+	std::reference_wrapper<Texture> tex;
 };
 
 }
 
 #endif	/* _SLG_FRESNELAPPROXTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

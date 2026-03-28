@@ -36,16 +36,11 @@ CPP_EXPORT CPP_API std::string oclErrorString(cl_int error);
 
 #define CHECK_OCL_ERROR(err) CheckOpenCLError(err, __FILE__, __LINE__)
 
-inline void CheckOpenCLError(const cl_int err, const char *file, const int line) {
-  if (err != CL_SUCCESS) {
-	  throw std::runtime_error("OpenCL driver API error "
-			  "(code: " + ToString(err) + ", file:" + std::string(file) + ", line: " + ToString(line) + ")"
-			  ": " + oclErrorString(err) + "\n");
-	}
-}
+void CheckOpenCLError(const cl_int err, const char *file, const int line);
 
 }
 
 #endif
 
 #endif	/* _LUXRAYS_OPENCLERROR_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

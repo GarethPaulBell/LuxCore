@@ -40,7 +40,7 @@ public:
 	virtual float Y() const { return 1.f; }
 	virtual float Filter() const { return 1.f; }
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 };
 
 //------------------------------------------------------------------------------
@@ -60,7 +60,7 @@ public:
 	virtual float Y() const { return 1.f; }
 	virtual float Filter() const { return 1.f; }
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 };
 
 //------------------------------------------------------------------------------
@@ -80,9 +80,10 @@ public:
 	virtual float Y() const { return 1.f; }
 	virtual float Filter() const { return 1.f; }
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 };
 
 }
 
 #endif	/* _SLG_OBJECT_ID_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

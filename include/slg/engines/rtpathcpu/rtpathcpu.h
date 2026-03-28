@@ -19,9 +19,8 @@
 #ifndef _SLG_RTPATHCPU_H
 #define	_SLG_RTPATHCPU_H
 
-#include <boost/thread/barrier.hpp>
-#include <boost/thread/condition_variable.hpp>
-#include <boost/thread/mutex.hpp>    
+#include <condition_variable>
+#include <barrier>
 
 #include "slg/engines/pathcpu/pathcpu.h"
 
@@ -42,8 +41,14 @@ public:
 	friend class RTPathCPURenderEngine;
 
 protected:
-	void RTRenderFunc();
-	virtual boost::thread *AllocRenderThread() { return new boost::thread(&RTPathCPURenderThread::RTRenderFunc, this); }
+	void RTRenderFunc(std::stop_token stop_token);
+	virtual luxrays::JThreadUPtr AllocRenderThread() {
+		auto t = std::make_unique<luxrays::JThread>(
+			std::bind_front(&RTPathCPURenderThread::RTRenderFunc, this)
+		);
+		luxrays::SetThreadName(t, "LxRTPathCPU");
+		return std::move(t);
+	}
 
 	virtual void StartRenderThread();
 };
@@ -52,7 +57,7 @@ class RTPathCPUSampler;
 
 class RTPathCPURenderEngine : public PathCPURenderEngine {
 public:
-	RTPathCPURenderEngine(const RenderConfig *cfg);
+	RTPathCPURenderEngine(RenderConfigRef cfg);
 	~RTPathCPURenderEngine();
 
 	virtual RenderEngineType GetType() const { return GetObjectType(); }
@@ -68,21 +73,25 @@ public:
 
 	static RenderEngineType GetObjectType() { return RTPATHCPU; }
 	static std::string GetObjectTag() { return "RTPATHCPU"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static RenderEngine *FromProperties(const RenderConfig *rcfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static RenderEngine *FromProperties(RenderConfigRef rcfg);
 
 	friend class PathCPURenderEngine;
 	friend class RTPathCPURenderThread;
 	friend class RTPathCPUSampler;
 
+    struct completion_t {
+        void operator()() noexcept { }
+    };
+
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	virtual bool IsRTMode() const { return true; }
 	
-	CPURenderThread *NewRenderThread(const u_int index,
+	CPURenderThreadUPtr NewRenderThread(const u_int index,
 			luxrays::IntersectionDevice *device) {
-		return new RTPathCPURenderThread(this, index, device);
+		return std::make_unique<RTPathCPURenderThread>(this, index, device);
 	}
 
 	virtual void StartLockLess();
@@ -92,7 +101,7 @@ protected:
 	virtual void EndSceneEditLockLess(const EditActionList &editActions);
 
 	virtual void BeginFilmEdit();
-	virtual void EndFilmEdit(Film *film, boost::mutex *flmMutex);
+	virtual void EndFilmEdit(FilmRef film, std::mutex *flmMutex);
 
 	virtual void UpdateFilmLockLess();
 
@@ -102,15 +111,16 @@ protected:
 	u_int zoomFactor;
 	float zoomWeight;
 
-	boost::mutex firstFrameMutex;
-    boost::condition_variable firstFrameCondition;
+	std::mutex firstFrameMutex;
+    std::condition_variable firstFrameCondition;
 	u_int firstFrameThreadDoneCount;
 	bool firstFrameDone;
 
-	boost::barrier *threadsSyncBarrier;
-	bool threadsPauseMode;
+	std::barrier<completion_t> *threadsSyncBarrier;
+	std::atomic<bool> threadsPauseMode;
 };
 
 }
 
 #endif	/* _SLG_RTPATHCPU_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

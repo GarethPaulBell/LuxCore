@@ -29,37 +29,34 @@ using namespace slg;
 // Volume
 //------------------------------------------------------------------------------
 
-void Volume::AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+void Volume::AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 	Material::AddReferencedTextures(referencedTexs);
 
-	if (iorTex)
-		iorTex->AddReferencedTextures(referencedTexs);
+	GetIORTexture().AddReferencedTextures(referencedTexs);
 	if (volumeEmissionTex)
 		volumeEmissionTex->AddReferencedTextures(referencedTexs);
 }
 
-void Volume::UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
+void Volume::UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
 	Material::UpdateTextureReferences(oldTex, newTex);
 
-	if (iorTex == oldTex)
-		iorTex = newTex;
-	if (volumeEmissionTex == oldTex)
-		volumeEmissionTex = newTex;
+	updtex(iorTex, oldTex, newTex);
+	updtex(volumeEmissionTex, oldTex, newTex);
 }
 
-Properties Volume::ToProperties() const {
-	Properties props;
+PropertiesUPtr Volume::ToProperties() const {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.volumes." + name + ".priority")(priority));
-	props.Set(Property("scene.volumes." + name + ".ior")(iorTex->GetSDLValue()));
+	props->Set(Property("scene.volumes." + name + ".priority")(priority));
+	props->Set(Property("scene.volumes." + name + ".ior")(GetIORTexture().GetSDLValue()));
 	if (volumeEmissionTex) {
-		props.Set(Property("scene.volumes." + name + ".emission")(volumeEmissionTex->GetSDLValue()));
-		props.Set(Property("scene.volumes." + name + ".emission.id")(volumeLightID));
+		props->Set(Property("scene.volumes." + name + ".emission")(volumeEmissionTex->GetSDLValue()));
+		props->Set(Property("scene.volumes." + name + ".emission.id")(volumeLightID));
 	}
-	props.Set(Property("scene.volumes." + name + ".id")(matID));
-	
-	props.Set(Property("scene.volumes." + name + ".photongi.enable")(isPhotonGIEnabled));
+	props->Set(Property("scene.volumes." + name + ".id")(matID));
+
+	props->Set(Property("scene.volumes." + name + ".photongi.enable")(isPhotonGIEnabled));
 
 	return props;
 }
@@ -68,20 +65,20 @@ Properties Volume::ToProperties() const {
 // SchlickScatter
 //------------------------------------------------------------------------------
 
-SchlickScatter::SchlickScatter(const Volume *vol, const Texture *gTex) :
+SchlickScatter::SchlickScatter(VolumeConstRef vol, TextureConstRef gTex) :
 	volume(vol), g(gTex) {
 }
 
 Spectrum SchlickScatter::GetColor(const HitPoint &hitPoint) const {
-	Spectrum r = volume->SigmaS(hitPoint);
-	const Spectrum sigmaA = volume->SigmaA(hitPoint);
+	Spectrum r = volume.SigmaS(hitPoint);
+	const Spectrum sigmaA = volume.SigmaA(hitPoint);
 	for (u_int i = 0; i < COLOR_SAMPLES; ++i) {
 		if (r.c[i] > 0.f)
 			r.c[i] /= r.c[i] + sigmaA.c[i];
 		else
 			r.c[i] = 1.f;
 	}
-	
+
 	return r;
 }
 
@@ -89,10 +86,15 @@ Spectrum SchlickScatter::Albedo(const HitPoint &hitPoint) const {
 	return GetColor(hitPoint).Clamp(0.f, 1.f);
 }
 
-Spectrum SchlickScatter::Evaluate(const HitPoint &hitPoint,
-		const Vector &localLightDir, const Vector &localEyeDir, BSDFEvent *event,
-		float *directPdfW, float *reversePdfW) const {
-	const Spectrum gValue = g->GetSpectrumValue(hitPoint).Clamp(-1.f, 1.f);
+Spectrum SchlickScatter::Evaluate(
+		const HitPoint &hitPoint,
+		const Vector &localLightDir,
+		const Vector &localEyeDir,
+		BSDFEvent *event,
+		float *directPdfW,
+		float *reversePdfW
+) const {
+	const Spectrum gValue = GetG().GetSpectrumValue(hitPoint).Clamp(-1.f, 1.f);
 	const Spectrum k = gValue * (Spectrum(1.55f) - .55f * gValue * gValue);
 
 	*event = DIFFUSE | REFLECT;
@@ -123,7 +125,7 @@ Spectrum SchlickScatter::Sample(const HitPoint &hitPoint,
 		const Vector &localFixedDir, Vector *localSampledDir,
 		const float u0, const float u1, const float passThroughEvent,
 		float *pdfW, BSDFEvent *event) const {
-	const Spectrum gValue = g->GetSpectrumValue(hitPoint).Clamp(-1.f, 1.f);
+	const Spectrum gValue = GetG().GetSpectrumValue(hitPoint).Clamp(-1.f, 1.f);
 	const Spectrum k = gValue * (Spectrum(1.55f) - .55f * gValue * gValue);
 	const float kFilter = k.Filter();
 
@@ -147,10 +149,12 @@ Spectrum SchlickScatter::Sample(const HitPoint &hitPoint,
 	return GetColor(hitPoint);
 }
 
-void SchlickScatter::Pdf(const HitPoint &hitPoint,
-		const Vector &localLightDir, const Vector &localEyeDir,
-		float *directPdfW, float *reversePdfW) const {
-	const Spectrum gValue = g->GetSpectrumValue(hitPoint).Clamp(-1.f, 1.f);
+void SchlickScatter::Pdf(
+	const HitPoint &hitPoint,
+	const Vector &localLightDir, const Vector &localEyeDir,
+	float *directPdfW, float *reversePdfW
+) const {
+	const Spectrum gValue = GetG().GetSpectrumValue(hitPoint).Clamp(-1.f, 1.f);
 	const Spectrum k = gValue * (Spectrum(1.55f) - .55f * gValue * gValue);
 	const float kFilter = k.Filter();
 
@@ -167,3 +171,4 @@ void SchlickScatter::Pdf(const HitPoint &hitPoint,
 	if (reversePdfW)
 		*reversePdfW = pdf;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -23,8 +23,6 @@
 #include <cstdlib>
 #include <limits>
 
-#include <boost/thread/thread.hpp>
-
 #include "luxrays/luxrays.h"
 #include "luxrays/core/dataset.h"
 #include "luxrays/core/context.h"
@@ -60,7 +58,7 @@ public:
 		forceWorkGroupSize(0) { }
 	virtual ~DeviceDescription() { }
 
-	const std::string &GetName() const { return name; }
+	const std::string GetName() const { return name; }
 	const DeviceType GetType() const { return type; };
 	virtual int GetComputeUnits() const { return 1; }
 	virtual u_int GetNativeVectorWidthFloat() const { return 4; };
@@ -107,7 +105,7 @@ protected:
 class Device {
 public:
 	const std::string &GetName() const { return deviceName; }
-	const Context *GetContext() const { return deviceContext; }
+	const Context & GetContext() const { return deviceContext; }
 	virtual const DeviceDescription *GetDeviceDesc() const = 0;
 	const size_t GetDeviceIndex() const { return deviceIndex; }
 
@@ -121,15 +119,15 @@ public:
 	friend class OpenCLIntersectionDevice;
 
 protected:
-	Device() { }
-	Device(const Context *context, const size_t index);
+	//Device() { }
+	Device(const Context & context, const size_t index);
 	virtual ~Device();
 
 	virtual void Start();
 	virtual void Interrupt();
 	virtual void Stop();
 
-	const Context *deviceContext;
+	const Context & deviceContext;
 	size_t deviceIndex;
 
 	std::string deviceName;
@@ -140,3 +138,4 @@ protected:
 }
 
 #endif	/* _LUXRAYS_DEVICE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

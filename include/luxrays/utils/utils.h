@@ -25,7 +25,8 @@
 #include <cmath>
 #include <limits>
 #include <iomanip>
-#include <codecvt>
+#include <memory>
+
 
 #if defined (__linux__)
 #include <pthread.h>
@@ -90,6 +91,10 @@ int isinf(T a) { return std::isinf(a); }
 #define INFINITY (std::numeric_limits<float>::infinity())
 #endif
 
+#ifndef INFINITY_DBL
+#define INFINITY_DBL (std::numeric_limits<double>::infinity())
+#endif
+
 #ifndef INV_PI
 #define INV_PI  0.31830988618379067154f
 #endif
@@ -103,6 +108,14 @@ typedef unsigned short u_short;
 typedef unsigned int u_int;
 typedef unsigned long u_long;
 typedef unsigned long long u_longlong;
+
+// verify behaves like assert, but will not abort
+void __verify(const char * cond, const char * file, int line);
+#ifdef NDEBUG
+# define verify(EX)
+#else
+# define verify(EX) (void)((EX) || (__verify (#EX, __FILE__, __LINE__),0))
+#endif
 
 namespace luxrays {
 
@@ -345,20 +358,30 @@ inline bool IsValid(float a) {
 	return !isnan(a) && !isinf(a) && (a >= 0.f);
 }
 
-// Convert between UTF-8 and UTF-16
-inline std::wstring utf8_to_utf16(const std::string &str) {
-    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t> > converter;
 
-    return converter.from_bytes(str);
-}
+// Helpers to cast unique_ptr from base class to derived class
+template <typename D, typename B>  // Derived, Base
+std::unique_ptr<D> dynamic_uptr_cast(std::unique_ptr<B>&& basePtr) {
+    // Static assertion to ensure Derived is a subclass of Base
+    static_assert(
+		std::is_base_of<B, D>::value,
+		"Derived must be a subclass of Base"
+	);
 
-// Convert between UTF-16 and UTF-8
-inline std::string utf16_to_utf8(const std::wstring &wstr) {
-    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t> > converter;
+	if (!basePtr) {
+		return std::unique_ptr<D>();
+	}
 
-    return converter.to_bytes(wstr);
-}
+	D* castPtr = dynamic_cast<D*>(basePtr.release());
+    if (!castPtr) {
+        throw std::bad_cast(); // Handle invalid cast
+    }
 
-}
+	return std::unique_ptr<D>(castPtr);
+};
+
+
+}  // namespace luxrays
 
 #endif	/* _LUXRAYS_UTILS_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

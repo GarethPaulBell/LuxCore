@@ -79,3 +79,4 @@ BOOST_CLASS_VERSION(slg::ColorLUTPlugin, 1)
 BOOST_CLASS_EXPORT_KEY(slg::ColorLUTPlugin)
 
 #endif	/*  _SLG_COLORLUT_PLUGIN_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

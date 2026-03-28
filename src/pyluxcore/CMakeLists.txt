@@ -22,8 +22,7 @@
 #
 ################################################################################
 
-set(PYLUXCORE_SRCS
-)
+set(PYLUXCORE_SRCS)
 include_directories(${PROJECT_SOURCE_DIR}/deps/bcd-1.1/include)
 
 pybind11_add_module(pyluxcore MODULE
@@ -36,19 +35,11 @@ target_link_libraries(pyluxcore PRIVATE
     OpenVDB::openvdb
     pybind11::pybind11
     Python::Module
-    onetbb::onetbb
-    blender-types
     robin_hood::robin_hood
-    fmt::fmt
     openimageio::openimageio
-    embree
+    embree::embree
 )
-
-if(APPLE)
-  target_link_libraries(pyluxcore PRIVATE OpenMP::OpenMP)
-else()
-  target_link_libraries(pyluxcore PRIVATE OpenMP::OpenMP_CXX)
-endif(APPLE)
+target_link_libraries(pyluxcore PRIVATE OpenMP::OpenMP_CXX)
 
 set_target_properties(pyluxcore PROPERTIES PREFIX "")
 if(MSVC)
@@ -56,7 +47,15 @@ if(MSVC)
 endif(MSVC)
 
 # Install
-INSTALL(TARGETS pyluxcore DESTINATION pyluxcore COMPONENT pyluxcore)
+INSTALL(
+  TARGETS pyluxcore
+  DESTINATION pyluxcore
+  COMPONENT pyluxcore
+  PERMISSIONS
+    OWNER_WRITE OWNER_READ OWNER_EXECUTE
+    GROUP_READ GROUP_EXECUTE
+    WORLD_READ WORLD_EXECUTE
+)
 
 # Install pdb file (if msvc and debug)
 if(MSVC)
@@ -83,50 +82,50 @@ if(APPLE)
   endif()
 endif()
 
-# OIDN
-# oidnDenoise
-add_executable(oidn-denoise IMPORTED)
-set_property(TARGET oidn-denoise PROPERTY IMPORTED_LOCATION "${LUX_OIDN_DENOISE_PATH}")
+## OIDN
+## oidnDenoise
+#add_executable(oidn-denoise IMPORTED)
+#set_property(TARGET oidn-denoise PROPERTY IMPORTED_LOCATION "${LUX_OIDN_DENOISE_PATH}")
 
-if(WIN32)
-  # Windows lacks rpath system, so we have to put oidnDenoise in the same
-  # folder as the dlls...
-  set(OIDN_DESTINATION "pyluxcore.libs")
-else()
-  # For Macos, reminder: don't put it in pyluxcore/.dylibs, it would prevent
-  # other deps' relocation
-  set(OIDN_DESTINATION "pyluxcore.oidn")
-endif(WIN32)
+#if(WIN32)
+  ## Windows lacks rpath system, so we have to put oidnDenoise in the same
+  ## folder as the dlls...
+  #set(OIDN_DESTINATION "pyluxcore.libs")
+#else()
+  ## For Macos, reminder: don't put it in pyluxcore/.dylibs, it would prevent
+  ## other deps' relocation
+  #set(OIDN_DESTINATION "pyluxcore.oidn")
+#endif(WIN32)
 
 if(LINUX)
-  set_property(
-    TARGET oidn-denoise
-    PROPERTY INSTALL_RPATH "\\\${ORIGIN}/../pyluxcore.libs"
-  )
+  #set_property(
+    #TARGET oidn-denoise
+    #PROPERTY INSTALL_RPATH "\\\${ORIGIN}/../pyluxcore.libs"
+  #)
   install(
-    PROGRAMS "${LUX_OIDN_DENOISE_CPU}"
+    PROGRAMS "${LUX_OIDN_DEVICE_CPU}"
     DESTINATION "pyluxcore.libs"
     COMPONENT pyluxcore
   )
 endif(LINUX)
 
-if(APPLE)
-  set_target_properties(
-    oidn-denoise PROPERTIES
-    INSTALL_RPATH "\\\${ORIGIN}/../pyluxcore/.pylibs"
-    BUILD_RPATH ""
-  )
-endif(APPLE)
+#if(APPLE)
+  #set_target_properties(
+    #oidn-denoise PROPERTIES
+    #INSTALL_RPATH "\\\${ORIGIN}/../pyluxcore/.pylibs"
+    #BUILD_RPATH ""
+  #)
+#endif(APPLE)
 
-INSTALL(
-  IMPORTED_RUNTIME_ARTIFACTS oidn-denoise
-  DESTINATION ${OIDN_DESTINATION}
-  PERMISSIONS
-    OWNER_WRITE OWNER_READ OWNER_EXECUTE
-    GROUP_READ GROUP_EXECUTE
-    WORLD_READ WORLD_EXECUTE
-  COMPONENT pyluxcore
-)
+#INSTALL(
+  #IMPORTED_RUNTIME_ARTIFACTS oidn-denoise
+  #DESTINATION ${OIDN_DESTINATION}
+  #PERMISSIONS
+    #OWNER_WRITE OWNER_READ OWNER_EXECUTE
+    #GROUP_READ GROUP_EXECUTE
+    #WORLD_READ WORLD_EXECUTE
+  #COMPONENT pyluxcore
+#)
 
 
 if(WIN32)
@@ -140,24 +139,24 @@ if(WIN32)
     COMPONENT pyluxcore
   )
 
-  # Delvewheel doesn't handle executables, however we need to delocate oidnDenoise.
-  # Therefore we had to let Delvewheel believe oidnDenoise is a lib, and now
-  # we have to make it an executable again...
-  message(STATUS "oidnDenoise suffix back to pyd")
-  INSTALL(
-    CODE
-    "
-    MESSAGE(STATUS
-        \"Renaming '$<INSTALL_PREFIX>/pyluxcore.libs/oidnDenoise.exe' \
-        into '$<INSTALL_PREFIX>/pyluxcore.libs/oidnDenoise.pyd'\"
-    )
-    FILE(RENAME
-        $<INSTALL_PREFIX>/pyluxcore.libs/oidnDenoise.exe
-        $<INSTALL_PREFIX>/pyluxcore.libs/oidnDenoise.pyd
-    )
-    "
-    COMPONENT pyluxcore
-  )
+  ## Delvewheel doesn't handle executables, however we need to delocate oidnDenoise.
+  ## Therefore we had to let Delvewheel believe oidnDenoise is a lib, and now
+  ## we have to make it an executable again...
+  #message(STATUS "oidnDenoise suffix back to pyd")
+  #INSTALL(
+    #CODE
+    #"
+    #MESSAGE(STATUS
+        #\"Renaming '$<INSTALL_PREFIX>/pyluxcore.libs/oidnDenoise.exe' \
+        #into '$<INSTALL_PREFIX>/pyluxcore.libs/oidnDenoise.pyd'\"
+    #)
+    #FILE(RENAME
+        #$<INSTALL_PREFIX>/pyluxcore.libs/oidnDenoise.exe
+        #$<INSTALL_PREFIX>/pyluxcore.libs/oidnDenoise.pyd
+    #)
+    #"
+    #COMPONENT pyluxcore
+  #)
 
 endif(WIN32)
 

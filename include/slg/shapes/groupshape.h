@@ -19,30 +19,45 @@
 #ifndef _SLG_GROUPSHAPE_H
 #define	_SLG_GROUPSHAPE_H
 
+#include <functional>
 #include <string>
 #include <vector>
+#include <span>
+#include <optional>
 
+#include "luxrays/core/exttrianglemesh.h"
 #include "luxrays/core/geometry/transform.h"
 
+#include "luxrays/usings.h"
 #include "slg/shapes/shape.h"
 
 namespace slg {
 
+using luxrays::ExtTriangleMesh;
+using luxrays::ExtTriangleMeshRef;
+using luxrays::ExtTriangleMeshUPtr;
+using luxrays::Transform;
+
 class GroupShape : public Shape {
 public:
-	GroupShape(const std::vector<const luxrays::ExtTriangleMesh *> &meshes,
-			const std::vector<luxrays::Transform> &trans);
+	using MeshRefWrapper = std::reference_wrapper<const ExtTriangleMesh>;
+
+	GroupShape(
+		std::vector<MeshRefWrapper> meshes,
+		std::optional<std::vector<Transform>> trans = std::nullopt
+	);
 	virtual ~GroupShape();
 
-	virtual ShapeType GetType() const { return GROUP; }
+	virtual ShapeType GetType() const override { return GROUP; }
 
 protected:
-	virtual luxrays::ExtTriangleMesh *RefineImpl(const Scene *scene);
+	virtual ExtTriangleMeshUPtr RefineImpl(SceneConstRef scene) override;
 
-	const std::vector<const luxrays::ExtTriangleMesh *> meshes;
-	const std::vector<luxrays::Transform> trans;
+	std::vector<MeshRefWrapper> meshes;
+	std::optional<std::vector<Transform>> trans;
 };
 
 }
 
 #endif	/* _SLG_GROUPSHAPE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

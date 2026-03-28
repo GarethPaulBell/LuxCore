@@ -48,14 +48,14 @@ public:
 
 	static FilterType GetObjectType() { return FILTER_NONE; }
 	static std::string GetObjectTag() { return "NONE"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static Filter *FromProperties(const luxrays::Properties &cfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static FilterUPtr FromProperties(const luxrays::Properties &cfg);
 	static slg::ocl::Filter *FromPropertiesOCL(const luxrays::Properties &cfg);
 
 	friend class boost::serialization::access;
 
 private:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	template<class Archive> void serialize(Archive &ar, const u_int version) {
 		ar & BOOST_SERIALIZATION_BASE_OBJECT_NVP(Filter);
@@ -69,3 +69,4 @@ BOOST_CLASS_VERSION(slg::NoneFilter, 2)
 BOOST_CLASS_EXPORT_KEY(slg::NoneFilter)
 
 #endif	/* _SLG_NONE_FILTER_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

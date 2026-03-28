@@ -29,8 +29,9 @@ namespace slg {
 // Fresnel preset texture
 //------------------------------------------------------------------------------
 
-extern FresnelTexture *AllocFresnelPresetTex(const luxrays::Properties &props, const std::string &propName);
+extern FresnelTextureUPtr AllocFresnelPresetTex(const luxrays::Properties &props, const std::string &propName);
 
 }
 
 #endif	/* _SLG_FRESNELSOPRATEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -43,8 +43,8 @@ add_library(luxparser STATIC ${BISON_luxbison_OUTPUTS} ${FLEX_luxflex_OUTPUTS})
 target_link_libraries(luxparser PRIVATE
   robin_hood::robin_hood
   boost::boost
-  fmt::fmt
-  embree
+  embree::embree
   Imath::Imath
   OpenColorIO::OpenColorIO
+  openimageio::openimageio
 )

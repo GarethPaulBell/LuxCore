@@ -20,8 +20,12 @@
 #define	_SLG_VOLUME_H
 
 #include "luxrays/luxrays.h"
+#include "luxrays/usings.h"
 #include "slg/materials/material.h"
 #include "slg/textures/texture.h"
+#include "slg/usings.h"
+#include <functional>
+#include <typeinfo>
 
 namespace slg {
 
@@ -31,11 +35,16 @@ namespace ocl {
 }
 
 class BSDF;
-	
+
 class Volume : public Material {
 public:
-	Volume(const Texture *ior, const Texture *emission) : Material(NULL, NULL, NULL, NULL),
-			iorTex(ior), volumeEmissionTex(emission), volumeLightID(0), priority(0) { }
+	Volume(TextureConstRef ior, TextureConstPtr emission) :
+		Material(nullptr, nullptr, nullptr, nullptr),
+		iorTex(ior),
+		volumeEmissionTex(emission),
+		volumeLightID(0),
+		priority(0)
+	{ }
 	virtual ~Volume() { }
 
 	void SetVolumeLightID(const u_int id) { volumeLightID = id; }
@@ -43,10 +52,12 @@ public:
 	void SetPriority(const int p) { priority = p; }
 	int GetPriority() const { return priority; }
 
-	const Texture *GetIORTexture() const { return iorTex; }
-	const Texture *GetVolumeEmissionTexture() const { return volumeEmissionTex; }
+	TextureConstRef GetIORTexture() const { return iorTex; }
+	bool HasIORTexture() const { return true; }
+	TextureConstRef GetVolumeEmissionTexture() const { return *volumeEmissionTex; }
+	bool HasVolumeEmissionTexture() const { return bool(volumeEmissionTex); }
 
-	float GetIOR(const HitPoint &hitPoint) const { return iorTex->GetFloatValue(hitPoint); }
+	float GetIOR(const HitPoint &hitPoint) const { return GetIORTexture().GetFloatValue(hitPoint); }
 
 	// Returns the ray t value of the scatter event. If (t <= 0.0) there was
 	// no scattering. In any case, it applies transmittance to connectionThroughput
@@ -54,10 +65,10 @@ public:
 	virtual float Scatter(const luxrays::Ray &ray, const float u, const bool scatteredStart,
 		luxrays::Spectrum *connectionThroughput, luxrays::Spectrum *connectionEmission) const = 0;
 
-	virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const;
-	virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex);
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexsreferencedTexs) const;
+	virtual void UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex);
 
-	virtual luxrays::Properties ToProperties() const;
+	virtual luxrays::PropertiesUPtr ToProperties() const;
 
 	friend class SchlickScatter;
 
@@ -71,10 +82,10 @@ protected:
 		return (volumeEmissionTex) ? volumeEmissionTex->GetSpectrumValue(hitPoint).Clamp() : luxrays::Spectrum(0.f);
 	}
 
-	const Texture *iorTex;
+	std::reference_wrapper<const Texture> iorTex;
 	// This is a different kind of emission texture from the one in
 	// Material class (i.e. is not sampled by direct light).
-	const Texture *volumeEmissionTex;
+	TextureConstPtr volumeEmissionTex;
 	u_int volumeLightID;
 	int priority;
 };
@@ -82,7 +93,7 @@ protected:
 // An utility class
 class SchlickScatter {
 public:
-	SchlickScatter(const Volume *volume, const Texture *g);
+	SchlickScatter(VolumeConstRef volume, TextureConstRef g);
 
 	luxrays::Spectrum Albedo(const HitPoint &hitPoint) const;
 
@@ -97,13 +108,51 @@ public:
 		const luxrays::Vector &localLightDir, const luxrays::Vector &localEyeDir,
 		float *directPdfW, float *reversePdfW) const;
 
-	const Volume *volume;
-	const Texture *g;
+	TextureConstRef GetG() const { return g; }
+	void SetG(TextureConstRef tex) { g = tex; }
+
+	VolumeConstRef volume;
 
 private:
 	luxrays::Spectrum GetColor(const HitPoint &hitPoint) const;
+	std::reference_wrapper<const Texture> g;
 };
 
+// Some utilities
+template <typename T>
+void updvol(T volume, const MaterialConstRef oldMat, MaterialRef newMat);
+
+template<>
+inline void updvol(VolumeConstPtr volume, MaterialConstRef oldMat, MaterialRef newMat) {
+
+	// Check
+	try {
+		auto& oldVol = dynamic_cast<const Volume &>(oldMat);
+		if (volume != &oldVol) return;  // Old material was not this volume
+	} catch (std::bad_cast&) {
+		return;  // Old material was not a volume
+	}
+
+	// Replace
+	auto& newVol = dynamic_cast<Volume &>(newMat);
+	volume = &newVol;
 }
 
+template<>
+inline void updvol(
+	std::reference_wrapper<const Volume> volume,
+	MaterialConstRef oldMat,
+	MaterialRef newMat
+) {
+	auto& oldVol = dynamic_cast<const Volume &>(oldMat);
+	auto& newVol = dynamic_cast<const Volume &>(newMat);
+
+	if (std::addressof(volume.get()) == std::addressof(oldVol)) {
+		volume = std::reference_wrapper(newVol);
+	}
+}
+
+}  // namespace slg
+
 #endif	/* _SLG_VOLUME_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

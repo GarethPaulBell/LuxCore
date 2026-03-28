@@ -44,7 +44,7 @@ class CompiledScene;
 
 class PathOCLBaseRenderEngine : public OCLRenderEngine {
 public:
-	PathOCLBaseRenderEngine(const RenderConfig *cfg, const bool supportsNativeThreads);
+	PathOCLBaseRenderEngine(RenderConfigRef cfg, const bool supportsNativeThreads);
 	virtual ~PathOCLBaseRenderEngine();
 
 	virtual bool HasDone() const;
@@ -80,7 +80,7 @@ protected:
 	void SetCachedKernels(const RenderConfig &renderConfig);
 	static std::string GetCachedKernelsHash(const RenderConfig &renderConfig);
 
-	boost::mutex setKernelArgsMutex;
+	std::mutex setKernelArgsMutex;
 
 	slg::ocl::pathoclbase::GPUTaskConfiguration taskConfig;
 	CompiledScene *compiledScene;
@@ -98,6 +98,8 @@ protected:
 	slg::ocl::Sampler *oclSampler;
 	slg::ocl::Filter *oclPixelFilter;
 	PhotonGICache *photonGICache;
+
+	std::shared_ptr<SamplerSharedData> lightSamplerSharedData;
 };
 
 }
@@ -105,3 +107,4 @@ protected:
 #endif
 
 #endif	/* _SLG_PATHOCLBASE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

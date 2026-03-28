@@ -29,12 +29,12 @@ using namespace slg;
 // LuxRender GlossyTranslucent material porting.
 //------------------------------------------------------------------------------
 
-GlossyTranslucentMaterial::GlossyTranslucentMaterial(const Texture *frontTransp, const Texture *backTransp,
-		const Texture *emitted, const Texture *bump,
-		const Texture *kd, const Texture *kt, const Texture *ks, const Texture *ks2,
-		const Texture *u, const Texture *u2, const Texture *v, const Texture *v2,
-		const Texture *ka, const Texture *ka2, const Texture *d, const Texture *d2,
-		const Texture *i, const Texture *i2, const bool mbounce, const bool mbounce2) :
+GlossyTranslucentMaterial::GlossyTranslucentMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
+		TextureConstPtr emitted, TextureConstPtr bump,
+		TextureConstPtr kd, TextureConstPtr kt, TextureConstPtr ks, TextureConstPtr ks2,
+		TextureConstPtr u, TextureConstPtr u2, TextureConstPtr v, TextureConstPtr v2,
+		TextureConstPtr ka, TextureConstPtr ka2, TextureConstPtr d, TextureConstPtr d2,
+		TextureConstPtr i, TextureConstPtr i2, const bool mbounce, const bool mbounce2) :
 			Material(frontTransp, backTransp, emitted, bump), Kd(kd), Kt(kt), Ks(ks), Ks_bf(ks2), nu(u), nu_bf(u2),
 			nv(v), nv_bf(v2), Ka(ka), Ka_bf(ka2), depth(d), depth_bf(d2), index(i),
 			index_bf(i2), multibounce(mbounce), multibounce_bf(mbounce2) {
@@ -352,7 +352,7 @@ void GlossyTranslucentMaterial::Pdf(const HitPoint &hitPoint,
 	}
 }
 
-void GlossyTranslucentMaterial::AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+void GlossyTranslucentMaterial::AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 	Material::AddReferencedTextures(referencedTexs);
 
 	Kd->AddReferencedTextures(referencedTexs);
@@ -371,73 +371,74 @@ void GlossyTranslucentMaterial::AddReferencedTextures(boost::unordered_set<const
 	index_bf->AddReferencedTextures(referencedTexs);
 }
 
-void GlossyTranslucentMaterial::UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
+void GlossyTranslucentMaterial::UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
 	Material::UpdateTextureReferences(oldTex, newTex);
 
 	bool updateGlossiness = false;
-	if (Kd == oldTex)
-		Kd = newTex;
-	if (Kt == oldTex)
-		Kt = newTex;
-	if (Ks == oldTex)
-		Ks = newTex;
-	if (Ks_bf == oldTex)
-		Ks_bf = newTex;
-	if (nu == oldTex) {
-		nu = newTex;
+	if (Kd == &oldTex)
+		Kd = &newTex;
+	if (Kt == &oldTex)
+		Kt = &newTex;
+	if (Ks == &oldTex)
+		Ks = &newTex;
+	if (Ks_bf == &oldTex)
+		Ks_bf = &newTex;
+	if (nu == &oldTex) {
+		nu = &newTex;
 		updateGlossiness = true;
 	}
-	if (nu_bf == oldTex) {
-		nu_bf = newTex;
+	if (nu_bf == &oldTex) {
+		nu_bf = &newTex;
 		updateGlossiness = true;
 	}
-	if (nv == oldTex) {
-		nv = newTex;
+	if (nv == &oldTex) {
+		nv = &newTex;
 		updateGlossiness = true;
 	}
-	if (nv_bf == oldTex) {
-		nv_bf = newTex;
+	if (nv_bf == &oldTex) {
+		nv_bf = &newTex;
 		updateGlossiness = true;
 	}
-	if (Ka == oldTex)
-		Ka = newTex;
-	if (Ka_bf == oldTex)
-		Ka_bf = newTex;
-	if (depth == oldTex)
-		depth = newTex;
-	if (depth_bf == oldTex)
-		depth_bf = newTex;
-	if (index == oldTex)
-		index = newTex;
-	if (index_bf == oldTex)
-		index_bf = newTex;
-	
+	if (Ka == &oldTex)
+		Ka = &newTex;
+	if (Ka_bf == &oldTex)
+		Ka_bf = &newTex;
+	if (depth == &oldTex)
+		depth = &newTex;
+	if (depth_bf == &oldTex)
+		depth_bf = &newTex;
+	if (index == &oldTex)
+		index = &newTex;
+	if (index_bf == &oldTex)
+		index_bf = &newTex;
+
 	if (updateGlossiness)
 		glossiness = Min(ComputeGlossiness(nu, nv), ComputeGlossiness(nu_bf, nv_bf));
 }
 
-Properties GlossyTranslucentMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
-	Properties props;
+PropertiesUPtr GlossyTranslucentMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.materials." + name + ".type")("glossytranslucent"));
-	props.Set(Property("scene.materials." + name + ".kd")(Kd->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".kt")(Kt->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".ks")(Ks->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".ks_bf")(Ks_bf->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".uroughness")(nu->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".uroughness_bf")(nu_bf->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".vroughness")(nv->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".vroughness_bf")(nv_bf->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".ka")(Ka->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".ka_bf")(Ka_bf->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".d")(depth->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".d_bf")(depth_bf->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".index")(index->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".index_bf")(index_bf->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".multibounce")(multibounce));
-	props.Set(Property("scene.materials." + name + ".multibounce_bf")(multibounce_bf));
-	props.Set(Material::ToProperties(imgMapCache, useRealFileName));
+	props->Set(Property("scene.materials." + name + ".type")("glossytranslucent"));
+	props->Set(Property("scene.materials." + name + ".kd")(Kd->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".kt")(Kt->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".ks")(Ks->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".ks_bf")(Ks_bf->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".uroughness")(nu->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".uroughness_bf")(nu_bf->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".vroughness")(nv->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".vroughness_bf")(nv_bf->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".ka")(Ka->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".ka_bf")(Ka_bf->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".d")(depth->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".d_bf")(depth_bf->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".index")(index->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".index_bf")(index_bf->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".multibounce")(multibounce));
+	props->Set(Property("scene.materials." + name + ".multibounce_bf")(multibounce_bf));
+	props->Set(Material::ToProperties(imgMapCache, useRealFileName));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

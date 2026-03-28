@@ -182,9 +182,10 @@ protected:
 	size_t usedMemory;
 };
 
-typedef HardwareDeviceBuffer * HardwareDeviceBufferPtr;
-template <> void HardwareDevice::SetKernelArg<HardwareDeviceBufferPtr>(HardwareDeviceKernel *kernel, const u_int index, const HardwareDeviceBufferPtr &buff);
+typedef HardwareDeviceBuffer * HardwareDeviceBufferRPtr;
+template <> void HardwareDevice::SetKernelArg<HardwareDeviceBufferRPtr>(HardwareDeviceKernel *kernel, const u_int index, const HardwareDeviceBufferRPtr &buff);
 
 }
 
 #endif	/* _LUXRAYS_INTERSECTIONDEVICE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

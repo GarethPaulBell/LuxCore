@@ -29,7 +29,7 @@ namespace slg {
 
 class MakeFloat3Texture : public Texture {
 public:
-	MakeFloat3Texture(const Texture *tex1, const Texture *tex2, const Texture *tex3) 
+	MakeFloat3Texture(TextureRef tex1, TextureRef tex2, TextureRef tex3) 
 		: tex1(tex1), tex2(tex2), tex3(tex3) { }
 	virtual ~MakeFloat3Texture() { }
 
@@ -41,40 +41,38 @@ public:
 	virtual float Y() const { return 1.f; }
 	virtual float Filter() const { return 1.f; }
 
-	virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 		Texture::AddReferencedTextures(referencedTexs);
 
-		tex1->AddReferencedTextures(referencedTexs);
-		tex2->AddReferencedTextures(referencedTexs);
-		tex3->AddReferencedTextures(referencedTexs);
+		GetTexture1().AddReferencedTextures(referencedTexs);
+		GetTexture2().AddReferencedTextures(referencedTexs);
+		GetTexture3().AddReferencedTextures(referencedTexs);
 	}
-	virtual void AddReferencedImageMaps(boost::unordered_set<const ImageMap *> &referencedImgMaps) const {
-		tex1->AddReferencedImageMaps(referencedImgMaps);
-		tex2->AddReferencedImageMaps(referencedImgMaps);
-		tex3->AddReferencedImageMaps(referencedImgMaps);
-	}
-
-	virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
-		if (tex1 == oldTex)
-			tex1 = newTex;
-		if (tex2 == oldTex)
-			tex2 = newTex;
-		if (tex3 == oldTex)
-			tex3 = newTex;
+	virtual void AddReferencedImageMaps(std::unordered_set<const ImageMap * > &referencedImgMaps) const {
+		GetTexture1().AddReferencedImageMaps(referencedImgMaps);
+		GetTexture2().AddReferencedImageMaps(referencedImgMaps);
+		GetTexture3().AddReferencedImageMaps(referencedImgMaps);
 	}
 
-	const Texture *GetTexture1() const { return tex1; }
-	const Texture *GetTexture2() const { return tex2; }
-	const Texture *GetTexture3() const { return tex3; }
+	virtual void UpdateTextureReferences(TextureRef oldTex, TextureRef newTex) {
+		updtex(tex1, oldTex, newTex);
+		updtex(tex2, oldTex, newTex);
+		updtex(tex3, oldTex, newTex);
+	}
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	TextureConstRef GetTexture1() const { return tex1; }
+	TextureConstRef GetTexture2() const { return tex2; }
+	TextureConstRef GetTexture3() const { return tex3; }
+
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
-	const Texture *tex1;
-	const Texture *tex2;
-	const Texture *tex3;
+	std::reference_wrapper<Texture> tex1;
+	std::reference_wrapper<Texture> tex2;
+	std::reference_wrapper<Texture> tex3;
 };
 
 }
 
 #endif	/* _SLG_MAKEFLOAT3TEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

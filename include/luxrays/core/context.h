@@ -40,6 +40,7 @@
 #include <ostream>
 
 #include "luxrays/luxrays.h"
+#include "luxrays/usings.h"
 #include "luxrays/core/dataset.h"
 #include "luxrays/utils/properties.h"
 
@@ -47,7 +48,7 @@ namespace luxrays {
 
 typedef void (*LuxRaysDebugHandler)(const char *msg);
 
-#define LR_LOG(c, a) { if (c->HasDebugHandler() && c->IsVerbose()) { std::stringstream _LR_LOG_LOCAL_SS; _LR_LOG_LOCAL_SS << a; c->PrintDebugMsg(_LR_LOG_LOCAL_SS.str().c_str()); } }
+#define LR_LOG(c, a) { if (c.HasDebugHandler() && c.IsVerbose()) { std::stringstream _LR_LOG_LOCAL_SS; _LR_LOG_LOCAL_SS << a; c.PrintDebugMsg(_LR_LOG_LOCAL_SS.str().c_str()); } }
 
 /*!
  * \brief Interface to all main LuxRays functions.
@@ -74,7 +75,7 @@ public:
 	 * \param handler is an optional pointer to a debug message handler. I can be NULL.
 	 * \param config is an optional set of properties used to configure the context.
 	 */
-	Context(LuxRaysDebugHandler handler = NULL, const Properties &config = Properties());
+	Context(LuxRaysDebugHandler handler = NULL, PropertiesUPtr&& config = nullptr);
 
 	/*!	\brief Free all Context associated resources.
 	 */
@@ -85,7 +86,7 @@ public:
 	 *
 	 * \return a reference to the context configuration properties.
 	 */
-	const Properties &GetConfig() const { return cfg; }
+	const Properties &GetConfig() const { return *cfg; }
 
 	//--------------------------------------------------------------------------
 	// Methods dedicated to device listing and creation
@@ -141,9 +142,9 @@ public:
 	// Methods dedicated to DataSet definition
 	//--------------------------------------------------------------------------
 
-	DataSet *GetCurrentDataSet() const { return currentDataSet; }
+	DataSetSPtr GetCurrentDataSet() const { return currentDataSet; }
 
-	void SetDataSet(DataSet *dataSet);
+	void SetDataSet(DataSetSPtr dataSet);
 	void UpdateDataSet();
 
 	//--------------------------------------------------------------------------
@@ -185,11 +186,11 @@ private:
 	std::vector<HardwareDevice *> CreateHardwareDevices(
 		std::vector<DeviceDescription *> &deviceDesc, const size_t indexOffset);
 
-	const Properties cfg;
+	PropertiesUPtr cfg;  // Context owns its own properties
 
 	LuxRaysDebugHandler debugHandler;
 
-	DataSet *currentDataSet;
+	DataSetSPtr currentDataSet;
 	std::vector<DeviceDescription *> deviceDescriptions;
 
 	// All intersection devices
@@ -205,3 +206,4 @@ private:
 }
 
 #endif	/* _LUXRAYS_CONTEXT_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

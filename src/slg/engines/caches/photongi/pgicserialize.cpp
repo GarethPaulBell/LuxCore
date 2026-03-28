@@ -114,11 +114,14 @@ template<class Archive> void PhotonGICache::serialize(Archive &ar, const u_int v
 	ar & causticPhotonTracedCount;
 	ar & causticPhotonPass;
 
-	threadsSyncBarrier.reset(new boost::barrier(threadCount));
+	threadsSyncBarrier.reset(new std::barrier(threadCount, completion_t()));
 }
 
 namespace slg {
 // Explicit instantiations for portable archives
 template void PhotonGICache::serialize(LuxOutputArchive &ar, const u_int version);
 template void PhotonGICache::serialize(LuxInputArchive &ar, const u_int version);
+template void PhotonGICache::serialize(LuxOutputArchiveText &ar, const u_int version);
+template void PhotonGICache::serialize(LuxInputArchiveText &ar, const u_int version);
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

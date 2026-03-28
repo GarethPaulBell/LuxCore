@@ -19,8 +19,6 @@
 #ifndef _SLG_TILEREPOSITORY_H
 #define	_SLG_TILEREPOSITORY_H
 
-#include <boost/thread/mutex.hpp>
-
 #include "luxrays/utils/utils.h"
 #include "luxrays/utils/serializationutils.h"
 #include "slg/slg.h"
@@ -76,13 +74,13 @@ private:
 	template<class Archive>	void load(Archive &ar, const unsigned int version);
 	BOOST_SERIALIZATION_SPLIT_MEMBER()
 
-	void InitTileFilm(const Film &film, Film **tileFilm);
+	void InitTileFilm(const Film &film, FilmUPtr * tileFilm);
 	void CheckConvergence();
 	void UpdateTileStats();
 	void VarianceClamp(Film &tileFilm);
 	void AddPass(Film &tileFilm, const u_int passRendered);
 
-	Film *allPassFilm, *evenPassFilm;
+	FilmUPtr allPassFilm, evenPassFilm;  // Owned by this object
 
 	float allPassFilmTotalYValue;
 	bool hasEnoughWarmUpSample;
@@ -133,18 +131,19 @@ public:
 	~TileRepository();
 
 	void Clear();
-	void Restart(Film *film, const u_int startPass = 0, const u_int multipassIndex = 0);
+	void Restart(FilmRef film, const u_int startPass = 0, const u_int multipassIndex = 0);
 	void GetPendingTiles(std::deque<const Tile *> &tiles);
 	void GetNotConvergedTiles(std::deque<const Tile *> &tiles);
 	void GetConvergedTiles(std::deque<const Tile *> &tiles);
 
 	void InitTiles(const Film &film);
-	bool NextTile(Film *film, boost::mutex *filmMutex,
-		TileWork &tileWork, Film *tileFilm);
+	bool NextTile(FilmRef film, std::mutex *filmMutex,
+		TileWork &tileWork, FilmRef tileFilm);
 
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
 	static TileRepository *FromProperties(const luxrays::Properties &cfg);
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
+
 
 	friend class Tile;
 
@@ -185,10 +184,10 @@ private:
 		const int xd, const int yd, const int xp, const int yp,
 		const int xEnd, const int yEnd);
 
-	void SetDone(Film *film);
+	void SetDone(FilmRef film);
 	bool GetNewTileWork(TileWork &tileWork);
 
-	mutable boost::mutex tileMutex;
+	mutable std::mutex tileMutex;
 	double startTime;
 
 	u_int filmRegionWidth, filmRegionHeight;
@@ -215,3 +214,4 @@ BOOST_CLASS_EXPORT_KEY(slg::Tile)
 BOOST_CLASS_EXPORT_KEY(slg::TileRepository)		
 
 #endif	/* _SLG_TILEREPOSITORY_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

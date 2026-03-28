@@ -22,10 +22,10 @@
 #include <string>
 #include <vector>
 
-#include <boost/unordered_set.hpp>
-
 #include "luxrays/core/namedobjectvector.h"
+#include "luxrays/usings.h"
 #include "slg/textures/texture.h"
+#include "slg/usings.h"
 
 namespace slg {
 
@@ -42,37 +42,47 @@ public:
 		return texs.IsObjDefined(name);
 	}
 
-	void DefineTexture(Texture *t);
+    std::tuple<TextureRef&, TextureUPtr> DefineTexture(TextureUPtr&& t);
 
-	const Texture *GetTexture(const std::string &name) const {
-		return static_cast<const Texture *>(texs.GetObj(name));
+	TextureConstRef GetTexture(const std::string &name) const {
+		return dynamic_cast<TextureConstRef>(texs.GetObj(name));
 	}
-	const Texture *GetTexture(const u_int index) const {
-		return static_cast<const Texture *>(texs.GetObj(index));
+	TextureRef GetTexture(const std::string &name) {
+		return dynamic_cast<TextureRef>(texs.GetObj(name));
+	}
+
+	TextureConstRef GetTexture(const u_int index) const {
+		return dynamic_cast<TextureConstRef>(texs.GetObj(index));
 	}
 	u_int GetTextureIndex(const std::string &name) const {
 		return texs.GetIndex(name);
 	}
-	u_int GetTextureIndex(const Texture *t) const {
+	u_int GetTextureIndex(TextureConstRef t) const {
 		return texs.GetIndex(t);
+	}
+	u_int GetTextureIndex(TextureConstPtr t) const {
+		return texs.GetIndex(*t);  // Will throw if t is nullopt
 	}
 
 	u_int GetSize() const {
 		return texs.GetSize();
 	}
-	void GetTextureNames(std::vector<std::string> &names) const {
-		texs.GetNames(names);
+	auto GetTextureNames() const {
+		return texs.GetNames();
 	}
 
-	void DeleteTexture(const std::string &name) {
-		texs.DeleteObj(name);
+	TextureUPtr DeleteTexture(const std::string &name) {
+		return std::move(texs.DeleteObj<Texture>(name));
 	}
 
-	void GetTextureSortedNames(std::vector<std::string> &names) const;
+	const std::vector<std::string> GetTextureSortedNames() const;
 
 private:
-	void GetTextureSortedNamesImpl(const Texture *tex, std::vector<std::string> &names,
-			boost::unordered_set<std::string> &doneNames) const;
+	void GetTextureSortedNamesImpl(
+		TextureConstRef tex,
+		std::vector<std::string> &names,
+		std::unordered_set<std::string> &doneNames
+	) const;
 
 	luxrays::NamedObjectVector texs;
 };
@@ -80,3 +90,4 @@ private:
 }
 
 #endif	/* _SLG_TEXTUREDEFS_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -25,8 +25,9 @@
 #include <string>
 
 #include <boost/serialization/export.hpp>
+#include <tbb/scalable_allocator.h>
 
-#include <OpenImageDenoise/oidn.hpp>
+//#include <OpenImageDenoise/oidn.hpp>
 
 #include "luxrays/luxrays.h"
 #include "luxrays/core/color/color.h"
@@ -55,7 +56,16 @@ private:
 	// Used by serialization
 	IntelOIDN();
 
-	void FilterImage(const std::string &imageName,
+	using float_buffer = std::vector<float, tbb::scalable_allocator<float>>;
+
+	float_buffer PrepareBuffer (
+		const std::string& imageName,
+		const GenericFrameBuffer<4, 1, float>& channel,
+		const u_int width,
+		const u_int height,
+		bool enablePrefiltering
+	) const;
+	void FilterImage (const std::string &imageName,
 			const float *srcBuffer, float *dstBuffer,
 			const float *albedoBuffer, const float *normalBuffer,
 			const u_int width, const u_int height,
@@ -87,4 +97,4 @@ BOOST_CLASS_EXPORT_KEY(slg::IntelOIDN)
 
 #endif
 		
-#endif /* _SLG_INTEL_OIDN_H */
+#endif /* _SLG_INTEL_OIDN_H */// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -17,8 +17,6 @@
  ***************************************************************************/
 
 #include <stdexcept>
-#include <boost/foreach.hpp>
-#include <boost/regex.hpp>
 
 #include "slg/film/film.h"
 #include "slg/kernels/kernels.h"
@@ -139,3 +137,4 @@ void PremultiplyAlphaPlugin::ApplyHW(Film &film, const u_int index) {
 	hardwareDevice->EnqueueKernel(applyKernel, HardwareDeviceRange(RoundUp(film.GetWidth() * film.GetHeight(), 256u)),
 			HardwareDeviceRange(256));
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

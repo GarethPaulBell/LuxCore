@@ -12,22 +12,35 @@ You can find more information about at https://www.luxcorerender.org
 
 ### Building
 
+#### Build documentation
+Complete build documentation can be found in the wiki: https://wiki.luxcorerender.org/Building_LuxCoreRender.
+
+Here is a short extract, please refer to link above for more information.
+
+
 #### Tool requirements
-First, ensure you have a suitable toolchain:
+[Mandatory] First, ensure you have a suitable toolchain:
 - Windows: MSVC >= 194x _latest version_
 - Linux: gcc 14
 - MacOS Intel: XCode 15.2
 - MacOS Arm: XCode 15.4
 
-Ensure the following software is also installed and available in the PATH:
-
+[Mandatory] Then, ensure the following software is also installed and available in
+the PATH:
 - Git
-- Github CLI (for dependency signature checking: optional, but recommended)
 - Python 3
 - Conan (`pip install conan`)
 - CMake
 
-For Windows, ensure the command line is configured for building (`vcvarsall.bat`).
+[Optional, but recommended] In addition, you may install the following
+software:
+- [Github CLI](https://cli.github.com/) (for dependency signature checking)
+- [repairwheel](https://pypi.org/project/repairwheel/) (to build test wheels)
+- [nektos/act](https://github.com/nektos/act) (to test Github scripts locally)
+
+[Mandatory, Windows only] For Windows, ensure the command line is configured
+for building (`vcvarsall.bat`).
+
 
 #### Quick build
 
@@ -50,7 +63,8 @@ Nota: second `make` statement can also name a specific target. Examples:
 #### Build type
 
 Build type can be controlled by environment variable `LUX_BUILD_TYPE`.
-Available build types are `Release` and `Debug` (case sensitive). Default is `Release`.
+Available build types are `Release` and `Debug` (case sensitive). Default is
+`Release`.
 
 #### Other commands
 
@@ -61,12 +75,15 @@ Available build types are `Release` and `Debug` (case sensitive). Default is `Re
 - `make doc`: build Doxygen documentation
 
 
+
 ### LuxCore library
 
-LuxCore is the new LuxCoreRender v2.x C++ and Python API. It is released under Apache Public
-License v2.0 and can be freely used in open source and commercial applications.
+LuxCore is the new LuxCoreRender v2.x C++ and Python API. It is released under
+Apache Public License v2.0 and can be freely used in open source and commercial
+applications.
 
-You can find more information about the API at https://wiki.luxcorerender.org/LuxCore_API
+You can find more information about the API at
+https://wiki.luxcorerender.org/LuxCore_API
 
 ### LuxCoreUI
 
@@ -89,8 +106,9 @@ out\install\Release\bin\luxcoreui scenes\cornell\cornell.cfg
 
 ### LuxCoreConsole
 
-This is a simple example of a command line renderer written using LuxCore API and it is
-available in the [`samples/luxcoreconsole`](samples/luxcoreconsole) directory.
+This is a simple example of a command line renderer written using LuxCore API
+and it is available in the [`samples/luxcoreconsole`](samples/luxcoreconsole)
+directory.
 Just run `luxcoreconsole` from the root directory with:
 
 Linux/MacOS:

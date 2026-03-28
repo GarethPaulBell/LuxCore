@@ -55,3 +55,4 @@ BOOST_CLASS_VERSION(slg::BiDirCPURenderState, 2)
 BOOST_CLASS_EXPORT_KEY(slg::BiDirCPURenderState)
 
 #endif	/* _SLG_BIDIRCPURENDERSTATE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

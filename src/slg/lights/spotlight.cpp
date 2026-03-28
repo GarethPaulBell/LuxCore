@@ -88,7 +88,7 @@ void SpotLight::GetPreprocessedData(float *emittedFactorData, float *absolutePos
 		*alignedLight2WorldData = &alignedLight2World;
 }
 
-float SpotLight::GetPower(const Scene &scene) const {
+float SpotLight::GetPower(SceneConstRef scene) const {
 	return emittedFactor.Y() * 2.f * M_PI * (1.f - .5f * (cosFalloffStart + cosTotalWidth));
 }
 
@@ -103,7 +103,7 @@ static float LocalFalloff(const Vector &w, const float cosTotalWidth, const floa
 	return powf(delta, 4);
 }
 
-Spectrum SpotLight::Emit(const Scene &scene,
+Spectrum SpotLight::Emit(SceneConstRef scene,
 		const float time, const float u0, const float u1,
 		const float u2, const float u3, const float passThroughEvent,
 		Ray &ray, float &emissionPdfW,
@@ -123,7 +123,7 @@ Spectrum SpotLight::Emit(const Scene &scene,
 	return emittedFactor * (LocalFalloff(localFromLight, cosTotalWidth, cosFalloffStart) / fabsf(CosTheta(localFromLight)));
 }
 
-Spectrum SpotLight::Illuminate(const Scene &scene, const BSDF &bsdf,
+Spectrum SpotLight::Illuminate(SceneConstRef scene, const BSDF &bsdf,
 		const float time, const float u0, const float u1, const float passThroughEvent,
         Ray &shadowRay, float &directPdfW,
 		float *emissionPdfW, float *cosThetaAtLight) const {
@@ -151,7 +151,7 @@ Spectrum SpotLight::Illuminate(const Scene &scene, const BSDF &bsdf,
 	return emittedFactor * (falloff / fabsf(CosTheta(localFromLight)));
 }
 
-bool SpotLight::IsAlwaysInShadow(const Scene &scene,
+bool SpotLight::IsAlwaysInShadow(SceneConstRef scene,
 			const luxrays::Point &p, const luxrays::Normal &n) const {
 	const Vector toLight(absolutePos - p);
 	const float distance = toLight.Length();
@@ -163,19 +163,20 @@ bool SpotLight::IsAlwaysInShadow(const Scene &scene,
 	return (falloff == 0.f);
 }
 
-Properties SpotLight::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+PropertiesUPtr SpotLight::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
 	const string prefix = "scene.lights." + GetName();
-	Properties props = NotIntersectableLightSource::ToProperties(imgMapCache, useRealFileName);
+	PropertiesUPtr props = NotIntersectableLightSource::ToProperties(imgMapCache, useRealFileName);
 
-	props.Set(Property(prefix + ".type")("spot"));
-	props.Set(Property(prefix + ".color")(color));
-	props.Set(Property(prefix + ".power")(power));
-	props.Set(Property(prefix + ".normalizebycolor")(emittedPowerNormalize));
-	props.Set(Property(prefix + ".efficiency")(efficiency));
-	props.Set(Property(prefix + ".position")(localPos));
-	props.Set(Property(prefix + ".target")(localTarget));
-	props.Set(Property(prefix + ".coneangle")(coneAngle));
-	props.Set(Property(prefix + ".conedeltaangle")(coneDeltaAngle));
+	props->Set(Property(prefix + ".type")("spot"));
+	props->Set(Property(prefix + ".color")(color));
+	props->Set(Property(prefix + ".power")(power));
+	props->Set(Property(prefix + ".normalizebycolor")(emittedPowerNormalize));
+	props->Set(Property(prefix + ".efficiency")(efficiency));
+	props->Set(Property(prefix + ".position")(localPos));
+	props->Set(Property(prefix + ".target")(localTarget));
+	props->Set(Property(prefix + ".coneangle")(coneAngle));
+	props->Set(Property(prefix + ".conedeltaangle")(coneDeltaAngle));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

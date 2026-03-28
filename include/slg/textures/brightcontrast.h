@@ -29,7 +29,7 @@ namespace slg {
 
 class BrightContrastTexture : public Texture {
 public:
-	BrightContrastTexture(const Texture *tex, const Texture *brightnessTex, const Texture *contrastTex) :
+	BrightContrastTexture(TextureRef tex, TextureRef brightnessTex, TextureRef contrastTex) :
 		tex(tex), brightnessTex(brightnessTex), contrastTex(contrastTex) { }
 	virtual ~BrightContrastTexture() { }
 
@@ -43,40 +43,41 @@ public:
 		return 0.f;  // TODO
 	}
 
-	virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 		Texture::AddReferencedTextures(referencedTexs);
 
-		tex->AddReferencedTextures(referencedTexs);
-		brightnessTex->AddReferencedTextures(referencedTexs);
-		contrastTex->AddReferencedTextures(referencedTexs);
+		GetTex().AddReferencedTextures(referencedTexs);
+		GetBrightnessTex().AddReferencedTextures(referencedTexs);
+		GetContrastTex().AddReferencedTextures(referencedTexs);
 	}
-	virtual void AddReferencedImageMaps(boost::unordered_set<const ImageMap *> &referencedImgMaps) const {
-		tex->AddReferencedImageMaps(referencedImgMaps);
-		brightnessTex->AddReferencedImageMaps(referencedImgMaps);
-		contrastTex->AddReferencedImageMaps(referencedImgMaps);
+	virtual void AddReferencedImageMaps(std::unordered_set<const ImageMap * > &referencedImgMaps) const {
+		GetTex().AddReferencedImageMaps(referencedImgMaps);
+		GetBrightnessTex().AddReferencedImageMaps(referencedImgMaps);
+		GetContrastTex().AddReferencedImageMaps(referencedImgMaps);
 	}
 
-	virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
-		if (tex == oldTex)
+	virtual void UpdateTextureReferences(TextureRef oldTex, TextureRef newTex) {
+		if (&tex.get() == &oldTex)
 			tex = newTex;
-		if (brightnessTex == oldTex)
+		if (&brightnessTex.get() == &oldTex)
 			brightnessTex = newTex;
-		if (contrastTex == oldTex)
+		if (&contrastTex.get() == &oldTex)
 			contrastTex = newTex;
 	}
 
-	const Texture *GetTex() const { return tex; }
-	const Texture *GetBrightnessTex() const { return brightnessTex; }
-	const Texture *GetContrastTex() const { return contrastTex; }
+	TextureConstRef GetTex() const { return tex; }
+	TextureConstRef GetBrightnessTex() const { return brightnessTex; }
+	TextureConstRef GetContrastTex() const { return contrastTex; }
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
-	const Texture *tex;
-	const Texture *brightnessTex;
-	const Texture *contrastTex;
+	std::reference_wrapper<Texture> tex;
+	std::reference_wrapper<Texture> brightnessTex;
+	std::reference_wrapper<Texture> contrastTex;
 };
 
 }
 
 #endif	/* _SLG_BRIGHTCONTRASTTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

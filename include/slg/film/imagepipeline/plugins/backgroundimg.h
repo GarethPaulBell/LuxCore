@@ -29,6 +29,7 @@
 #include "luxrays/utils/serializationutils.h"
 #include "slg/film/imagepipeline/imagepipeline.h"
 #include "slg/imagemap/imagemap.h"
+#include "slg/usings.h"
 
 namespace slg {
 
@@ -38,7 +39,7 @@ namespace slg {
 
 class BackgroundImgPlugin : public ImagePipelinePlugin {
 public:
-	BackgroundImgPlugin(ImageMap *map);
+	BackgroundImgPlugin(ImageMapUPtr&& map);
 	virtual ~BackgroundImgPlugin();
 
 	virtual ImagePipelinePlugin *Copy() const;
@@ -48,6 +49,15 @@ public:
 	virtual bool CanUseHW() const { return true; }
 	virtual void AddHWChannelsUsed(Film::FilmChannels &hwChannelsUsed) const;
 	virtual void ApplyHW(Film &film, const u_int index);
+
+	ImageMapRef GetImageMap() { return *imgMap; }
+	ImageMapConstRef GetImageMap() const { return *imgMap; }
+	bool HasImageMap() const { return bool(imgMap); }
+
+	ImageMapRef GetFilmImageMap() { return *filmImageMap; }
+	ImageMapConstRef GetFilmImageMap() const { return *filmImageMap; }
+	void SetFilmImageMap(ImageMapUPtr&& imgMap) { filmImageMap = std::move(imgMap); }
+	bool HasFilmImageMap() const { return bool(filmImageMap); }
 
 	friend class boost::serialization::access;
 
@@ -63,8 +73,8 @@ private:
 
 	void UpdateFilmImageMap(const Film &film);
 
-	ImageMap *imgMap;
-	ImageMap *filmImageMap;
+	ImageMapUPtr imgMap;
+	ImageMapUPtr filmImageMap;
 
 	// Used inside the object destructor to free buffers
 	luxrays::HardwareDevice *hardwareDevice;
@@ -81,3 +91,4 @@ BOOST_CLASS_VERSION(slg::BackgroundImgPlugin, 1)
 BOOST_CLASS_EXPORT_KEY(slg::BackgroundImgPlugin)
 
 #endif	/*  _SLG_BACKGROUND_IMG_PLUGIN_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -43,7 +43,7 @@ public:
 	const luxrays::Spectrum GetN() const { return n; };
 	const luxrays::Spectrum GetK() const { return k; };
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
 	const luxrays::Spectrum n, k;
@@ -52,3 +52,4 @@ private:
 }
 
 #endif	/* _SLG_FRESNELCONSTTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

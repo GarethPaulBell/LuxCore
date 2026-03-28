@@ -29,7 +29,7 @@ namespace slg {
 
 class BevelTexture : public Texture {
 public:
-	BevelTexture(const Texture *t, const float radius);
+	BevelTexture(TextureConstRef t, const float radius);
 	virtual ~BevelTexture();
 
 	virtual TextureType GetType() const { return BEVEL_TEX; }
@@ -40,32 +40,34 @@ public:
 
     virtual luxrays::Normal Bump(const HitPoint &hitPoint, const float sampleDistance) const;
 
-	virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 		Texture::AddReferencedTextures(referencedTexs);
 
 		if (tex)
 			tex->AddReferencedTextures(referencedTexs);
 	}
-	virtual void AddReferencedImageMaps(boost::unordered_set<const ImageMap *> &referencedImgMaps) const {
+	virtual void AddReferencedImageMaps(std::unordered_set<const ImageMap *> &referencedImgMaps) const {
 		if (tex)
 			tex->AddReferencedImageMaps(referencedImgMaps);
 	}
 
-	virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
-		if (tex == oldTex)
-			tex = newTex;
+	virtual void UpdateTextureReferences(TextureRef oldTex, TextureRef newTex) {
+		if (tex == &oldTex)
+			tex = &newTex;
 	}
 
-	const Texture *GetTexture() const { return tex; }
+	bool HasTexture() const { return bool(tex); }
+	TextureConstRef GetTexture() const { return *tex; }
 	const float GetRadius() const { return radius; }
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
-	const Texture *tex;
+	TextureConstPtr tex;
 	const float radius;
 };
 
 }
 
 #endif	/* _SLG_BEVELTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -21,12 +21,12 @@
 #include <exception>
 
 #include <boost/lexical_cast.hpp>
-#include <boost/foreach.hpp>
 
 #include "slg/film/film.h"
 #include "slg/film/imagepipeline/imagepipeline.h"
 #include "slg/film/imagepipeline/radiancechannelscale.h"
 #include "luxrays/utils/oclerror.h"
+#include "luxrays/utils/thread.h"
 
 using namespace std;
 using namespace luxrays;
@@ -50,7 +50,7 @@ void Film::SetImagePipelines(const u_int index, ImagePipeline *newImagePiepeline
 }
 
 void Film::SetImagePipelines(ImagePipeline *newImagePiepeline) {
-	BOOST_FOREACH(ImagePipeline *ip, imagePipelines)
+	for(ImagePipeline *ip: imagePipelines)
 		delete ip;
 
 	if (newImagePiepeline) {
@@ -61,7 +61,7 @@ void Film::SetImagePipelines(ImagePipeline *newImagePiepeline) {
 }
 
 void Film::SetImagePipelines(std::vector<ImagePipeline *> &newImagePiepelines) {
-	BOOST_FOREACH(ImagePipeline *ip, imagePipelines)
+	for(ImagePipeline *ip: imagePipelines)
 		delete ip;
 
 	imagePipelines = newImagePiepelines;
@@ -130,9 +130,9 @@ void Film::AsyncExecuteImagePipeline(const u_int index) {
 		throw runtime_error("AsyncExecuteImagePipeline() called while another AsyncExecuteImagePipeline() is still running");
 
 	isAsyncImagePipelineRunning = true;
-	
-	delete imagePipelineThread;
-	imagePipelineThread = new boost::thread(&Film::ExecuteImagePipelineThreadImpl, this, index);
+
+	imagePipelineThread = std::make_unique<luxrays::JThread>(&Film::ExecuteImagePipelineThreadImpl, this, index);
+	SetThreadName(imagePipelineThread, "LxImagePipeline");
 }
 
 bool Film::HasDoneAsyncExecuteImagePipeline() {
@@ -147,17 +147,12 @@ void Film::WaitAsyncExecuteImagePipeline() {
 void Film::ExecuteImagePipeline(const u_int index) {
 	if (isAsyncImagePipelineRunning)
 		throw runtime_error("ExecuteImagePipeline() called while an AsyncExecuteImagePipeline() is still running");
-	
+
 	ExecuteImagePipelineImpl(index);
 }
 
 void Film::ExecuteImagePipelineThreadImpl(const u_int index) {
-	try {
-		ExecuteImagePipelineImpl(index);
-	} catch (boost::thread_interrupted) {
-		SLG_LOG("[ExecuteImagePipelineThreadImpl::" << index << "] Image pipeline thread halted");
-	}
-
+        ExecuteImagePipelineImpl(index);
 	isAsyncImagePipelineRunning = false;
 }
 
@@ -206,3 +201,4 @@ void Film::ExecuteImagePipelineImpl(const u_int index) {
 	//const double p2 = WallClockTime();
 	//SLG_LOG("Image pipeline " << index << " time: " << int((p2 - p1) * 1000.0) << "ms");
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

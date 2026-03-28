@@ -29,8 +29,9 @@ namespace slg {
 // Lamp spectrum texture
 //------------------------------------------------------------------------------
 
-extern Texture *AllocLampSpectrumTex(const luxrays::Properties &props, const std::string &propName);
+extern TextureUPtr AllocLampSpectrumTex(const luxrays::Properties &props, const std::string &propName);
 
 }
 
 #endif	/* _SLG_LAMPSPECTRUMTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -31,8 +31,7 @@ using namespace std;
 using namespace luxrays;
 using namespace slg;
 
-CompiledScene::CompiledScene(Scene *scn, const PathTracer *pt) {
-	scene = scn;
+CompiledScene::CompiledScene(SceneConstRef scn, const PathTracer *pt) : scene(scn) {
 	pathTracer = pt;
 	maxMemPageSize = numeric_limits<size_t>::max();
 
@@ -111,3 +110,4 @@ string CompiledScene::ToOCLString(const slg::ocl::Spectrum &v) {
 }
 
 #endif
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

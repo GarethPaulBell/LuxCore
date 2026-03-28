@@ -145,13 +145,13 @@ namespace bcd
 	{
 		SamplesStatisticsImages stats(m_samplesStatisticsImages);
 		computeSampleStatistics(stats);
-		return move(stats);
+		return std::move(stats);
 	}
 
 	SamplesStatisticsImages SamplesAccumulator::extractSamplesStatistics()
 	{
 		computeSampleStatistics(m_samplesStatisticsImages);
-		return move(m_samplesStatisticsImages);
+		return std::move(m_samplesStatisticsImages);
 	}
 
 	void SamplesAccumulatorThreadSafe::addSampleThreadSafely(

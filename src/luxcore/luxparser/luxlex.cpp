@@ -768,7 +768,6 @@ char *luxcore_parserlxs_yytext;
 
 #include <sstream>
 
-#include <boost/foreach.hpp>
 	
 #include "luxcore/luxcore.h"
 #include "luxrays/utils/utils.h"
@@ -2513,3 +2512,4 @@ int luxcore_parserlxs_yywrap(void)
 	return 0;
 }
 
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

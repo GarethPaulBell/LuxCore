@@ -34,6 +34,7 @@ public:
 	virtual ~OrthographicCamera() { }
 
 	virtual void ClampRay(luxrays::Ray *ray) const;
+	virtual bool ProjectToImage(luxrays::Ray *ray, float *filmX, float *filmY) const;
 	virtual bool GetSamplePosition(luxrays::Ray *eyeRay, float *filmX, float *filmY) const;
 	virtual bool LocalSampleLens(const float time, const float u1, const float u2,
 		luxrays::Point *lensPoint) const;
@@ -43,7 +44,7 @@ public:
 		const float filmX, const float filmY,
 		float *pdfW, float *fluxToRadianceFactor) const;
 
-	luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
 	virtual void InitCameraTransforms(CameraTransforms *trans);
@@ -56,3 +57,4 @@ private:
 }
 
 #endif	/* _SLG_ORTHOGRAPHIC_CAMERA_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

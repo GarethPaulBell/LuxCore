@@ -27,28 +27,29 @@ using namespace slg;
 //------------------------------------------------------------------------------
 
 float ColorDepthTexture::GetFloatValue(const HitPoint &hitPoint) const {
-	return logf(Clamp(kt->GetFloatValue(hitPoint), 1e-9f, 1.f)) / d;
+	return logf(Clamp(GetKt().GetFloatValue(hitPoint), 1e-9f, 1.f)) / d;
 }
 
 Spectrum ColorDepthTexture::GetSpectrumValue(const HitPoint &hitPoint) const {
-	return Ln(kt->GetSpectrumValue(hitPoint).Clamp(1e-9f, 1.f)) / d;
+	return Ln(GetKt().GetSpectrumValue(hitPoint).Clamp(1e-9f, 1.f)) / d;
 }
 
 float ColorDepthTexture::Y() const {
-	return logf(Clamp(kt->Y(), 1e-9f, 1.f)) / d;
+	return logf(Clamp(GetKt().Y(), 1e-9f, 1.f)) / d;
 }
 
 float ColorDepthTexture::Filter() const {
-	return logf(Clamp(kt->Filter(), 1e-9f, 1.f)) / d;
+	return logf(Clamp(GetKt().Filter(), 1e-9f, 1.f)) / d;
 }
 
-Properties ColorDepthTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
-	Properties props;
+PropertiesUPtr ColorDepthTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.textures." + name + ".type")("colordepth"));
-	props.Set(Property("scene.textures." + name + ".kt")(kt->GetSDLValue()));
-	props.Set(Property("scene.textures." + name + ".depth")(-d));
+	props->Set(Property("scene.textures." + name + ".type")("colordepth"));
+	props->Set(Property("scene.textures." + name + ".kt")(GetKt().GetSDLValue()));
+	props->Set(Property("scene.textures." + name + ".depth")(-d));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

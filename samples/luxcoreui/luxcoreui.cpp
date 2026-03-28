@@ -17,7 +17,7 @@
  ***************************************************************************/
 
 #include <iostream>
-#include <boost/filesystem.hpp>
+#include <filesystem>
 #include <boost/lexical_cast.hpp>
 #include <boost/format.hpp>
 #include <ImGuiFileDialog.h>
@@ -67,7 +67,7 @@ static void ConvertImage(const string &fileName) {
 */
 
 int main(int argc, char *argv[]) {
-  try {
+  //try {
     // Initialize LuxCore
     luxcore::Init(LuxCoreApp::LogHandler);
     //luxcore::SetEnableLogSubSystem(luxcore::LOG_API, true);
@@ -123,7 +123,7 @@ int main(int argc, char *argv[]) {
           i += 2;
         }
 
-        else if (argv[i][1] == 'd') boost::filesystem::current_path(boost::filesystem::path(argv[++i]));
+        else if (argv[i][1] == 'd') std::filesystem::current_path(std::filesystem::path(argv[++i]));
 
         else if (argv[i][1] == 'c') removeUnused = true;
 
@@ -147,9 +147,9 @@ int main(int argc, char *argv[]) {
     }
 
     // Check if we have to parse a LuxCore SDL file or a LuxRender SDL file
-    RenderConfig *config;
-    RenderState *startRenderState = NULL;
-    Film *startFilm = NULL;
+    RenderConfigRPtr config;
+    std::shared_ptr<RenderState> startRenderState = nullptr;
+    std::unique_ptr<Film> startFilm = nullptr;
 
     if (configFileName.compare("") != 0) {
       // Clear the file name resolver list
@@ -157,41 +157,47 @@ int main(int argc, char *argv[]) {
       // Add the current directory to the list of place where to look for files
       luxcore::AddFileNameResolverPath(".");
       // Add the .cfg directory to the list of place where to look for files
-      boost::filesystem::path path(configFileName);
+      std::filesystem::path path(configFileName);
       luxcore::AddFileNameResolverPath(path.parent_path().generic_string());
     }
 
     const string configFileNameExt = GetFileNameExt(configFileName);
     if (configFileName.compare("") == 0) {
       // Start without a rendering
-      config = NULL;
+      config = nullptr;
     } else if (configFileNameExt == ".lxs") {
       // It is a LuxRender SDL file
       LA_LOG("Parsing LuxRender SDL file...");
-      Properties renderConfigProps, sceneProps;
+      auto renderConfigProps = std::make_unique<Properties>();
+      auto sceneProps = std::make_unique<Properties>();
       luxcore::ParseLXS(configFileName, renderConfigProps, sceneProps);
 
       // For debugging
       //LA_LOG("RenderConfig: \n" << renderConfigProps);
       //LA_LOG("Scene: \n" << sceneProps);
 
-      Scene *scene = Scene::Create();
+      auto scene = Scene::Create();
       scene->Parse(sceneProps);
-      config = RenderConfig::Create(renderConfigProps.Set(cmdLineProp), scene);
+      renderConfigProps->Set(cmdLineProp);
+      config = RenderConfig::Create(std::move(renderConfigProps), std::move(scene));
       config->DeleteSceneOnExit();
     } else if (configFileNameExt == ".cfg") {
       // It is a LuxCore SDL file
-      config = RenderConfig::Create(Properties(configFileName).Set(cmdLineProp));
+      auto props = std::make_unique<Properties>(std::move(configFileName));
+      props->Set(cmdLineProp);
+      config = RenderConfig::Create(std::move(props));
     } else if (configFileNameExt == ".bcf") {
       // It is a LuxCore RenderConfig binary archive
+      auto props = std::make_unique<Properties>(std::move(cmdLineProp));
       config = RenderConfig::Create(configFileName);
-      config->Parse(cmdLineProp);
+      config->Parse(props);
     } else if (configFileNameExt == ".rsm") {
       // It is a rendering resume file
-      delete startRenderState;
-      delete startFilm;
-      config = RenderConfig::Create(configFileName, &startRenderState, &startFilm);
-      config->Parse(cmdLineProp);
+      auto props = std::make_unique<Properties>(std::move(cmdLineProp));
+      startRenderState.reset();
+      startFilm.reset();
+      config = RenderConfig::Create(configFileName, startRenderState, startFilm);
+      config->Parse(props);
     } else
       throw runtime_error("Unknown file extension: " + configFileName);
 
@@ -208,15 +214,15 @@ int main(int argc, char *argv[]) {
     if (config && ((startFilm && !startRenderState) || (!startFilm && startRenderState)))
       throw runtime_error("You have to use both a film and render state to resume the rendering");
 
-    if (config && (config->ToProperties().Get("renderengine.type").Get<string>() == "FILESAVER")) {
-      RenderSession *session = RenderSession::Create(config);
+    if (config && (config->ToProperties()->Get("renderengine.type").Get<string>() == "FILESAVER")) {
+      auto session = RenderSession::Create(config);
 
       // Save the scene and exit
       session->Start();
       session->Stop();
 
-      delete session;
-      delete config;
+      session.reset();
+      config.reset();
     } else {
       LuxCoreApp app(config);
       app.optMouseGrabMode = mouseGrabMode;
@@ -226,13 +232,13 @@ int main(int argc, char *argv[]) {
     }
 
     LA_LOG("Done.");
-  } catch (runtime_error &err) {
-    LA_LOG("RUNTIME ERROR: " << err.what());
-    return EXIT_FAILURE;
-  } catch (exception &err) {
-    LA_LOG("ERROR: " << err.what());
-    return EXIT_FAILURE;
-  }
+  //} catch (runtime_error &err) {
+    //LA_LOG("RUNTIME ERROR: " << err.what());
+    //return EXIT_FAILURE;
+  //} catch (exception &err) {
+    //LA_LOG("ERROR: " << err.what());
+    //return EXIT_FAILURE;
+  //}
 
   return EXIT_SUCCESS;
 }

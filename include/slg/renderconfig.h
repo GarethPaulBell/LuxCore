@@ -20,18 +20,42 @@
 #define	_SLG_RENDERCONFIG_H
 
 #include "luxrays/core/randomgen.h"
+#include "luxrays/usings.h"
 #include "luxrays/utils/properties.h"
 #include "luxrays/utils/serializationutils.h"
 #include "slg/slg.h"
 #include "slg/samplers/sampler.h"
 #include "slg/scene/scene.h"
+#include "slg/usings.h"
+#include <functional>
+#include <memory>
 
 namespace slg {
+using luxrays::PropertiesRPtr;
+using luxrays::PropertiesUPtr;
+using luxrays::PropertiesConstRPtr;
+using luxrays::PropertiesConstRef;
+using luxrays::PropertiesRef;
 
 class RenderConfig {
+
+	struct Private{ explicit Private() = default; };
+
 public:
-	RenderConfig(const luxrays::Properties &props, Scene *scene = NULL);
-	~RenderConfig();
+
+	// Factory
+	template<typename... Args>
+	static RenderConfigUPtr Create(Args... args) {
+		return std::make_unique<RenderConfig>(Private(), std::forward<Args>(args)...);
+	}
+
+	// Constructors are private, please use factory instead
+
+	// Case #1: External scene provided
+	RenderConfig(Private, PropertiesRPtr props, SceneRef scene);
+
+	// Case #2: No external scene provided, will generate an internal one
+	RenderConfig(Private, PropertiesRPtr props);
 
 	bool HasCachedKernels();
 
@@ -42,56 +66,135 @@ public:
 	void UpdateFilmProperties(const luxrays::Properties &props);
 	void Delete(const std::string &prefix);
 
-	Filter *AllocPixelFilter() const;
-	Film *AllocFilm() const;
+	FilterUPtr AllocPixelFilter() const;
+	FilmUPtr AllocFilm() const;
 
-	SamplerSharedData *AllocSamplerSharedData(luxrays::RandomGenerator *rndGen, Film *film) const;
-	Sampler *AllocSampler(luxrays::RandomGenerator *rndGen, Film *film,
-		const FilmSampleSplatter *flmSplatter,
-		SamplerSharedData *sharedData,
-		const luxrays::Properties &additionalProps) const;
+	SamplerSharedDataUPtr AllocSamplerSharedData(
+		const luxrays::RandomGeneratorUPtr & rndGen,
+		FilmRef film
+	) const;
+	SamplerSharedDataUPtr AllocSamplerSharedData(
+		const luxrays::RandomGeneratorUPtr & rndGen,
+		FilmPtr film
+	) const;
 
-	RenderEngine *AllocRenderEngine() const;
+	SamplerUPtr AllocSampler(
+		const luxrays::RandomGeneratorUPtr & rndGen,
+		FilmRef film,
+		FilmSampleSplatterRPtr flmSplatter,
+		const std::shared_ptr<SamplerSharedData> sharedData,
+		const luxrays::Properties &additionalProps
+	) const;
+	SamplerUPtr AllocSampler(
+		const luxrays::RandomGeneratorUPtr & rndGen,
+		FilmPtr film,
+		FilmSampleSplatterRPtr flmSplatter,
+		const std::shared_ptr<SamplerSharedData> sharedData,
+		const luxrays::Properties &additionalProps
+	) const;
 
-	const luxrays::Properties &ToProperties() const;
 
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static const luxrays::Properties &GetDefaultProperties();
+	RenderEngineUPtr AllocRenderEngine();
 
-	static RenderConfig *LoadSerialized(const std::string &fileName);
-	static void SaveSerialized(const std::string &fileName, const RenderConfig *renderConfig);
-	static void SaveSerialized(const std::string &fileName, const RenderConfig *renderConfig,
-		const luxrays::Properties &additionalCfg);
+	PropertiesRPtr ToProperties() const;
 
-	luxrays::Properties cfg;
-	Scene *scene;
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static luxrays::PropertiesRPtr GetDefaultProperties();
 
+	static RenderConfigUPtr LoadSerialized(const std::string &fileName);
+	static void SaveSerialized(
+		const std::string &fileName,
+		const RenderConfigUPtr& renderConfig
+	);
+	static void SaveSerialized(
+		const std::string &fileName,
+		const RenderConfigUPtr& renderConfig,
+		const luxrays::Properties &additionalCfg
+	);
+	static void SaveSerialized(
+		const std::string &fileName,
+		RenderConfigConstRef renderConfig,
+		const luxrays::Properties &additionalCfg
+	);
+
+	// Accessors
+	SceneConstRef GetScene() const { return sceneRef; }
+	SceneRef GetScene() { return sceneRef; }
+	PropertiesConstRef GetConfig() const { return *cfg; }
+	PropertiesRef GetConfig() { return *cfg; }
+	PropertiesRPtr GetConfigPtr() { return cfg; }
+
+
+	// Serialization stuff
 	friend class boost::serialization::access;
 
-private:
-	// Used by serialization
-	RenderConfig() {
-		allocatedScene = false;
-	}
+	template<class Archive> static void save_construct_data(
+		Archive & ar, const RenderConfig * t, const unsigned int file_version
+	);
+	template<class Archive> static void load_construct_data(
+		Archive & ar, RenderConfig * t, const unsigned int file_version
+	);
+	template<class Archive> void serialize(Archive & ar, const unsigned int file_version);
 
-	template<class Archive> void save(Archive &ar, const unsigned int version) const;
-	template<class Archive>	void load(Archive &ar, const unsigned int version);
-	BOOST_SERIALIZATION_SPLIT_MEMBER()
+
+private:
+
+	// For deserialization only
+	RenderConfig(PropertiesUPtr&& p_cfg, SceneRef p_scn, SceneUPtr&& p_internalscene);
 
 	static void InitDefaultProperties();
 
-	mutable luxrays::Properties propsCache;
+	mutable luxrays::PropertiesUPtr propsCache{std::make_unique<luxrays::Properties>()};
 	// This is a temporary field used to exchange data between SaveSerialized())
 	// and save()
 	mutable luxrays::Properties saveAdditionalCfg;
 
-	bool allocatedScene;
+	// RenderConfig owns its configuration
+	luxrays::PropertiesUPtr cfg;
+
+	// RenderConfig owns the scene... or not
+	// There are 2 cases:
+	// - Either a scene is generated outside of RenderConfig and passed as
+	//   reference to RenderConfig constructor: in this case, we just set sceneRef
+	//   to the external scene
+	// - Or no scene is passed to RenderConfig constructor, and in this case
+	//   RenderConfig constructor will generate an internal scene, and sceneRef will
+	//   be set to reference this internal scene
+	SceneUPtr internalScene;
+	std::reference_wrapper<Scene> sceneRef;
 };
 
+}  // namespace slg
+
+//------------------------------------------------------------------------------
+// Serialization plumbing
+//------------------------------------------------------------------------------
+
+namespace boost {
+namespace serialization {
+
+// Non-default construction
+template<class Archive>
+inline void save_construct_data(
+    Archive & ar, const slg::RenderConfig * t, const unsigned int file_version
+){
+	slg::RenderConfig::save_construct_data(ar, t, file_version);
 }
+
+template<class Archive>
+inline void load_construct_data(
+    Archive & ar, slg::RenderConfig * t, const unsigned int file_version
+){
+	slg::RenderConfig::load_construct_data(ar, t, file_version);
+}
+
+
+} // namespace serialization
+} // namespace boost
 
 BOOST_CLASS_VERSION(slg::RenderConfig, 2)
 
 BOOST_CLASS_EXPORT_KEY(slg::RenderConfig)
 
 #endif	/* _SLG_RENDERCONFIG_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

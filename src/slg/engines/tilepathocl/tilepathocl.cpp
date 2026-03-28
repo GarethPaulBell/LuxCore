@@ -16,6 +16,8 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include "luxrays/utils/properties.h"
+#include <memory>
 #if !defined(LUXRAYS_DISABLE_OPENCL)
 
 #include <boost/format.hpp>
@@ -37,7 +39,7 @@ using namespace slg;
 // TilePathOCLRenderEngine
 //------------------------------------------------------------------------------
 
-TilePathOCLRenderEngine::TilePathOCLRenderEngine(const RenderConfig *rcfg,
+TilePathOCLRenderEngine::TilePathOCLRenderEngine(RenderConfigRef rcfg,
 		const bool supportsNativeThreads) :
 		PathOCLBaseRenderEngine(rcfg, supportsNativeThreads) {
 	tileRepository = NULL;
@@ -85,11 +87,11 @@ void TilePathOCLRenderEngine::InitTileRepository() {
 		delete tileRepository;
 	tileRepository = NULL;
 
-	// Work on a copy of configuration properties so I can edit tile.size if
+	// Make a copy of configuration properties so I can edit tile.size if
 	// required
-	Properties cfgProps = renderConfig->cfg;
+	auto cfgProps = renderConfig.GetConfig().Clone();
 	if (GetType() == RTPATHOCL) {
-		cfgProps.Delete("tile.size");
+		cfgProps->Delete("tile.size");
 
 		// Check if I'm going to use a single device
 		u_int tileWidth, tileHeight;
@@ -109,12 +111,12 @@ void TilePathOCLRenderEngine::InitTileRepository() {
 		u_int rup = Max(rtengine->previewResolutionReduction, rtengine->resolutionReduction);
 		tileWidth = RoundUp(tileWidth, rup);
 
-		cfgProps <<
+		*cfgProps <<
 				Property("tile.size.x")(tileWidth) <<
 				Property("tile.size.y")(tileHeight);
 	}
 
-	tileRepository = TileRepository::FromProperties(cfgProps);
+	tileRepository = TileRepository::FromProperties(*cfgProps);
 	if (GetType() == RTPATHOCL)
 		tileRepository->enableMultipassRendering = false;
 	tileRepository->varianceClamping = VarianceClamping(pathTracer.sqrtVarianceClampMaxValue);
@@ -123,12 +125,12 @@ void TilePathOCLRenderEngine::InitTileRepository() {
 	InitTaskCount();
 }
 
-RenderState *TilePathOCLRenderEngine::GetRenderState() {
-	return new TilePathOCLRenderState(bootStrapSeed, tileRepository, photonGICache);
+RenderStateSPtr TilePathOCLRenderEngine::GetRenderState() {
+	return std::make_shared<TilePathOCLRenderState>(bootStrapSeed, tileRepository, photonGICache);
 }
 
 void TilePathOCLRenderEngine::StartLockLess() {
-	const Properties &cfg = renderConfig->cfg;
+	auto& cfg = renderConfig.GetConfig();
 
 	//--------------------------------------------------------------------------
 	// Check to have the right sampler settings
@@ -141,19 +143,19 @@ void TilePathOCLRenderEngine::StartLockLess() {
 	// Initialize rendering parameters
 	//--------------------------------------------------------------------------
 
-	const Properties &defaultProps = (GetType() == TILEPATHOCL) ?
+	auto defaultProps = (GetType() == TILEPATHOCL) ?
 		TilePathOCLRenderEngine::GetDefaultProps() :
 		RTPathOCLRenderEngine::GetDefaultProps();
 
 	// TilePath specific settings
 	aaSamples = (GetType() == TILEPATHOCL) ?
-		Max(1, cfg.Get(defaultProps.Get("tilepath.sampling.aa.size")).Get<int>()) :
+		Max(1, cfg.Get(defaultProps->Get("tilepath.sampling.aa.size")).Get<int>()) :
 		1;
 
 	maxTilePerDevice = cfg.Get(Property("tilepathocl.devices.maxtiles")(16)).Get<u_int>();
 	// pathTracer must be configured here because it is then used
 	// to set tileRepository->varianceClamping, etc.
-	pathTracer.ParseOptions(cfg, defaultProps);
+	pathTracer.ParseOptions(cfg, *defaultProps);
 
 	//--------------------------------------------------------------------------
 	// Restore render state if there is one
@@ -163,7 +165,7 @@ void TilePathOCLRenderEngine::StartLockLess() {
 		// Check if the render state is of the right type
 		startRenderState->CheckEngineTag(GetObjectTag());
 
-		TilePathOCLRenderState *rs = (TilePathOCLRenderState *)startRenderState;
+		auto rs = static_pointer_cast<TilePathOCLRenderState>(startRenderState);
 
 		// Use a new seed to continue the rendering
 		const u_int newSeed = rs->bootStrapSeed + 1;
@@ -178,9 +180,8 @@ void TilePathOCLRenderEngine::StartLockLess() {
 		photonGICache = rs->photonGICache;
 		rs->photonGICache = nullptr;
 
-		delete startRenderState;
-		startRenderState = NULL;
-		
+		startRenderState = nullptr;
+
 		InitTaskCount();
 	} else {
 		film->Reset();
@@ -191,7 +192,7 @@ void TilePathOCLRenderEngine::StartLockLess() {
 	//--------------------------------------------------------------------------
 
 	// Initialize the PathTracer class
-	pathTracer.InitPixelFilterDistribution(pixelFilter);
+	pathTracer.InitPixelFilterDistribution(GetPixelFilter());
 
 	PathOCLBaseRenderEngine::StartLockLess();
 }
@@ -228,24 +229,30 @@ void TilePathOCLRenderEngine::UpdateCounters() {
 // Static methods used by RenderEngineRegistry
 //------------------------------------------------------------------------------
 
-Properties TilePathOCLRenderEngine::ToProperties(const Properties &cfg) {
-	return OCLRenderEngine::ToProperties(cfg) <<
-			cfg.Get(GetDefaultProps().Get("renderengine.type")) <<
+PropertiesUPtr TilePathOCLRenderEngine::ToProperties(const Properties &cfg) {
+	auto props_ptr = std::make_unique<Properties>();
+	auto& props = *props_ptr;
+	props <<
+			OCLRenderEngine::ToProperties(cfg) <<
+			cfg.Get(GetDefaultProps()->Get("renderengine.type")) <<
 			// Force true
 			Property("pathocl.pixelatomics.enable")(true) <<
-			cfg.Get(GetDefaultProps().Get("tilepath.sampling.aa.size")) <<
-			cfg.Get(GetDefaultProps().Get("tilepathocl.devices.maxtiles")) <<
+			cfg.Get(GetDefaultProps()->Get("tilepath.sampling.aa.size")) <<
+			cfg.Get(GetDefaultProps()->Get("tilepathocl.devices.maxtiles")) <<
 			PathTracer::ToProperties(cfg) <<
 			TileRepository::ToProperties(cfg) <<
 			PhotonGICache::ToProperties(cfg);
+	return props_ptr;
 }
 
-RenderEngine *TilePathOCLRenderEngine::FromProperties(const RenderConfig *rcfg) {
+RenderEngine *TilePathOCLRenderEngine::FromProperties(RenderConfigRef rcfg) {
 	return new TilePathOCLRenderEngine(rcfg, true);
 }
 
-const Properties &TilePathOCLRenderEngine::GetDefaultProps() {
-	static Properties props = Properties() <<
+PropertiesUPtr TilePathOCLRenderEngine::GetDefaultProps() {
+	auto props = std::make_unique<Properties>();
+	*props <<
+			props <<
 			OCLRenderEngine::GetDefaultProps() <<
 			Property("renderengine.type")(GetObjectTag()) <<
 			// Force true
@@ -260,3 +267,4 @@ const Properties &TilePathOCLRenderEngine::GetDefaultProps() {
 }
 
 #endif
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

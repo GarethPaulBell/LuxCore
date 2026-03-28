@@ -29,9 +29,9 @@ namespace slg {
 
 class TriplanarTexture : public Texture {
 public:
-	TriplanarTexture(const TextureMapping3D *mp, const Texture *t1, const Texture *t2, 
-    const Texture *t3, const bool uvlessBumpMap) :
-    mapping(mp), texX(t1), texY(t2), texZ(t3),
+	TriplanarTexture(TextureMapping3DUPtr mp, TextureRef t1, TextureRef t2, 
+    TextureRef t3, const bool uvlessBumpMap) :
+    mapping(std::move(mp)), texX(t1), texY(t2), texZ(t3),
 	enableUVlessBumpMap(uvlessBumpMap) {}
 
 	virtual ~TriplanarTexture() {}
@@ -43,52 +43,49 @@ public:
 	virtual luxrays::Spectrum GetSpectrumValue(const HitPoint &hitPoint) const;
 
 	virtual float Y() const {
-		return (texX->Y() + texY->Y() + texZ->Y()) * (1.f / 3.f);
+		return (GetTexture1().Y() + GetTexture2().Y() + GetTexture3().Y()) * (1.f / 3.f);
 	}
 
 	virtual float Filter() const {
-		return (texX->Filter() + texY->Filter() + texZ->Filter()) * (1.f / 3.f);
+		return (GetTexture1().Filter() + GetTexture2().Filter() + GetTexture3().Filter()) * (1.f / 3.f);
 	}
 
 	virtual luxrays::Normal Bump(const HitPoint &hitPoint, const float sampleDistance) const;
 
-	virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 		Texture::AddReferencedTextures(referencedTexs);
 
-		texX->AddReferencedTextures(referencedTexs);
-		texY->AddReferencedTextures(referencedTexs);
-		texZ->AddReferencedTextures(referencedTexs);
+		GetTexture1().AddReferencedTextures(referencedTexs);
+		GetTexture2().AddReferencedTextures(referencedTexs);
+		GetTexture3().AddReferencedTextures(referencedTexs);
 	}
 
-	virtual void AddReferencedImageMaps(boost::unordered_set<const ImageMap *> &referencedImgMaps) const {
-		texX->AddReferencedImageMaps(referencedImgMaps);
-		texY->AddReferencedImageMaps(referencedImgMaps);
-		texZ->AddReferencedImageMaps(referencedImgMaps);
+	virtual void AddReferencedImageMaps(std::unordered_set<const ImageMap * > &referencedImgMaps) const {
+		GetTexture1().AddReferencedImageMaps(referencedImgMaps);
+		GetTexture2().AddReferencedImageMaps(referencedImgMaps);
+		GetTexture3().AddReferencedImageMaps(referencedImgMaps);
 	}
 
-	virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
-		if (texX == oldTex)
-			texX = newTex;
-		if (texY == oldTex)
-			texY = newTex;
-		if (texZ == oldTex)
-			texZ = newTex;
+	virtual void UpdateTextureReferences(TextureRef oldTex, TextureRef newTex) {
+		updtex(texX, oldTex, newTex);
+		updtex(texY, oldTex, newTex);
+		updtex(texZ, oldTex, newTex);
 	}
 
-	const TextureMapping3D *GetTextureMapping() const { return mapping; }
-	const Texture *GetTexture1() const { return texX; }
-	const Texture *GetTexture2() const { return texY; }
-    const Texture *GetTexture3() const { return texZ; }
+	TextureMapping3DConstRef GetTextureMapping() const { return *mapping; }
+	TextureConstRef GetTexture1() const { return texX; }
+	TextureConstRef GetTexture2() const { return texY; }
+    TextureConstRef GetTexture3() const { return texZ; }
 	const bool IsUVlessBumpMap() const { return enableUVlessBumpMap; }
 
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
-	const TextureMapping3D *mapping;
-	const Texture *texX;
-	const Texture *texY;
-    const Texture *texZ;
+	TextureMapping3DUPtr mapping;
+	std::reference_wrapper<Texture> texX;
+	std::reference_wrapper<Texture> texY;
+    std::reference_wrapper<Texture> texZ;
 
 	const bool enableUVlessBumpMap;
 };
@@ -96,3 +93,4 @@ private:
 }
 
 #endif	/* _SLG_TRIPLANAR_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

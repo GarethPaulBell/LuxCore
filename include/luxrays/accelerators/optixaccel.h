@@ -28,7 +28,7 @@ namespace luxrays {
 
 class OptixAccel : public Accelerator {
 public:
-	OptixAccel(const Context *context);
+	OptixAccel(const Context & context);
 	virtual ~OptixAccel();
 
 	virtual AcceleratorType GetType() const { return ACCEL_OPTIX; }
@@ -38,7 +38,7 @@ public:
 
 	virtual HardwareIntersectionKernel *NewHardwareIntersectionKernel(HardwareIntersectionDevice &device) const;
 
-	virtual void Init(const std::deque<const Mesh *> &meshes,
+	virtual void Init(const std::deque<const Mesh * > &meshes,
 		const u_longlong totalVertexCount,
 		const u_longlong totalTriangleCount);
 
@@ -47,8 +47,8 @@ public:
 	friend class OptixKernel;
 
 private:
-	const Context *ctx;
-	std::deque<const Mesh *> meshes;
+	const Context & ctx;
+	std::deque<const Mesh * > meshes;
 	u_longlong totalVertexCount, totalTriangleCount;
 
 	bool initialized;
@@ -59,3 +59,4 @@ private:
 #endif
 
 #endif
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

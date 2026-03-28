@@ -30,34 +30,34 @@ namespace slg {
 	
 class DensityGridTexture : public Texture {
 public:
-	DensityGridTexture(const TextureMapping3D *mp, const u_int nx, const u_int ny, const u_int nz,
-            const ImageMap *imageMap);
+	DensityGridTexture(TextureMapping3DUPtr&& mp, const u_int nx, const u_int ny, const u_int nz,
+            ImageMapConstRef imageMap);
 	virtual ~DensityGridTexture() { }
 
 	virtual TextureType GetType() const { return DENSITYGRID_TEX; }
 	virtual float GetFloatValue(const HitPoint &hitPoint) const;
 	virtual luxrays::Spectrum GetSpectrumValue(const HitPoint &hitPoint) const;
-	virtual float Y() const { return imageMap->GetSpectrumMeanY(); }
-	virtual float Filter() const { return imageMap->GetSpectrumMean(); }
+	virtual float Y() const { return imageMap.GetSpectrumMeanY(); }
+	virtual float Filter() const { return imageMap.GetSpectrumMean(); }
 
 	u_int GetWidth() const { return nx; }
 	u_int GetHeight() const { return ny; }
 	u_int GetDepth() const { return nz; }
-	const ImageMap *GetImageMap() const { return imageMap; }
+	ImageMapConstRef GetImageMap() const { return imageMap; }
 
-	virtual void AddReferencedImageMaps(boost::unordered_set<const ImageMap *> &referencedImgMaps) const {
-		referencedImgMaps.insert(imageMap);
+	virtual void AddReferencedImageMaps(std::unordered_set<const ImageMap *> &referencedImgMaps) const {
+		referencedImgMaps.insert(&imageMap);
 	}
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
-	const TextureMapping3D *GetTextureMapping() const { return mapping; }
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	TextureMapping3DConstRef GetTextureMapping() const { return *mapping; }
 
-	static ImageMap *ParseData(const luxrays::Property &Property,
+	static ImageMapUPtr ParseData(const luxrays::Property &Property,
 			const bool isRGB,
 			const u_int nx, const u_int ny, const u_int nz,
 			const ImageMapStorage::StorageType storageType,
 			const ImageMapStorage::WrapType wrapMode);
-	static ImageMap *ParseOpenVDB(const std::string &fileName, const std::string &gridName,
+	static ImageMapUPtr ParseOpenVDB(const std::string &fileName, const std::string &gridName,
 			const u_int nx, const u_int ny, const u_int nz,
 			const ImageMapStorage::StorageType storageType,
 			const ImageMapStorage::WrapType wrapMode);
@@ -65,12 +65,13 @@ public:
 private:
 	luxrays::Spectrum D(int x, int y, int z) const;
 
-	const TextureMapping3D *mapping;
+	TextureMapping3DUPtr mapping;
     const int nx, ny, nz;
 
-	const ImageMap *imageMap;
+	ImageMapConstRef imageMap;  // The image map is in the global cache, we just store ref to it
 };
 
 }
 
 #endif	/* _SLG_DENSITYGRIDTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

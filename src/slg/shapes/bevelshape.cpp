@@ -24,15 +24,14 @@ using namespace std;
 using namespace luxrays;
 using namespace slg;
 
-BevelShape::BevelShape(ExtTriangleMesh *m, const float bevelRadius) {
-	mesh = m->Copy(bevelRadius);
+BevelShape::BevelShape(ExtTriangleMeshRef m, const float bevelRadius) {
+	mesh = m.Copy(bevelRadius);
 }
 
 BevelShape::~BevelShape() {
-	if (!refined)
-		delete mesh;
 }
 
-ExtTriangleMesh *BevelShape::RefineImpl(const Scene *scene) {
-	return mesh;
+ExtTriangleMeshUPtr BevelShape::RefineImpl(SceneConstRef scene) {
+	return std::move(mesh);
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

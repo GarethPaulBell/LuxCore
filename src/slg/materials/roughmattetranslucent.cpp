@@ -27,9 +27,9 @@ using namespace slg;
 //------------------------------------------------------------------------------
 
 RoughMatteTranslucentMaterial::RoughMatteTranslucentMaterial(
-		const Texture *frontTransp, const Texture *backTransp,
-		const Texture *emitted, const Texture *bump,
-		const Texture *refl, const Texture *trans, const Texture *s) :
+		TextureConstPtr frontTransp, TextureConstPtr backTransp,
+		TextureConstPtr emitted, TextureConstPtr bump,
+		TextureConstPtr refl, TextureConstPtr trans, TextureConstPtr s) :
 			Material(frontTransp, backTransp, emitted, bump), Kr(refl), Kt(trans), sigma(s) {
 }
 
@@ -214,7 +214,7 @@ void RoughMatteTranslucentMaterial::Pdf(const HitPoint &hitPoint,
 		*reversePdfW = fabsf((hitPoint.fromLight ? localLightDir.z : localEyeDir.z) * (weight * INV_PI));
 }
 
-void RoughMatteTranslucentMaterial::AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+void RoughMatteTranslucentMaterial::AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 	Material::AddReferencedTextures(referencedTexs);
 
 	Kr->AddReferencedTextures(referencedTexs);
@@ -222,26 +222,27 @@ void RoughMatteTranslucentMaterial::AddReferencedTextures(boost::unordered_set<c
 	sigma->AddReferencedTextures(referencedTexs);
 }
 
-void RoughMatteTranslucentMaterial::UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
+void RoughMatteTranslucentMaterial::UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
 	Material::UpdateTextureReferences(oldTex, newTex);
 
-	if (Kr == oldTex)
-		Kr = newTex;
-	if (Kt == oldTex)
-		Kt = newTex;
-	if (sigma == oldTex)
-		sigma = newTex;
+	if (Kr == &oldTex)
+		Kr = &newTex;
+	if (Kt == &oldTex)
+		Kt = &newTex;
+	if (sigma == &oldTex)
+		sigma = &newTex;
 }
 
-Properties RoughMatteTranslucentMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
-	Properties props;
+PropertiesUPtr RoughMatteTranslucentMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.materials." + name + ".type")("roughmattetranslucent"));
-	props.Set(Property("scene.materials." + name + ".kr")(Kr->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".kt")(Kt->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".sigma")(sigma->GetSDLValue()));
-	props.Set(Material::ToProperties(imgMapCache, useRealFileName));
+	props->Set(Property("scene.materials." + name + ".type")("roughmattetranslucent"));
+	props->Set(Property("scene.materials." + name + ".kr")(Kr->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".kt")(Kt->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".sigma")(sigma->GetSDLValue()));
+	props->Set(Material::ToProperties(imgMapCache, useRealFileName));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

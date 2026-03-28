@@ -47,7 +47,7 @@ protected:
 			slg::ocl::TilePathSamplerSharedData &samplerData);
 
 	virtual void GetThreadFilmSize(u_int *filmWidth, u_int *filmHeight, u_int *filmSubRegion);
-	virtual void RenderThreadImpl();
+	virtual void RenderThreadImpl(std::stop_token stop_token);
 	
 	void RenderTileWork(const TileWork &tileWork,
 			slg::ocl::TilePathSamplerSharedData &samplerData,
@@ -68,14 +68,19 @@ public:
 
 protected:
 	virtual void StartRenderThread();
-	virtual void RenderThreadImpl();
+	virtual void RenderThreadImpl(std::stop_token stop_token);
 
 	void SampleGrid(luxrays::RandomGenerator *rndGen, const u_int size,
 		const u_int ix, const u_int iy, float *u0, float *u1) const;
 	void RenderTile(const Tile *tile, const u_int filmIndex);
+	FilmRef GetTileFilm() { return *tileFilm; }
+	FilmConstRef GetTileFilm() const { return *tileFilm; }
+	FilmPtr GetTileFilmPtr() { return FilmPtr(tileFilm.get()); }
+	FilmConstPtr GetTileFilmPtr() const { return FilmConstPtr(tileFilm.get()); }
 
 
-	Film *tileFilm;
+private:
+	FilmUPtr tileFilm;
 };
 
 //------------------------------------------------------------------------------
@@ -84,7 +89,7 @@ protected:
 
 class TilePathOCLRenderEngine : public PathOCLBaseRenderEngine {
 public:
-	TilePathOCLRenderEngine(const RenderConfig *cfg, const bool supportsNativeThreads);
+	TilePathOCLRenderEngine(RenderConfigRef cfg, const bool supportsNativeThreads);
 	virtual ~TilePathOCLRenderEngine();
 
 	virtual RenderEngineType GetType() const { return GetObjectType(); }
@@ -96,7 +101,7 @@ public:
 	u_int GetTileWidth() const { return tileRepository->tileWidth; }
 	u_int GetTileHeight() const { return tileRepository->tileHeight; }
 
-	virtual RenderState *GetRenderState();
+	virtual RenderStateSPtr GetRenderState();
 
 	//--------------------------------------------------------------------------
 	// Static methods used by RenderEngineRegistry
@@ -104,8 +109,8 @@ public:
 
 	static RenderEngineType GetObjectType() { return TILEPATHOCL; }
 	static std::string GetObjectTag() { return "TILEPATHOCL"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static RenderEngine *FromProperties(const RenderConfig *rcfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static RenderEngine *FromProperties(RenderConfigRef rcfg);
 
 	friend class TilePathOCLRenderThread;
 	friend class TilePathNativeRenderThread;
@@ -116,7 +121,7 @@ public:
 	u_int maxTilePerDevice;
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	virtual PathOCLBaseOCLRenderThread *CreateOCLThread(const u_int index,
 		luxrays::HardwareIntersectionDevice *device);
@@ -140,3 +145,4 @@ protected:
 #endif
 
 #endif	/* _SLG_TILEPATHOCL_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -29,9 +29,10 @@ namespace slg {
 
 class MirrorMaterial : public Material {
 public:
-	MirrorMaterial(const Texture *frontTransp, const Texture *backTransp,
-			const Texture *emitted, const Texture *bump,
-			const Texture *refl);
+	using TexRef = TextureConstPtr;
+	MirrorMaterial(TexRef frontTransp, TexRef backTransp,
+			TexRef emitted, TexRef bump,
+			TexRef refl);
 
 	virtual MaterialType GetType() const { return MIRROR; }
 	virtual BSDFEvent GetEventTypes() const { return SPECULAR | REFLECT; };
@@ -54,17 +55,18 @@ public:
 			*reversePdfW = 0.f;
 	}
 
-	virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const;
-	virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex);
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexsreferencedTexs) const;
+	virtual void UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex);
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
-	const Texture *GetKr() const { return Kr; }
+	TexRef GetKr() const { return Kr; }
 
 private:
-	const Texture *Kr;
+	TexRef Kr;
 };
 
 }
 
 #endif	/* _SLG_MIRRORMAT_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

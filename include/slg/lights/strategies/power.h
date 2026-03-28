@@ -31,7 +31,7 @@ class LightStrategyPower : public DistributionLightStrategy {
 public:
 	LightStrategyPower() : DistributionLightStrategy(TYPE_POWER) { }
 
-	virtual void Preprocess(const Scene *scene, const LightStrategyTask taskType,
+	virtual void Preprocess(SceneConstRef scene, const LightStrategyTask taskType,
 			const bool useRTMode);
 
 	virtual LightStrategyType GetType() const { return GetObjectType(); }
@@ -43,13 +43,15 @@ public:
 
 	static LightStrategyType GetObjectType() { return TYPE_POWER; }
 	static std::string GetObjectTag() { return "POWER"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static LightStrategy *FromProperties(const luxrays::Properties &cfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	//static LightStrategy *FromProperties(const luxrays::Properties &cfg);
+	static LightStrategyUPtr FromProperties(const luxrays::Properties &cfg);
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 };
 
 }
 
 #endif	/* _SLG_LIGHTSTRATEGY_POWER_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

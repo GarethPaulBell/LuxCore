@@ -18,6 +18,7 @@
 
 #include "slg/lights/strategies/distributionlightstrategy.h"
 #include "slg/scene/scene.h"
+#include <memory>
 
 using namespace std;
 using namespace luxrays;
@@ -27,36 +28,51 @@ using namespace slg;
 // DistributionLightStrategy
 //------------------------------------------------------------------------------
 
-LightSource *DistributionLightStrategy::SampleLights(const float u,
+LightSourcePtr DistributionLightStrategy::SampleLights(
+		SceneConstRef scene,
+		const float u,
 		const Point &p, const Normal &n,
 		const bool isVolume,
-		float *pdf) const {
-	return SampleLights(u, pdf);
+		float *pdf
+) const {
+	return SampleLights(scene, u, pdf);
 }
 
-float DistributionLightStrategy::SampleLightPdf(const LightSource *light,
-		const Point &p, const Normal &n, const bool isVolume) const {
+float DistributionLightStrategy::SampleLightPdf(
+	LightSourceConstRef light,
+	const Point &p,
+	const Normal &n,
+	const bool isVolume
+) const {
 	if (lightsDistribution)
-		return lightsDistribution->PdfDiscrete(light->lightSceneIndex);
+		return lightsDistribution->PdfDiscrete(light.lightSceneIndex);
 	else
 		return 0.f;
 }
 
-LightSource *DistributionLightStrategy::SampleLights(const float u,
-		float *pdf) const {
+LightSourcePtr DistributionLightStrategy::SampleLights(
+	SceneConstRef scene,
+	const float u,
+	float *pdf
+) const {
 	if (lightsDistribution) {
 		const u_int lightIndex = lightsDistribution->SampleDiscrete(u, pdf);
-		assert ((lightIndex >= 0) && (lightIndex < scene->lightDefs.GetSize()));
+		assert ((lightIndex >= 0) && (lightIndex < scene.GetLightSources().GetSize()));
 
 		if (*pdf > 0.f)
-			return scene->lightDefs.GetLightSources()[lightIndex];
+			return LightSourcePtr(&scene.GetLightSources().GetLightSource(lightIndex));
 		else
 			return nullptr;
 	} else
 		return nullptr;
 }
 
-Properties DistributionLightStrategy::ToProperties() const {
-	return Properties() <<
-			Property("lightstrategy.type")(LightStrategyType2String(GetType()));
+PropertiesUPtr DistributionLightStrategy::ToProperties() const {
+	PropertiesUPtr props = std::make_unique<Properties>();
+	
+	*props <<
+				Property("lightstrategy.type")(LightStrategyType2String(GetType()));
+	
+	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

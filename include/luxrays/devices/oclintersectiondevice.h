@@ -34,11 +34,11 @@ namespace luxrays {
 
 class OpenCLIntersectionDevice : public OpenCLDevice, public HardwareIntersectionDevice {
 public:
-	OpenCLIntersectionDevice(const Context *context,
+	OpenCLIntersectionDevice(const Context & context,
 		OpenCLDeviceDescription *desc, const size_t devIndex);
 	virtual ~OpenCLIntersectionDevice();
 
-	virtual void SetDataSet(DataSet *newDataSet);
+	virtual void SetDataSet(DataSetSPtr newDataSet);
 	virtual void Start();
 	virtual void Stop();
 
@@ -64,3 +64,4 @@ protected:
 
 #endif	/* _LUXRAYS_OCLINTERSECTIONDEVICE_H */
 
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

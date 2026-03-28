@@ -51,7 +51,7 @@ public:
 	}
 
 	// Transform the current object in Properties
-	virtual luxrays::Properties ToProperties() const;
+	virtual luxrays::PropertiesUPtr ToProperties() const;
 
 	//--------------------------------------------------------------------------
 	// Static methods used by FilterRegistry
@@ -59,8 +59,8 @@ public:
 
 	static FilterType GetObjectType() { return FILTER_MITCHELL_SS; }
 	static std::string GetObjectTag() { return "MITCHELL_SS"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static Filter *FromProperties(const luxrays::Properties &cfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static FilterUPtr FromProperties(const luxrays::Properties &cfg);
 	static slg::ocl::Filter *FromPropertiesOCL(const luxrays::Properties &cfg);
 
 	float B, C, a0, a1;
@@ -71,7 +71,7 @@ private:
 	static float CalcA0(const float B, const float C) { return (76.f - 16.f * B + 8.f * C) / 81.f; }
 	static float CalcA1(const float a0) { return (1.f - a0)/ 2.f; }
 
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	// Used by serialization
 	MitchellSSFilter() { }
@@ -105,3 +105,4 @@ BOOST_CLASS_VERSION(slg::MitchellSSFilter, 2)
 BOOST_CLASS_EXPORT_KEY(slg::MitchellSSFilter)
 
 #endif	/* _SLG_MITCHELLSS_FILTER_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

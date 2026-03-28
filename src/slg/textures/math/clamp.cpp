@@ -27,21 +27,22 @@ using namespace slg;
 //------------------------------------------------------------------------------
 
 float ClampTexture::GetFloatValue(const HitPoint &hitPoint) const {
-	return Clamp(tex->GetFloatValue(hitPoint), minVal, maxVal);
+	return Clamp(GetTexture().GetFloatValue(hitPoint), minVal, maxVal);
 }
 
 Spectrum ClampTexture::GetSpectrumValue(const HitPoint &hitPoint) const {
-	return tex->GetSpectrumValue(hitPoint).Clamp(minVal, maxVal);
+	return GetTexture().GetSpectrumValue(hitPoint).Clamp(minVal, maxVal);
 }
 
-Properties ClampTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
-	Properties props;
+PropertiesUPtr ClampTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.textures." + name + ".type")("clamp"));
-	props.Set(Property("scene.textures." + name + ".texture")(tex->GetSDLValue()));
-	props.Set(Property("scene.textures." + name + ".min")(minVal));
-	props.Set(Property("scene.textures." + name + ".max")(maxVal));
+	props->Set(Property("scene.textures." + name + ".type")("clamp"));
+	props->Set(Property("scene.textures." + name + ".texture")(GetTexture().GetSDLValue()));
+	props->Set(Property("scene.textures." + name + ".min")(minVal));
+	props->Set(Property("scene.textures." + name + ".max")(maxVal));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

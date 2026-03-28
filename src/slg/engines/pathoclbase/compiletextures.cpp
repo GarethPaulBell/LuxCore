@@ -89,143 +89,151 @@ using namespace luxrays;
 using namespace slg;
 using namespace slg::blender;
 
-void CompiledScene::CompileTextureMapping2D(slg::ocl::TextureMapping2D *mapping, const TextureMapping2D *m) {
-	switch (m->GetType()) {
+void CompiledScene::CompileTextureMapping2D(
+		slg::ocl::TextureMapping2D* mapping,
+		TextureMapping2DConstRef m
+) {
+	switch (m.GetType()) {
 		case UVMAPPING2D: {
 			mapping->type = slg::ocl::UVMAPPING2D;
 
-			const UVMapping2D *uvm = static_cast<const UVMapping2D *>(m);
-			mapping->dataIndex = uvm->GetDataIndex();
+			auto uvm = dynamic_cast<const UVMapping2D &>(m);
+			mapping->dataIndex = uvm.GetDataIndex();
 
-			mapping->uvMapping2D.sinTheta = uvm->sinTheta;
-			mapping->uvMapping2D.cosTheta = uvm->cosTheta;
-			mapping->uvMapping2D.uScale = uvm->uScale;
-			mapping->uvMapping2D.vScale = uvm->vScale;
-			mapping->uvMapping2D.uDelta = uvm->uDelta;
-			mapping->uvMapping2D.vDelta = uvm->vDelta;
+			mapping->uvMapping2D.sinTheta = uvm.sinTheta;
+			mapping->uvMapping2D.cosTheta = uvm.cosTheta;
+			mapping->uvMapping2D.uScale = uvm.uScale;
+			mapping->uvMapping2D.vScale = uvm.vScale;
+			mapping->uvMapping2D.uDelta = uvm.uDelta;
+			mapping->uvMapping2D.vDelta = uvm.vDelta;
+			mapping->uvMapping2D.centerrotation = uvm.centerrotation;
 			break;
 		}
 		case UVRANDOMMAPPING2D: {
 			mapping->type = slg::ocl::UVRANDOMMAPPING2D;
 
-			const UVRandomMapping2D *uvm = static_cast<const UVRandomMapping2D *>(m);
-			mapping->dataIndex = uvm->GetDataIndex();
+			auto uvm = dynamic_cast<const UVRandomMapping2D &>(m);
+			mapping->dataIndex = uvm.GetDataIndex();
 
-			switch (uvm->seedType) {
+			switch (uvm.seedType) {
 				case RandomMappingSeedType::OBJECT_ID:
 					mapping->uvRandomMapping2D.seedType = slg::ocl::RandomMappingSeedType::OBJECT_ID;
 					break;
 				case RandomMappingSeedType::TRIANGLE_AOV:
 					mapping->uvRandomMapping2D.seedType = slg::ocl::RandomMappingSeedType::TRIANGLE_AOV;
-					mapping->uvRandomMapping2D.triAOVIndex = uvm->triAOVIndex;
+					mapping->uvRandomMapping2D.triAOVIndex = uvm.triAOVIndex;
 					break;
 				case RandomMappingSeedType::OBJECT_ID_OFFSET:
 					mapping->uvRandomMapping2D.seedType = slg::ocl::RandomMappingSeedType::OBJECT_ID_OFFSET;
-					mapping->uvRandomMapping2D.objectIDOffset = uvm->objectIDOffset;
+					mapping->uvRandomMapping2D.objectIDOffset = uvm.objectIDOffset;
 					break;
 				default:
-					throw runtime_error("Unknown seed type in CompiledScene::CompileTextureMapping2D: " + ToString(uvm->seedType));
+					throw runtime_error("Unknown seed type in CompiledScene::CompileTextureMapping2D : " + ToString(uvm.seedType));
 			}
 
-			mapping->uvRandomMapping2D.uvRotationMin = uvm->uvRotationMin;
-			mapping->uvRandomMapping2D.uvRotationMax = uvm->uvRotationMax;
-			mapping->uvRandomMapping2D.uvRotationStep = uvm->uvRotationStep;
-			mapping->uvRandomMapping2D.uScaleMin = uvm->uScaleMin;
-			mapping->uvRandomMapping2D.uScaleMax = uvm->uScaleMax;
-			mapping->uvRandomMapping2D.vScaleMin = uvm->vScaleMin;
-			mapping->uvRandomMapping2D.vScaleMax = uvm->vScaleMax;
-			mapping->uvRandomMapping2D.uDeltaMin = uvm->uDeltaMin;
-			mapping->uvRandomMapping2D.uDeltaMax = uvm->uDeltaMax;
-			mapping->uvRandomMapping2D.vDeltaMin = uvm->vDeltaMin;
-			mapping->uvRandomMapping2D.vDeltaMax = uvm->vDeltaMax;
-			mapping->uvRandomMapping2D.uniformScale = uvm->uniformScale;
+			mapping->uvRandomMapping2D.uvRotationMin = uvm.uvRotationMin;
+			mapping->uvRandomMapping2D.uvRotationMax = uvm.uvRotationMax;
+			mapping->uvRandomMapping2D.uvRotationStep = uvm.uvRotationStep;
+			mapping->uvRandomMapping2D.uScaleMin = uvm.uScaleMin;
+			mapping->uvRandomMapping2D.uScaleMax = uvm.uScaleMax;
+			mapping->uvRandomMapping2D.vScaleMin = uvm.vScaleMin;
+			mapping->uvRandomMapping2D.vScaleMax = uvm.vScaleMax;
+			mapping->uvRandomMapping2D.uDeltaMin = uvm.uDeltaMin;
+			mapping->uvRandomMapping2D.uDeltaMax = uvm.uDeltaMax;
+			mapping->uvRandomMapping2D.vDeltaMin = uvm.vDeltaMin;
+			mapping->uvRandomMapping2D.vDeltaMax = uvm.vDeltaMax;
+			mapping->uvRandomMapping2D.uniformScale = uvm.uniformScale;
 			break;
 		}
 		default:
-			throw runtime_error("Unknown 2D texture mapping in CompiledScene::CompileTextureMapping2D: " + ToString(m->GetType()));
+			throw runtime_error("Unknown 2D texture mapping in CompiledScene::CompileTextureMapping2D: " + ToString(m.GetType()));
 	}
 }
 
-void CompiledScene::CompileTextureMapping3D(slg::ocl::TextureMapping3D *mapping, const TextureMapping3D *m) {
-	switch (m->GetType()) {
+void CompiledScene::CompileTextureMapping3D(
+	slg::ocl::TextureMapping3D *mapping,
+	TextureMapping3DConstRef m
+) {
+	switch (m.GetType()) {
 		case UVMAPPING3D: {
 			mapping->type = slg::ocl::UVMAPPING3D;
 
-			const UVMapping3D *uvm = static_cast<const UVMapping3D *>(m);
-			memcpy(&mapping->worldToLocal.m, &uvm->worldToLocal.m, sizeof(float[4][4]));
-			memcpy(&mapping->worldToLocal.mInv, &uvm->worldToLocal.mInv, sizeof(float[4][4]));
+			auto uvm = dynamic_cast<const UVMapping3D &>(m);
+			memcpy(&mapping->worldToLocal.m, &uvm.worldToLocal.m, sizeof(float[4][4]));
+			memcpy(&mapping->worldToLocal.mInv, &uvm.worldToLocal.mInv, sizeof(float[4][4]));
 
-			mapping->uvMapping3D.dataIndex = uvm->GetDataIndex();
+			mapping->uvMapping3D.dataIndex = uvm.GetDataIndex();
 			break;
 		}
 		case GLOBALMAPPING3D: {
 			mapping->type = slg::ocl::GLOBALMAPPING3D;
 
-			const GlobalMapping3D *gm = static_cast<const GlobalMapping3D *>(m);
-			memcpy(&mapping->worldToLocal.m, &gm->worldToLocal.m, sizeof(float[4][4]));
-			memcpy(&mapping->worldToLocal.mInv, &gm->worldToLocal.mInv, sizeof(float[4][4]));
+			auto gm = dynamic_cast<const GlobalMapping3D &>(m);
+			memcpy(&mapping->worldToLocal.m, &gm.worldToLocal.m, sizeof(float[4][4]));
+			memcpy(&mapping->worldToLocal.mInv, &gm.worldToLocal.mInv, sizeof(float[4][4]));
 			break;
 		}
 		case LOCALMAPPING3D: {
 			mapping->type = slg::ocl::LOCALMAPPING3D;
 
-			const LocalMapping3D *gm = static_cast<const LocalMapping3D *>(m);
-			memcpy(&mapping->worldToLocal.m, &gm->worldToLocal.m, sizeof(float[4][4]));
-			memcpy(&mapping->worldToLocal.mInv, &gm->worldToLocal.mInv, sizeof(float[4][4]));
+			auto gm = dynamic_cast<const LocalMapping3D &>(m);
+			memcpy(&mapping->worldToLocal.m, &gm.worldToLocal.m, sizeof(float[4][4]));
+			memcpy(&mapping->worldToLocal.mInv, &gm.worldToLocal.mInv, sizeof(float[4][4]));
 			break;
 		}
 		case LOCALRANDOMMAPPING3D: {
 			mapping->type = slg::ocl::LOCALRANDOMMAPPING3D;
 
-			const LocalRandomMapping3D *gm = static_cast<const LocalRandomMapping3D *>(m);
-			memcpy(&mapping->worldToLocal.m, &gm->worldToLocal.m, sizeof(float[4][4]));
-			memcpy(&mapping->worldToLocal.mInv, &gm->worldToLocal.mInv, sizeof(float[4][4]));
-			
-			switch (gm->seedType) {
+			auto& gm = dynamic_cast<const LocalRandomMapping3D &>(m);
+
+			memcpy(&mapping->worldToLocal.m, &gm.worldToLocal.m, sizeof(float[4][4]));
+			memcpy(&mapping->worldToLocal.mInv, &gm.worldToLocal.mInv, sizeof(float[4][4]));
+
+			switch (gm.seedType) {
 				case RandomMappingSeedType::OBJECT_ID:
 					mapping->localRandomMapping.seedType = slg::ocl::RandomMappingSeedType::OBJECT_ID;
 					break;
 				case RandomMappingSeedType::TRIANGLE_AOV:
 					mapping->localRandomMapping.seedType = slg::ocl::RandomMappingSeedType::TRIANGLE_AOV;
-					mapping->localRandomMapping.triAOVIndex = gm->triAOVIndex;
+					mapping->localRandomMapping.triAOVIndex = gm.triAOVIndex;
 					break;
 				case RandomMappingSeedType::OBJECT_ID_OFFSET:
 					mapping->localRandomMapping.seedType = slg::ocl::RandomMappingSeedType::OBJECT_ID_OFFSET;
-					mapping->localRandomMapping.objectIDOffset = gm->objectIDOffset;
+					mapping->localRandomMapping.objectIDOffset = gm.objectIDOffset;
 					break;
 				default:
-					throw runtime_error("Unknown seed type in CompiledScene::CompileTextureMapping2D: " + ToString(gm->seedType));
+					throw runtime_error("Unknown seed type in CompiledScene::CompileTextureMapping2D: " + ToString(gm.seedType));
 			}
 
-			mapping->localRandomMapping.xRotationMin = gm->xRotationMin;
-			mapping->localRandomMapping.xRotationMax = gm->xRotationMax;
-			mapping->localRandomMapping.xRotationStep = gm->xRotationStep;
-			mapping->localRandomMapping.yRotationMin = gm->yRotationMin;
-			mapping->localRandomMapping.yRotationMax = gm->yRotationMax;
-			mapping->localRandomMapping.yRotationStep = gm->yRotationStep;
-			mapping->localRandomMapping.zRotationMin = gm->zRotationMin;
-			mapping->localRandomMapping.zRotationMax = gm->zRotationMax;
-			mapping->localRandomMapping.zRotationStep = gm->zRotationStep;
+			mapping->localRandomMapping.xRotationMin = gm.xRotationMin;
+			mapping->localRandomMapping.xRotationMax = gm.xRotationMax;
+			mapping->localRandomMapping.xRotationStep = gm.xRotationStep;
+			mapping->localRandomMapping.yRotationMin = gm.yRotationMin;
+			mapping->localRandomMapping.yRotationMax = gm.yRotationMax;
+			mapping->localRandomMapping.yRotationStep = gm.yRotationStep;
+			mapping->localRandomMapping.zRotationMin = gm.zRotationMin;
+			mapping->localRandomMapping.zRotationMax = gm.zRotationMax;
+			mapping->localRandomMapping.zRotationStep = gm.zRotationStep;
 
-			mapping->localRandomMapping.xScaleMin = gm->xScaleMin;
-			mapping->localRandomMapping.xScaleMax = gm->xScaleMax;
-			mapping->localRandomMapping.yScaleMin = gm->yScaleMin;
-			mapping->localRandomMapping.yScaleMax = gm->yScaleMax;
-			mapping->localRandomMapping.zScaleMin = gm->zScaleMin;
-			mapping->localRandomMapping.zScaleMax = gm->zScaleMax;
+			mapping->localRandomMapping.xScaleMin = gm.xScaleMin;
+			mapping->localRandomMapping.xScaleMax = gm.xScaleMax;
+			mapping->localRandomMapping.yScaleMin = gm.yScaleMin;
+			mapping->localRandomMapping.yScaleMax = gm.yScaleMax;
+			mapping->localRandomMapping.zScaleMin = gm.zScaleMin;
+			mapping->localRandomMapping.zScaleMax = gm.zScaleMax;
 
-			mapping->localRandomMapping.xTranslateMin = gm->xTranslateMin;
-			mapping->localRandomMapping.xTranslateMax = gm->xTranslateMax;
-			mapping->localRandomMapping.yTranslateMin = gm->yTranslateMin;
-			mapping->localRandomMapping.yTranslateMax = gm->yTranslateMax;
-			mapping->localRandomMapping.zTranslateMin = gm->zTranslateMin;
-			mapping->localRandomMapping.zTranslateMax = gm->zTranslateMax;
+			mapping->localRandomMapping.xTranslateMin = gm.xTranslateMin;
+			mapping->localRandomMapping.xTranslateMax = gm.xTranslateMax;
+			mapping->localRandomMapping.yTranslateMin = gm.yTranslateMin;
+			mapping->localRandomMapping.yTranslateMax = gm.yTranslateMax;
+			mapping->localRandomMapping.zTranslateMin = gm.zTranslateMin;
+			mapping->localRandomMapping.zTranslateMax = gm.zTranslateMax;
 
-			mapping->localRandomMapping.uniformScale = gm->uniformScale;
+			mapping->localRandomMapping.uniformScale = gm.uniformScale;
 			break;
 		}
 		default:
-			throw runtime_error("Unknown 3D texture mapping in CompiledScene::CompileTextureMapping3D: " + ToString(m->GetType()));
+			throw runtime_error("Unknown 3D texture mapping in CompiledScene::CompileTextureMapping3D: " + ToString(m.GetType()));
 	}
 }
 
@@ -254,8 +262,9 @@ float *CompiledScene::CompileDistribution2D(const Distribution2D *dist, u_int *s
 	u_int condSize;
 	vector<float *> condDists;
 	for (u_int i = 0; i < dist->GetHeight(); ++i) {
-		condDists.push_back(CompileDistribution1D(dist->GetConditionalDistribution(i),
-			&condSize));
+		condDists.push_back(
+			CompileDistribution1D(dist->GetConditionalDistribution(i), &condSize)
+		);
 	}
 
 	// Here, I assume sizeof(u_int) = sizeof(float)
@@ -307,10 +316,10 @@ u_int CompiledScene::CompileTextureOpsGenericBumpMap(const u_int texIndex) {
 
 	// Eval texture at hit point + offset V
 	evalOpStackSize += CompileTextureOps(texIndex, slg::ocl::TextureEvalOpType::EVAL_FLOAT);
-	
+
 	return evalOpStackSize;
 }
-					
+
 u_int CompiledScene::CompileTextureOps(const u_int texIndex,
 		const slg::ocl::TextureEvalOpType opType) {
 	// Translate textures to texture evaluate ops
@@ -1150,7 +1159,7 @@ void CompiledScene::CompileTextureOps() {
 }
 
 void CompiledScene::CompileTextures() {
-	const u_int texturesCount = scene->texDefs.GetSize();
+	const u_int texturesCount = scene.GetTextures().GetSize();
 	SLG_LOG("Compile " << texturesCount << " Textures");
 	//SLG_LOG("  Texture size: " << sizeof(slg::ocl::Texture));
 
@@ -1163,39 +1172,39 @@ void CompiledScene::CompileTextures() {
 	texs.resize(texturesCount);
 
 	for (u_int i = 0; i < texturesCount; ++i) {
-		const Texture *t = scene->texDefs.GetTexture(i);
+		auto& t = scene.GetTextures().GetTexture(i);
 		slg::ocl::Texture *tex = &texs[i];
 
-		switch (t->GetType()) {
+		switch (t.GetType()) {
 			case CONST_FLOAT: {
-				const ConstFloatTexture *cft = static_cast<const ConstFloatTexture *>(t);
+				auto& cft = dynamic_cast<const ConstFloatTexture &>(t);
 
 				tex->type = slg::ocl::CONST_FLOAT;
-				tex->constFloat.value = cft->GetValue();
+				tex->constFloat.value = cft.GetValue();
 				break;
 			}
 			case CONST_FLOAT3: {
-				const ConstFloat3Texture *cft = static_cast<const ConstFloat3Texture *>(t);
+				auto& cft = dynamic_cast<const ConstFloat3Texture &>(t);
 
 				tex->type = slg::ocl::CONST_FLOAT3;
-				ASSIGN_SPECTRUM(tex->constFloat3.color, cft->GetColor());
+				ASSIGN_SPECTRUM(tex->constFloat3.color, cft.GetColor());
 				break;
 			}
 			case IMAGEMAP: {
-				const ImageMapTexture *imt = static_cast<const ImageMapTexture *>(t);
+				auto& imt = dynamic_cast<const ImageMapTexture &>(t);
 
 				tex->type = slg::ocl::IMAGEMAP;
-				const ImageMap *im = imt->GetImageMap();
-				tex->imageMapTex.gain = imt->GetGain();
-				CompileTextureMapping2D(&tex->imageMapTex.mapping, imt->GetTextureMapping());
-				tex->imageMapTex.imageMapIndex = scene->imgMapCache.GetImageMapIndex(im);
+				auto& im = imt.GetImageMap();
+				tex->imageMapTex.gain = imt.GetGain();
+				CompileTextureMapping2D(&tex->imageMapTex.mapping, imt.GetTextureMapping());
+				tex->imageMapTex.imageMapIndex = scene.GetImageMaps().GetImageMapIndex(im);
 
-				if (imt->HasRandomizedTiling()) {
+				if (imt.HasRandomizedTiling()) {
 					tex->imageMapTex.randomizedTiling = true;
 
-					tex->imageMapTex.randomizedTilingLUTIndex = scene->imgMapCache.GetImageMapIndex(imt->GetRandomizedTilingLUT());
-					tex->imageMapTex.randomizedTilingInvLUTIndex = scene->imgMapCache.GetImageMapIndex(imt->GetRandomizedTilingInvLUT());
-					tex->imageMapTex.randomImageMapIndex = scene->imgMapCache.GetImageMapIndex(ImageMapTexture::randomImageMap.get());
+					tex->imageMapTex.randomizedTilingLUTIndex = scene.GetImageMaps().GetImageMapIndex(imt.GetRandomizedTilingLUT());
+					tex->imageMapTex.randomizedTilingInvLUTIndex = scene.GetImageMaps().GetImageMapIndex(imt.GetRandomizedTilingInvLUT());
+					tex->imageMapTex.randomImageMapIndex = scene.GetImageMaps().GetImageMapIndex(*ImageMapTexture::randomImageMap);
 				} else {
 					tex->imageMapTex.randomizedTiling = false;
 					tex->imageMapTex.randomizedTilingLUTIndex = NULL_INDEX;
@@ -1205,134 +1214,134 @@ void CompiledScene::CompileTextures() {
 				break;
 			}
 			case SCALE_TEX: {
-				const ScaleTexture *st = static_cast<const ScaleTexture *>(t);
+				auto& st = dynamic_cast<const ScaleTexture &>(t);
 
 				tex->type = slg::ocl::SCALE_TEX;
-				const Texture *tex1 = st->GetTexture1();
-				tex->scaleTex.tex1Index = scene->texDefs.GetTextureIndex(tex1);
+				TextureConstRef tex1 = st.GetTexture1();
+				tex->scaleTex.tex1Index = scene.GetTextures().GetTextureIndex(tex1);
 
-				const Texture *tex2 = st->GetTexture2();
-				tex->scaleTex.tex2Index = scene->texDefs.GetTextureIndex(tex2);
+				TextureConstRef tex2 = st.GetTexture2();
+				tex->scaleTex.tex2Index = scene.GetTextures().GetTextureIndex(tex2);
 				break;
 			}
 			case FRESNEL_APPROX_N: {
-				const FresnelApproxNTexture *ft = static_cast<const FresnelApproxNTexture *>(t);
+				auto& ft = dynamic_cast<const FresnelApproxNTexture &>(t);
 
 				tex->type = slg::ocl::FRESNEL_APPROX_N;
-				const Texture *tx = ft->GetTexture();
-				tex->fresnelApproxN.texIndex = scene->texDefs.GetTextureIndex(tx);
+				auto& tx = ft.GetTexture();
+				tex->fresnelApproxN.texIndex = scene.GetTextures().GetTextureIndex(tx);
 				break;
 			}
 			case FRESNEL_APPROX_K: {
-				const FresnelApproxKTexture *ft = static_cast<const FresnelApproxKTexture *>(t);
+				auto& ft = dynamic_cast<const FresnelApproxKTexture &>(t);
 
 				tex->type = slg::ocl::FRESNEL_APPROX_K;
-				const Texture *tx = ft->GetTexture();
-				tex->fresnelApproxK.texIndex = scene->texDefs.GetTextureIndex(tx);
+				TextureConstRef tx = ft.GetTexture();
+				tex->fresnelApproxK.texIndex = scene.GetTextures().GetTextureIndex(tx);
 				break;
 			}
 			case CHECKERBOARD2D: {
-				const CheckerBoard2DTexture *cb = static_cast<const CheckerBoard2DTexture *>(t);
+				auto& cb = dynamic_cast<const CheckerBoard2DTexture &>(t);
 
 				tex->type = slg::ocl::CHECKERBOARD2D;
-				CompileTextureMapping2D(&tex->checkerBoard2D.mapping, cb->GetTextureMapping());
-				const Texture *tex1 = cb->GetTexture1();
-				tex->checkerBoard2D.tex1Index = scene->texDefs.GetTextureIndex(tex1);
+				CompileTextureMapping2D(&tex->checkerBoard2D.mapping, cb.GetTextureMapping());
+				TextureConstRef tex1 = cb.GetTexture1();
+				tex->checkerBoard2D.tex1Index = scene.GetTextures().GetTextureIndex(tex1);
 
-				const Texture *tex2 = cb->GetTexture2();
-				tex->checkerBoard2D.tex2Index = scene->texDefs.GetTextureIndex(tex2);
+				TextureConstRef tex2 = cb.GetTexture2();
+				tex->checkerBoard2D.tex2Index = scene.GetTextures().GetTextureIndex(tex2);
 				break;
 			}
 			case CHECKERBOARD3D: {
-				const CheckerBoard3DTexture *cb = static_cast<const CheckerBoard3DTexture *>(t);
+				auto& cb = dynamic_cast<const CheckerBoard3DTexture &>(t);
 
 				tex->type = slg::ocl::CHECKERBOARD3D;
-				CompileTextureMapping3D(&tex->checkerBoard3D.mapping, cb->GetTextureMapping());
-				const Texture *tex1 = cb->GetTexture1();
-				tex->checkerBoard3D.tex1Index = scene->texDefs.GetTextureIndex(tex1);
+				CompileTextureMapping3D(&tex->checkerBoard3D.mapping, cb.GetTextureMapping());
+				TextureConstRef tex1 = cb.GetTexture1();
+				tex->checkerBoard3D.tex1Index = scene.GetTextures().GetTextureIndex(tex1);
 
-				const Texture *tex2 = cb->GetTexture2();
-				tex->checkerBoard3D.tex2Index = scene->texDefs.GetTextureIndex(tex2);
+				TextureConstRef tex2 = cb.GetTexture2();
+				tex->checkerBoard3D.tex2Index = scene.GetTextures().GetTextureIndex(tex2);
 				break;
 			}
 			case MIX_TEX: {
-				const MixTexture *mt = static_cast<const MixTexture *>(t);
+				auto& mt = dynamic_cast<const MixTexture &>(t);
 
 				tex->type = slg::ocl::MIX_TEX;
-				const Texture *amount = mt->GetAmountTexture();
-				tex->mixTex.amountTexIndex = scene->texDefs.GetTextureIndex(amount);
+				TextureConstRef amount = mt.GetAmountTexture();
+				tex->mixTex.amountTexIndex = scene.GetTextures().GetTextureIndex(amount);
 
-				const Texture *tex1 = mt->GetTexture1();
-				tex->mixTex.tex1Index = scene->texDefs.GetTextureIndex(tex1);
-				const Texture *tex2 = mt->GetTexture2();
-				tex->mixTex.tex2Index = scene->texDefs.GetTextureIndex(tex2);
+				TextureConstRef tex1 = mt.GetTexture1();
+				tex->mixTex.tex1Index = scene.GetTextures().GetTextureIndex(tex1);
+				TextureConstRef tex2 = mt.GetTexture2();
+				tex->mixTex.tex2Index = scene.GetTextures().GetTextureIndex(tex2);
 				break;
 			}
 			case CLOUD_TEX: {
-				const CloudTexture *ft = static_cast<const CloudTexture *>(t);
+				auto& ft = dynamic_cast<const CloudTexture &>(t);
 
 				tex->type = slg::ocl::CLOUD_TEX;
-				CompileTextureMapping3D(&tex->cloud.mapping, ft->GetTextureMapping());
+				CompileTextureMapping3D(&tex->cloud.mapping, ft.GetTextureMapping());
 
-				tex->cloud.radius = ft->GetRadius();
-				tex->cloud.numspheres = ft->GetNumSpheres();
-				tex->cloud.spheresize = ft->GetSphereSize();
-				tex->cloud.sharpness = ft->GetSharpness();
-				tex->cloud.basefadedistance = ft->GetBaseFadeDistance();
-				tex->cloud.baseflatness = ft->GetBaseFlatness();
-				tex->cloud.variability = ft->GetVariability();
-				tex->cloud.omega = ft->GetOmega();
-				tex->cloud.noisescale = ft->GetNoiseScale();
-				tex->cloud.noiseoffset = ft->GetNoiseOffset();
-				tex->cloud.turbulence = ft->GetTurbulenceAmount();
-				tex->cloud.octaves = ft->GetNumOctaves();
+				tex->cloud.radius = ft.GetRadius();
+				tex->cloud.numspheres = ft.GetNumSpheres();
+				tex->cloud.spheresize = ft.GetSphereSize();
+				tex->cloud.sharpness = ft.GetSharpness();
+				tex->cloud.basefadedistance = ft.GetBaseFadeDistance();
+				tex->cloud.baseflatness = ft.GetBaseFlatness();
+				tex->cloud.variability = ft.GetVariability();
+				tex->cloud.omega = ft.GetOmega();
+				tex->cloud.noisescale = ft.GetNoiseScale();
+				tex->cloud.noiseoffset = ft.GetNoiseOffset();
+				tex->cloud.turbulence = ft.GetTurbulenceAmount();
+				tex->cloud.octaves = ft.GetNumOctaves();
 				break;
 			}
 			case FBM_TEX: {
-				const FBMTexture *ft = static_cast<const FBMTexture *>(t);
+				auto& ft = dynamic_cast<const FBMTexture &>(t);
 
 				tex->type = slg::ocl::FBM_TEX;
-				CompileTextureMapping3D(&tex->fbm.mapping, ft->GetTextureMapping());
-				tex->fbm.octaves = ft->GetOctaves();
-				tex->fbm.omega = ft->GetOmega();
+				CompileTextureMapping3D(&tex->fbm.mapping, ft.GetTextureMapping());
+				tex->fbm.octaves = ft.GetOctaves();
+				tex->fbm.omega = ft.GetOmega();
 				break;
 			}
 			case MARBLE: {
-				const MarbleTexture *mt = static_cast<const MarbleTexture *>(t);
+				auto& mt = dynamic_cast<const MarbleTexture &>(t);
 
 				tex->type = slg::ocl::MARBLE;
-				CompileTextureMapping3D(&tex->marble.mapping, mt->GetTextureMapping());
-				tex->marble.octaves = mt->GetOctaves();
-				tex->marble.omega = mt->GetOmega();
-				tex->marble.scale = mt->GetScale();
-				tex->marble.variation = mt->GetVariation();
+				CompileTextureMapping3D(&tex->marble.mapping, mt.GetTextureMapping());
+				tex->marble.octaves = mt.GetOctaves();
+				tex->marble.omega = mt.GetOmega();
+				tex->marble.scale = mt.GetScale();
+				tex->marble.variation = mt.GetVariation();
 				break;
 			}
 			case DOTS: {
-				const DotsTexture *dt = static_cast<const DotsTexture *>(t);
+				auto& dt = dynamic_cast<const DotsTexture &>(t);
 
 				tex->type = slg::ocl::DOTS;
-				CompileTextureMapping2D(&tex->dots.mapping, dt->GetTextureMapping());
-				const Texture *insideTex = dt->GetInsideTex();
-				tex->dots.insideIndex = scene->texDefs.GetTextureIndex(insideTex);
+				CompileTextureMapping2D(&tex->dots.mapping, dt.GetTextureMapping());
+				TextureConstRef insideTex = dt.GetInsideTex();
+				tex->dots.insideIndex = scene.GetTextures().GetTextureIndex(insideTex);
 
-				const Texture *outsideTex = dt->GetOutsideTex();
-				tex->dots.outsideIndex = scene->texDefs.GetTextureIndex(outsideTex);
+				TextureConstRef outsideTex = dt.GetOutsideTex();
+				tex->dots.outsideIndex = scene.GetTextures().GetTextureIndex(outsideTex);
 				break;
 			}
 			case BRICK: {
-				const BrickTexture *bt = static_cast<const BrickTexture *>(t);
+				auto& bt = dynamic_cast<const BrickTexture &>(t);
 
 				tex->type = slg::ocl::BRICK;
-				CompileTextureMapping3D(&tex->brick.mapping, bt->GetTextureMapping());
-				const Texture *tex1 = bt->GetTexture1();
-				tex->brick.tex1Index = scene->texDefs.GetTextureIndex(tex1);
-				const Texture *tex2 = bt->GetTexture2();
-				tex->brick.tex2Index = scene->texDefs.GetTextureIndex(tex2);
-				const Texture *tex3 = bt->GetTexture3();
-				tex->brick.tex3Index = scene->texDefs.GetTextureIndex(tex3);
+				CompileTextureMapping3D(&tex->brick.mapping, bt.GetTextureMapping());
+				TextureConstRef tex1 = bt.GetTexture1();
+				tex->brick.tex1Index = scene.GetTextures().GetTextureIndex(tex1);
+				TextureConstRef tex2 = bt.GetTexture2();
+				tex->brick.tex2Index = scene.GetTextures().GetTextureIndex(tex2);
+				TextureConstRef tex3 = bt.GetTexture3();
+				tex->brick.tex3Index = scene.GetTextures().GetTextureIndex(tex3);
 
-				switch (bt->GetBond()) {
+				switch (bt.GetBond()) {
 					case FLEMISH:
 						tex->brick.bond = slg::ocl::FLEMISH;
 						break;
@@ -1354,92 +1363,92 @@ void CompiledScene::CompileTextures() {
 						break;
 				}
 
-				tex->brick.offsetx = bt->GetOffset().x;
-				tex->brick.offsety = bt->GetOffset().y;
-				tex->brick.offsetz = bt->GetOffset().z;
-				tex->brick.brickwidth = bt->GetBrickWidth();
-				tex->brick.brickheight = bt->GetBrickHeight();
-				tex->brick.brickdepth = bt->GetBrickDepth();
-				tex->brick.mortarsize = bt->GetMortarSize();
-				tex->brick.proportion = bt->GetProportion();
-				tex->brick.invproportion = bt->GetInvProportion();
-				tex->brick.run = bt->GetRun();
-				tex->brick.mortarwidth = bt->GetMortarWidth();
-				tex->brick.mortarheight = bt->GetMortarHeight();
-				tex->brick.mortardepth = bt->GetMortarDepth();
-				tex->brick.modulationBias = bt->GetModulationBias();
+				tex->brick.offsetx = bt.GetOffset().x;
+				tex->brick.offsety = bt.GetOffset().y;
+				tex->brick.offsetz = bt.GetOffset().z;
+				tex->brick.brickwidth = bt.GetBrickWidth();
+				tex->brick.brickheight = bt.GetBrickHeight();
+				tex->brick.brickdepth = bt.GetBrickDepth();
+				tex->brick.mortarsize = bt.GetMortarSize();
+				tex->brick.proportion = bt.GetProportion();
+				tex->brick.invproportion = bt.GetInvProportion();
+				tex->brick.run = bt.GetRun();
+				tex->brick.mortarwidth = bt.GetMortarWidth();
+				tex->brick.mortarheight = bt.GetMortarHeight();
+				tex->brick.mortardepth = bt.GetMortarDepth();
+				tex->brick.modulationBias = bt.GetModulationBias();
 				break;
 			}
 			case ADD_TEX: {
-				const AddTexture *st = static_cast<const AddTexture *>(t);
+				auto& st = dynamic_cast<const AddTexture &>(t);
 
 				tex->type = slg::ocl::ADD_TEX;
-				const Texture *tex1 = st->GetTexture1();
-				tex->addTex.tex1Index = scene->texDefs.GetTextureIndex(tex1);
+				TextureConstRef tex1 = st.GetTexture1();
+				tex->addTex.tex1Index = scene.GetTextures().GetTextureIndex(tex1);
 
-				const Texture *tex2 = st->GetTexture2();
-				tex->addTex.tex2Index = scene->texDefs.GetTextureIndex(tex2);
+				TextureConstRef tex2 = st.GetTexture2();
+				tex->addTex.tex2Index = scene.GetTextures().GetTextureIndex(tex2);
 				break;
 			}
 			case SUBTRACT_TEX: {
-				const SubtractTexture *st = static_cast<const SubtractTexture *>(t);
+				auto& st = dynamic_cast<const SubtractTexture &>(t);
 
 				tex->type = slg::ocl::SUBTRACT_TEX;
-				const Texture *tex1 = st->GetTexture1();
-				tex->subtractTex.tex1Index = scene->texDefs.GetTextureIndex(tex1);
+				TextureConstRef tex1 = st.GetTexture1();
+				tex->subtractTex.tex1Index = scene.GetTextures().GetTextureIndex(tex1);
 
-				const Texture *tex2 = st->GetTexture2();
-				tex->subtractTex.tex2Index = scene->texDefs.GetTextureIndex(tex2);
+				TextureConstRef tex2 = st.GetTexture2();
+				tex->subtractTex.tex2Index = scene.GetTextures().GetTextureIndex(tex2);
 				break;
 			}
             case ROUNDING_TEX: {
-                const RoundingTexture *rt = static_cast<const RoundingTexture *>(t);
+                auto& rt = dynamic_cast<const RoundingTexture &>(t);
 
                 tex->type = slg::ocl::ROUNDING_TEX;
-                const Texture *texture = rt->GetTexture();
-                tex->roundingTex.textureIndex = scene->texDefs.GetTextureIndex(texture);
+                TextureConstRef texture = rt.GetTexture();
+                tex->roundingTex.textureIndex = scene.GetTextures().GetTextureIndex(texture);
 
-                const Texture *increment = rt->GetIncrement();
-                tex->roundingTex.incrementIndex = scene->texDefs.GetTextureIndex(increment);
+                TextureConstRef increment = rt.GetIncrement();
+                tex->roundingTex.incrementIndex = scene.GetTextures().GetTextureIndex(increment);
                 break;
             }
             case MODULO_TEX: {
-                const ModuloTexture *mt = static_cast<const ModuloTexture *>(t);
+                auto& mt = dynamic_cast<const ModuloTexture &>(t);
 
                 tex->type = slg::ocl::MODULO_TEX;
-                const Texture *texture = mt->GetTexture();
-                tex->moduloTex.textureIndex = scene->texDefs.GetTextureIndex(texture);
+                TextureConstRef texture = mt.GetTexture();
+                tex->moduloTex.textureIndex = scene.GetTextures().GetTextureIndex(texture);
 
-                const Texture *modulo = mt->GetModulo();
-                tex->moduloTex.moduloIndex = scene->texDefs.GetTextureIndex(modulo);
+                TextureConstRef modulo = mt.GetModulo();
+                tex->moduloTex.moduloIndex = scene.GetTextures().GetTextureIndex(modulo);
                 break;
             }
 
 			case WINDY: {
-				const WindyTexture *wt = static_cast<const WindyTexture *>(t);
+				auto& wt = dynamic_cast<const WindyTexture &>(t);
 
 				tex->type = slg::ocl::WINDY;
-				CompileTextureMapping3D(&tex->windy.mapping, wt->GetTextureMapping());
+				CompileTextureMapping3D(&tex->windy.mapping, wt.GetTextureMapping());
 				break;
 			}
 			case WRINKLED: {
-				const WrinkledTexture *wt = static_cast<const WrinkledTexture *>(t);
+				auto& wt = dynamic_cast<const WrinkledTexture &>(t);
 
 				tex->type = slg::ocl::WRINKLED;
-				CompileTextureMapping3D(&tex->wrinkled.mapping, wt->GetTextureMapping());
-				tex->wrinkled.octaves = wt->GetOctaves();
-				tex->wrinkled.omega = wt->GetOmega();
+				CompileTextureMapping3D(&tex->wrinkled.mapping, wt.GetTextureMapping());
+				tex->wrinkled.octaves = wt.GetOctaves();
+				tex->wrinkled.omega = wt.GetOmega();
 				break;
 			}
 			case BLENDER_BLEND: {
-				const BlenderBlendTexture *wt = static_cast<const BlenderBlendTexture *>(t);
+				auto& wt = dynamic_cast<const BlenderBlendTexture &>(t);
 				tex->type = slg::ocl::BLENDER_BLEND;
-				CompileTextureMapping3D(&tex->blenderBlend.mapping, wt->GetTextureMapping());
-				tex->blenderBlend.direction = wt->GetDirection();
-				tex->blenderBlend.bright = wt->GetBright();
-				tex->blenderBlend.contrast = wt->GetContrast();
+				CompileTextureMapping3D(&tex->blenderBlend.mapping, wt.GetTextureMapping());
+				tex->blenderBlend.direction = wt.GetDirection();
+				tex->blenderBlend.bright = wt.GetBright();
+				tex->blenderBlend.contrast = wt.GetContrast();
 
-				switch (wt->GetProgressionType()) {
+				switch (wt.GetProgressionType()) {
 					default:
 					case TEX_LIN:
 						tex->blenderBlend.type = slg::ocl::TEX_LIN;
@@ -1466,15 +1475,15 @@ void CompiledScene::CompileTextures() {
 				break;
 			}
 			case BLENDER_CLOUDS: {
-				const BlenderCloudsTexture *wt = static_cast<const BlenderCloudsTexture *>(t);
+				auto& wt = dynamic_cast<const BlenderCloudsTexture &>(t);
 				tex->type = slg::ocl::BLENDER_CLOUDS;
-				CompileTextureMapping3D(&tex->blenderClouds.mapping, wt->GetTextureMapping());
-				tex->blenderClouds.noisesize = wt->GetNoiseSize();
-				tex->blenderClouds.noisedepth = wt->GetNoiseDepth();
-				tex->blenderClouds.bright = wt->GetBright();
-				tex->blenderClouds.contrast = wt->GetContrast();
-				tex->blenderClouds.hard = wt->GetNoiseType();
-				switch (wt->GetNoiseBasis()) {
+				CompileTextureMapping3D(&tex->blenderClouds.mapping, wt.GetTextureMapping());
+				tex->blenderClouds.noisesize = wt.GetNoiseSize();
+				tex->blenderClouds.noisedepth = wt.GetNoiseDepth();
+				tex->blenderClouds.bright = wt.GetBright();
+				tex->blenderClouds.contrast = wt.GetContrast();
+				tex->blenderClouds.hard = wt.GetNoiseType();
+				switch (wt.GetNoiseBasis()) {
 					default:
 					case BLENDER_ORIGINAL:
 						tex->blenderClouds.noisebasis = slg::ocl::BLENDER_ORIGINAL;
@@ -1510,15 +1519,15 @@ void CompiledScene::CompileTextures() {
 				break;
 			}
 			case BLENDER_DISTORTED_NOISE: {
-				const BlenderDistortedNoiseTexture *wt = static_cast<const BlenderDistortedNoiseTexture *>(t);
+				auto& wt = dynamic_cast<const BlenderDistortedNoiseTexture &>(t);
 				tex->type = slg::ocl::BLENDER_DISTORTED_NOISE;
-				CompileTextureMapping3D(&tex->blenderDistortedNoise.mapping, wt->GetTextureMapping());
-				tex->blenderDistortedNoise.distortion = wt->GetDistortion();
-				tex->blenderDistortedNoise.noisesize = wt->GetNoiseSize();
-				tex->blenderDistortedNoise.bright = wt->GetBright();
-				tex->blenderDistortedNoise.contrast = wt->GetContrast();
+				CompileTextureMapping3D(&tex->blenderDistortedNoise.mapping, wt.GetTextureMapping());
+				tex->blenderDistortedNoise.distortion = wt.GetDistortion();
+				tex->blenderDistortedNoise.noisesize = wt.GetNoiseSize();
+				tex->blenderDistortedNoise.bright = wt.GetBright();
+				tex->blenderDistortedNoise.contrast = wt.GetContrast();
 
-				switch (wt->GetNoiseDistortion()) {
+				switch (wt.GetNoiseDistortion()) {
 					default:
 					case BLENDER_ORIGINAL:
 						tex->blenderDistortedNoise.noisedistortion = slg::ocl::BLENDER_ORIGINAL;
@@ -1552,7 +1561,7 @@ void CompiledScene::CompileTextures() {
 						break;
 				}
 
-				switch (wt->GetNoiseBasis()) {
+				switch (wt.GetNoiseBasis()) {
 					default:
 					case BLENDER_ORIGINAL:
 						tex->blenderDistortedNoise.noisebasis = slg::ocl::BLENDER_ORIGINAL;
@@ -1588,27 +1597,27 @@ void CompiledScene::CompileTextures() {
 				break;
 			}
 			case BLENDER_MAGIC: {
-				const BlenderMagicTexture *wt = static_cast<const BlenderMagicTexture *>(t);
+				auto& wt = dynamic_cast<const BlenderMagicTexture &>(t);
 				tex->type = slg::ocl::BLENDER_MAGIC;
-				CompileTextureMapping3D(&tex->blenderMagic.mapping, wt->GetTextureMapping());
-				tex->blenderMagic.noisedepth = wt->GetNoiseDepth();
-				tex->blenderMagic.turbulence = wt->GetTurbulence();
-				tex->blenderMagic.bright = wt->GetBright();
-				tex->blenderMagic.contrast = wt->GetContrast();
+				CompileTextureMapping3D(&tex->blenderMagic.mapping, wt.GetTextureMapping());
+				tex->blenderMagic.noisedepth = wt.GetNoiseDepth();
+				tex->blenderMagic.turbulence = wt.GetTurbulence();
+				tex->blenderMagic.bright = wt.GetBright();
+				tex->blenderMagic.contrast = wt.GetContrast();
 				break;
 			}
 			case BLENDER_MARBLE: {
-				const BlenderMarbleTexture *wt = static_cast<const BlenderMarbleTexture *>(t);
+				auto& wt = dynamic_cast<const BlenderMarbleTexture &>(t);
 				tex->type = slg::ocl::BLENDER_MARBLE;
-				CompileTextureMapping3D(&tex->blenderMarble.mapping, wt->GetTextureMapping());
-				tex->blenderMarble.turbulence = wt->GetTurbulence();
-				tex->blenderMarble.noisesize = wt->GetNoiseSize();
-				tex->blenderMarble.noisedepth = wt->GetNoiseDepth();
-				tex->blenderMarble.bright = wt->GetBright();
-				tex->blenderMarble.contrast = wt->GetContrast();
-				tex->blenderMarble.hard = wt->GetNoiseType();
+				CompileTextureMapping3D(&tex->blenderMarble.mapping, wt.GetTextureMapping());
+				tex->blenderMarble.turbulence = wt.GetTurbulence();
+				tex->blenderMarble.noisesize = wt.GetNoiseSize();
+				tex->blenderMarble.noisedepth = wt.GetNoiseDepth();
+				tex->blenderMarble.bright = wt.GetBright();
+				tex->blenderMarble.contrast = wt.GetContrast();
+				tex->blenderMarble.hard = wt.GetNoiseType();
 
-				switch (wt->GetNoiseBasis2()) {
+				switch (wt.GetNoiseBasis2()) {
 					default:
 					case TEX_SIN:
 						tex->blenderMarble.noisebasis2 = slg::ocl::TEX_SIN;
@@ -1621,7 +1630,7 @@ void CompiledScene::CompileTextures() {
 						break;
 				}
 
-				switch (wt->GetMarbleType()) {
+				switch (wt.GetMarbleType()) {
 					default:
 					case TEX_SOFT:
 						tex->blenderMarble.type = slg::ocl::TEX_SOFT;
@@ -1634,7 +1643,7 @@ void CompiledScene::CompileTextures() {
 						break;
 				}
 
-				switch (wt->GetNoiseBasis()) {
+				switch (wt.GetNoiseBasis()) {
 					default:
 					case BLENDER_ORIGINAL:
 						tex->blenderMarble.noisebasis = slg::ocl::BLENDER_ORIGINAL;
@@ -1670,20 +1679,20 @@ void CompiledScene::CompileTextures() {
 				break;
 			}
 			case BLENDER_MUSGRAVE: {
-				const BlenderMusgraveTexture *wt = static_cast<const BlenderMusgraveTexture *>(t);
+				auto& wt = dynamic_cast<const BlenderMusgraveTexture &>(t);
 				tex->type = slg::ocl::BLENDER_MUSGRAVE;
-				CompileTextureMapping3D(&tex->blenderMusgrave.mapping, wt->GetTextureMapping());
-				tex->blenderMusgrave.dimension = wt->GetDimension();
-				tex->blenderMusgrave.intensity = wt->GetIntensity();
-				tex->blenderMusgrave.lacunarity = wt->GetLacunarity();
-				tex->blenderMusgrave.offset = wt->GetOffset();
-				tex->blenderMusgrave.gain = wt->GetGain();
-				tex->blenderMusgrave.octaves = wt->GetOctaves();
-				tex->blenderMusgrave.noisesize = wt->GetNoiseSize();
-				tex->blenderMusgrave.bright = wt->GetBright();
-				tex->blenderMusgrave.contrast = wt->GetContrast();
+				CompileTextureMapping3D(&tex->blenderMusgrave.mapping, wt.GetTextureMapping());
+				tex->blenderMusgrave.dimension = wt.GetDimension();
+				tex->blenderMusgrave.intensity = wt.GetIntensity();
+				tex->blenderMusgrave.lacunarity = wt.GetLacunarity();
+				tex->blenderMusgrave.offset = wt.GetOffset();
+				tex->blenderMusgrave.gain = wt.GetGain();
+				tex->blenderMusgrave.octaves = wt.GetOctaves();
+				tex->blenderMusgrave.noisesize = wt.GetNoiseSize();
+				tex->blenderMusgrave.bright = wt.GetBright();
+				tex->blenderMusgrave.contrast = wt.GetContrast();
 
-				switch (wt->GetMusgraveType()) {
+				switch (wt.GetMusgraveType()) {
 					default:
 					case TEX_MULTIFRACTAL:
 						tex->blenderMusgrave.type = slg::ocl::TEX_MULTIFRACTAL;
@@ -1702,7 +1711,7 @@ void CompiledScene::CompileTextures() {
 						break;
 				}
 
-				switch (wt->GetNoiseBasis()) {
+				switch (wt.GetNoiseBasis()) {
 					default:
 					case BLENDER_ORIGINAL:
 						tex->blenderMusgrave.noisebasis = slg::ocl::BLENDER_ORIGINAL;
@@ -1738,24 +1747,24 @@ void CompiledScene::CompileTextures() {
 				break;
 			}
 			case BLENDER_NOISE: {
-				const BlenderNoiseTexture *nt = static_cast<const BlenderNoiseTexture *>(t);
+				auto& nt = dynamic_cast<const BlenderNoiseTexture &>(t);
 				tex->type = slg::ocl::BLENDER_NOISE;
-				tex->blenderNoise.noisedepth = nt->GetNoiseDepth();
-				tex->blenderNoise.bright = nt->GetBright();
-				tex->blenderNoise.contrast = nt->GetContrast();
+				tex->blenderNoise.noisedepth = nt.GetNoiseDepth();
+				tex->blenderNoise.bright = nt.GetBright();
+				tex->blenderNoise.contrast = nt.GetContrast();
 				break;
 			}
 			case BLENDER_STUCCI: {
-				const BlenderStucciTexture *wt = static_cast<const BlenderStucciTexture *>(t);
+				auto& wt = dynamic_cast<const BlenderStucciTexture &>(t);
 				tex->type = slg::ocl::BLENDER_STUCCI;
-				CompileTextureMapping3D(&tex->blenderStucci.mapping, wt->GetTextureMapping());
-				tex->blenderStucci.noisesize = wt->GetNoiseSize();
-				tex->blenderStucci.turbulence = wt->GetTurbulence();
-				tex->blenderStucci.bright = wt->GetBright();
-				tex->blenderStucci.contrast = wt->GetContrast();
-				tex->blenderStucci.hard = wt->GetNoiseType();
+				CompileTextureMapping3D(&tex->blenderStucci.mapping, wt.GetTextureMapping());
+				tex->blenderStucci.noisesize = wt.GetNoiseSize();
+				tex->blenderStucci.turbulence = wt.GetTurbulence();
+				tex->blenderStucci.bright = wt.GetBright();
+				tex->blenderStucci.contrast = wt.GetContrast();
+				tex->blenderStucci.hard = wt.GetNoiseType();
 
-				switch (wt->GetStucciType()) {
+				switch (wt.GetStucciType()) {
 					default:
 					case TEX_PLASTIC:
 						tex->blenderStucci.type = slg::ocl::TEX_PLASTIC;
@@ -1768,7 +1777,7 @@ void CompiledScene::CompileTextures() {
 						break;
 				}
 
-				switch (wt->GetNoiseBasis()) {
+				switch (wt.GetNoiseBasis()) {
 					default:
 					case BLENDER_ORIGINAL:
 						tex->blenderStucci.noisebasis = slg::ocl::BLENDER_ORIGINAL;
@@ -1805,16 +1814,16 @@ void CompiledScene::CompileTextures() {
 				break;
 			}
 			case BLENDER_WOOD: {
-				const BlenderWoodTexture *wt = static_cast<const BlenderWoodTexture *>(t);
+				auto& wt = dynamic_cast<const BlenderWoodTexture &>(t);
 
 				tex->type = slg::ocl::BLENDER_WOOD;
-				CompileTextureMapping3D(&tex->blenderWood.mapping, wt->GetTextureMapping());
-				tex->blenderWood.turbulence = wt->GetTurbulence();
-				tex->blenderWood.bright = wt->GetBright();
-				tex->blenderWood.contrast = wt->GetContrast();
-				tex->blenderWood.hard = wt->GetNoiseType();
-				tex->blenderWood.noisesize = wt->GetNoiseSize();
-				switch (wt->GetNoiseBasis2()) {
+				CompileTextureMapping3D(&tex->blenderWood.mapping, wt.GetTextureMapping());
+				tex->blenderWood.turbulence = wt.GetTurbulence();
+				tex->blenderWood.bright = wt.GetBright();
+				tex->blenderWood.contrast = wt.GetContrast();
+				tex->blenderWood.hard = wt.GetNoiseType();
+				tex->blenderWood.noisesize = wt.GetNoiseSize();
+				switch (wt.GetNoiseBasis2()) {
 					default:
 					case TEX_SIN:
 						tex->blenderWood.noisebasis2 = slg::ocl::TEX_SIN;
@@ -1827,7 +1836,7 @@ void CompiledScene::CompileTextures() {
 						break;
 				}
 
-				switch (wt->GetWoodType()) {
+				switch (wt.GetWoodType()) {
 					default:
 					case BANDS:
 						tex->blenderWood.type = slg::ocl::BANDS;
@@ -1842,7 +1851,7 @@ void CompiledScene::CompileTextures() {
 						tex->blenderWood.type = slg::ocl::RINGNOISE;
 						break;
 				}
-				switch (wt->GetNoiseBasis()) {
+				switch (wt.GetNoiseBasis()) {
 					default:
 					case BLENDER_ORIGINAL:
 						tex->blenderWood.noisebasis = slg::ocl::BLENDER_ORIGINAL;
@@ -1878,21 +1887,21 @@ void CompiledScene::CompileTextures() {
 				break;
 			}
 			case BLENDER_VORONOI: {
-				const BlenderVoronoiTexture *wt = static_cast<const BlenderVoronoiTexture *>(t);
+				auto& wt = dynamic_cast<const BlenderVoronoiTexture &>(t);
 
 				tex->type = slg::ocl::BLENDER_VORONOI;
-				CompileTextureMapping3D(&tex->blenderVoronoi.mapping, wt->GetTextureMapping());
-				tex->blenderVoronoi.feature_weight1 = wt->GetFeatureWeight1();
-				tex->blenderVoronoi.feature_weight2 = wt->GetFeatureWeight2();
-				tex->blenderVoronoi.feature_weight3 = wt->GetFeatureWeight3();
-				tex->blenderVoronoi.feature_weight4 = wt->GetFeatureWeight4();
-				tex->blenderVoronoi.noisesize = wt->GetNoiseSize();
-				tex->blenderVoronoi.intensity = wt->GetIntensity();
-				tex->blenderVoronoi.exponent = wt->GetExponent();
-				tex->blenderVoronoi.bright = wt->GetBright();
-				tex->blenderVoronoi.contrast = wt->GetContrast();
+				CompileTextureMapping3D(&tex->blenderVoronoi.mapping, wt.GetTextureMapping());
+				tex->blenderVoronoi.feature_weight1 = wt.GetFeatureWeight1();
+				tex->blenderVoronoi.feature_weight2 = wt.GetFeatureWeight2();
+				tex->blenderVoronoi.feature_weight3 = wt.GetFeatureWeight3();
+				tex->blenderVoronoi.feature_weight4 = wt.GetFeatureWeight4();
+				tex->blenderVoronoi.noisesize = wt.GetNoiseSize();
+				tex->blenderVoronoi.intensity = wt.GetIntensity();
+				tex->blenderVoronoi.exponent = wt.GetExponent();
+				tex->blenderVoronoi.bright = wt.GetBright();
+				tex->blenderVoronoi.contrast = wt.GetContrast();
 
-				switch (wt->GetDistMetric()) {
+				switch (wt.GetDistMetric()) {
 					default:
 					case ACTUAL_DISTANCE:
 						tex->blenderVoronoi.distancemetric = slg::ocl::ACTUAL_DISTANCE;
@@ -1919,18 +1928,18 @@ void CompiledScene::CompileTextures() {
 				break;
 			}
             case UV_TEX: {
-				const UVTexture *uvt = static_cast<const UVTexture *>(t);
+				auto& uvt = dynamic_cast<const UVTexture &>(t);
 
 				tex->type = slg::ocl::UV_TEX;
-				CompileTextureMapping2D(&tex->uvTex.mapping, uvt->GetTextureMapping());
+				CompileTextureMapping2D(&tex->uvTex.mapping, uvt.GetTextureMapping());
 				break;
 			}
 			case BAND_TEX: {
-				const BandTexture *bt = static_cast<const BandTexture *>(t);
+				auto& bt = dynamic_cast<const BandTexture &>(t);
 
 				tex->type = slg::ocl::BAND_TEX;
 
-				switch (bt->GetInterpolationType()) {
+				switch (bt.GetInterpolationType()) {
 					case BandTexture::NONE:
 						tex->band.interpType = slg::ocl::INTERP_NONE;
 						break;
@@ -1943,11 +1952,11 @@ void CompiledScene::CompileTextures() {
 						break;
 				}
 
-				const Texture *amount = bt->GetAmountTexture();
-				tex->band.amountTexIndex = scene->texDefs.GetTextureIndex(amount);
+				TextureConstRef amount = bt.GetAmountTexture();
+				tex->band.amountTexIndex = scene.GetTextures().GetTextureIndex(amount);
 
-				const vector<float> &offsets = bt->GetOffsets();
-				const vector<Spectrum> &values = bt->GetValues();
+				const vector<float> &offsets = bt.GetOffsets();
+				const vector<Spectrum> &values = bt.GetValues();
 				if (offsets.size() > BAND_TEX_MAX_SIZE)
 					throw runtime_error("BandTexture with more than " + ToString(BAND_TEX_MAX_SIZE) + " are not supported");
 				tex->band.size = offsets.size();
@@ -1965,167 +1974,167 @@ void CompiledScene::CompileTextures() {
 				break;
 			}
 			case HITPOINTCOLOR: {
-				const HitPointColorTexture *hpc = static_cast<const HitPointColorTexture *>(t);
+				auto& hpc = dynamic_cast<const HitPointColorTexture &>(t);
 
 				tex->type = slg::ocl::HITPOINTCOLOR;
-				tex->hitPointColor.dataIndex = hpc->GetDataIndex();
+				tex->hitPointColor.dataIndex = hpc.GetDataIndex();
 				break;
 			}
 			case HITPOINTALPHA: {
-				const HitPointAlphaTexture *hpa = static_cast<const HitPointAlphaTexture *>(t);
+				auto& hpa = dynamic_cast<const HitPointAlphaTexture &>(t);
 
 				tex->type = slg::ocl::HITPOINTALPHA;
-				tex->hitPointAlpha.dataIndex = hpa->GetDataIndex();
+				tex->hitPointAlpha.dataIndex = hpa.GetDataIndex();
 				break;
 			}
 			case HITPOINTGREY: {
-				const HitPointGreyTexture *hpg = static_cast<const HitPointGreyTexture *>(t);
+				auto& hpg = dynamic_cast<const HitPointGreyTexture &>(t);
 
 				tex->type = slg::ocl::HITPOINTGREY;
-				tex->hitPointGrey.dataIndex = hpg->GetDataIndex();
-				tex->hitPointGrey.channelIndex = hpg->GetChannel();
+				tex->hitPointGrey.dataIndex = hpg.GetDataIndex();
+				tex->hitPointGrey.channelIndex = hpg.GetChannel();
 				break;
 			}
 			case HITPOINTVERTEXAOV: {
-				const HitPointVertexAOVTexture *hpv = static_cast<const HitPointVertexAOVTexture *>(t);
+				auto& hpv = dynamic_cast<const HitPointVertexAOVTexture &>(t);
 
 				tex->type = slg::ocl::HITPOINTVERTEXAOV;
-				tex->hitPointVertexAOV.dataIndex = hpv->GetDataIndex();
+				tex->hitPointVertexAOV.dataIndex = hpv.GetDataIndex();
 				break;
 			}
 			case HITPOINTTRIANGLEAOV: {
-				const HitPointTriangleAOVTexture *hpt = static_cast<const HitPointTriangleAOVTexture *>(t);
+				auto& hpt = dynamic_cast<const HitPointTriangleAOVTexture &>(t);
 
 				tex->type = slg::ocl::HITPOINTTRIANGLEAOV;
-				tex->hitPointTriangleAOV.dataIndex = hpt->GetDataIndex();
+				tex->hitPointTriangleAOV.dataIndex = hpt.GetDataIndex();
 				break;
 			}
             case NORMALMAP_TEX: {
-                const NormalMapTexture *nmt = static_cast<const NormalMapTexture *>(t);
+                auto& nmt = dynamic_cast<const NormalMapTexture &>(t);
 
                 tex->type = slg::ocl::NORMALMAP_TEX;
-                const Texture *normalTex = nmt->GetTexture();
-				tex->normalMap.texIndex = scene->texDefs.GetTextureIndex(normalTex);
-				tex->normalMap.scale = nmt->GetScale();
+                auto& normalTex = nmt.GetTexture();
+				tex->normalMap.texIndex = scene.GetTextures().GetTextureIndex(normalTex);
+				tex->normalMap.scale = nmt.GetScale();
 				break;
             }
 			case BLACKBODY_TEX: {
-				const BlackBodyTexture *bbt = static_cast<const BlackBodyTexture *>(t);
+				auto& bbt = dynamic_cast<const BlackBodyTexture &>(t);
 
 				tex->type = slg::ocl::BLACKBODY_TEX;
-				ASSIGN_SPECTRUM(tex->blackBody.rgb, bbt->GetRGB());
+				ASSIGN_SPECTRUM(tex->blackBody.rgb, bbt.GetRGB());
 				break;
 			}
 			case IRREGULARDATA_TEX: {
-				const IrregularDataTexture *idt = static_cast<const IrregularDataTexture *>(t);
+				auto& idt = dynamic_cast<const IrregularDataTexture &>(t);
 
 				tex->type = slg::ocl::IRREGULARDATA_TEX;
-				ASSIGN_SPECTRUM(tex->irregularData.rgb, idt->GetRGB());
+				ASSIGN_SPECTRUM(tex->irregularData.rgb, idt.GetRGB());
 				break;
 			}
 			case DENSITYGRID_TEX: {
-				const DensityGridTexture *dgt = static_cast<const DensityGridTexture *>(t);
+				auto& dgt = dynamic_cast<const DensityGridTexture &>(t);
 
 				tex->type = slg::ocl::DENSITYGRID_TEX;
-				CompileTextureMapping3D(&tex->densityGrid.mapping, dgt->GetTextureMapping());
+				CompileTextureMapping3D(&tex->densityGrid.mapping, dgt.GetTextureMapping());
 
-				tex->densityGrid.nx = dgt->GetWidth();
-				tex->densityGrid.ny = dgt->GetHeight();
-				tex->densityGrid.nz = dgt->GetDepth();
-				tex->densityGrid.imageMapIndex = scene->imgMapCache.GetImageMapIndex(dgt->GetImageMap());
+				tex->densityGrid.nx = dgt.GetWidth();
+				tex->densityGrid.ny = dgt.GetHeight();
+				tex->densityGrid.nz = dgt.GetDepth();
+				tex->densityGrid.imageMapIndex = scene.GetImageMaps().GetImageMapIndex(dgt.GetImageMap());
 				break;
 			}
 			case FRESNELCOLOR_TEX: {
-				const FresnelColorTexture *fct = static_cast<const FresnelColorTexture *>(t);
+				auto& fct = dynamic_cast<const FresnelColorTexture &>(t);
 
 				tex->type = slg::ocl::FRESNELCOLOR_TEX;
-				const Texture *krTex = fct->GetKr();
-				tex->fresnelColor.krIndex = scene->texDefs.GetTextureIndex(krTex);
+				TextureConstRef krTex = fct.GetKr();
+				tex->fresnelColor.krIndex = scene.GetTextures().GetTextureIndex(krTex);
 				break;
 			}
 			case FRESNELCONST_TEX: {
-				const FresnelConstTexture *fct = static_cast<const FresnelConstTexture *>(t);
+				auto& fct = dynamic_cast<const FresnelConstTexture &>(t);
 
 				tex->type = slg::ocl::FRESNELCONST_TEX;
-				ASSIGN_SPECTRUM(tex->fresnelConst.n, fct->GetN());
-				ASSIGN_SPECTRUM(tex->fresnelConst.k, fct->GetK());
+				ASSIGN_SPECTRUM(tex->fresnelConst.n, fct.GetN());
+				ASSIGN_SPECTRUM(tex->fresnelConst.k, fct.GetK());
 				break;
 			}
 			case ABS_TEX: {
-				const AbsTexture *at = static_cast<const AbsTexture *>(t);
+				auto& at = dynamic_cast<const AbsTexture &>(t);
 
 				tex->type = slg::ocl::ABS_TEX;
-				const Texture *refTex = at->GetTexture();
-				tex->absTex.texIndex = scene->texDefs.GetTextureIndex(refTex);
+				TextureConstRef refTex = at.GetTexture();
+				tex->absTex.texIndex = scene.GetTextures().GetTextureIndex(refTex);
 				break;
 			}
 			case CLAMP_TEX: {
-				const ClampTexture *ct = static_cast<const ClampTexture *>(t);
+				auto& ct = dynamic_cast<const ClampTexture &>(t);
 
 				tex->type = slg::ocl::CLAMP_TEX;
-				const Texture *refTex = ct->GetTexture();
-				tex->clampTex.texIndex = scene->texDefs.GetTextureIndex(refTex);
-				tex->clampTex.minVal = ct->GetMinVal();
-				tex->clampTex.maxVal = ct->GetMaxVal();
+				TextureConstRef refTex = ct.GetTexture();
+				tex->clampTex.texIndex = scene.GetTextures().GetTextureIndex(refTex);
+				tex->clampTex.minVal = ct.GetMinVal();
+				tex->clampTex.maxVal = ct.GetMaxVal();
 				break;
 			}
 			case BILERP_TEX: {
-				const BilerpTexture *bt = static_cast<const BilerpTexture *>(t);
+				auto& bt = dynamic_cast<const BilerpTexture &>(t);
 				tex->type = slg::ocl::BILERP_TEX;
-				const Texture *t00 = bt->GetTexture00();
-				const Texture *t01 = bt->GetTexture01();
-				const Texture *t10 = bt->GetTexture10();
-				const Texture *t11 = bt->GetTexture11();
-				tex->bilerpTex.t00Index = scene->texDefs.GetTextureIndex(t00);
-				tex->bilerpTex.t01Index = scene->texDefs.GetTextureIndex(t01);
-				tex->bilerpTex.t10Index = scene->texDefs.GetTextureIndex(t10);
-				tex->bilerpTex.t11Index = scene->texDefs.GetTextureIndex(t11);
+				TextureConstRef t00 = bt.GetTexture00();
+				TextureConstRef t01 = bt.GetTexture01();
+				TextureConstRef t10 = bt.GetTexture10();
+				TextureConstRef t11 = bt.GetTexture11();
+				tex->bilerpTex.t00Index = scene.GetTextures().GetTextureIndex(t00);
+				tex->bilerpTex.t01Index = scene.GetTextures().GetTextureIndex(t01);
+				tex->bilerpTex.t10Index = scene.GetTextures().GetTextureIndex(t10);
+				tex->bilerpTex.t11Index = scene.GetTextures().GetTextureIndex(t11);
 				break;
 			}
 			case COLORDEPTH_TEX: {
-				const ColorDepthTexture *ct = static_cast<const ColorDepthTexture *>(t);
+				auto& ct = dynamic_cast<const ColorDepthTexture &>(t);
 
 				tex->type = slg::ocl::COLORDEPTH_TEX;
-				const Texture *ktTex = ct->GetKt();
-				tex->colorDepthTex.ktIndex = scene->texDefs.GetTextureIndex(ktTex);
-				tex->colorDepthTex.dVal = ct->GetD();
+				TextureConstRef ktTex = ct.GetKt();
+				tex->colorDepthTex.ktIndex = scene.GetTextures().GetTextureIndex(ktTex);
+				tex->colorDepthTex.dVal = ct.GetD();
 				break;
 			}
 			case HSV_TEX: {
-				const HsvTexture *ht = static_cast<const HsvTexture *>(t);
+				auto& ht = dynamic_cast<const HsvTexture &>(t);
 
 				tex->type = slg::ocl::HSV_TEX;
-				tex->hsvTex.texIndex = scene->texDefs.GetTextureIndex(ht->GetTexture());
-				tex->hsvTex.hueTexIndex = scene->texDefs.GetTextureIndex(ht->GetHue());
-				tex->hsvTex.satTexIndex = scene->texDefs.GetTextureIndex(ht->GetSaturation());
-				tex->hsvTex.valTexIndex = scene->texDefs.GetTextureIndex(ht->GetValue());
+				tex->hsvTex.texIndex = scene.GetTextures().GetTextureIndex(ht.GetTexture());
+				tex->hsvTex.hueTexIndex = scene.GetTextures().GetTextureIndex(ht.GetHue());
+				tex->hsvTex.satTexIndex = scene.GetTextures().GetTextureIndex(ht.GetSaturation());
+				tex->hsvTex.valTexIndex = scene.GetTextures().GetTextureIndex(ht.GetValue());
 				break;
 			}
 			case DIVIDE_TEX: {
-				const DivideTexture *dt = static_cast<const DivideTexture *>(t);
+				auto& dt = dynamic_cast<const DivideTexture &>(t);
 
 				tex->type = slg::ocl::DIVIDE_TEX;
-				const Texture *tex1 = dt->GetTexture1();
-				tex->divideTex.tex1Index = scene->texDefs.GetTextureIndex(tex1);
+				TextureConstRef tex1 = dt.GetTexture1();
+				tex->divideTex.tex1Index = scene.GetTextures().GetTextureIndex(tex1);
 
-				const Texture *tex2 = dt->GetTexture2();
-				tex->divideTex.tex2Index = scene->texDefs.GetTextureIndex(tex2);
+				TextureConstRef tex2 = dt.GetTexture2();
+				tex->divideTex.tex2Index = scene.GetTextures().GetTextureIndex(tex2);
 				break;
 			}
 			case REMAP_TEX: {
-				const RemapTexture *rt = static_cast<const RemapTexture *>(t);
+				auto& rt = dynamic_cast<const RemapTexture &>(t);
 
 				tex->type = slg::ocl::REMAP_TEX;
-				const Texture *valueTex = rt->GetValueTex();
-				tex->remapTex.valueTexIndex = scene->texDefs.GetTextureIndex(valueTex);
-				const Texture *sourceMinTex = rt->GetSourceMinTex();
-				tex->remapTex.sourceMinTexIndex = scene->texDefs.GetTextureIndex(sourceMinTex);
-				const Texture *sourceMaxTex = rt->GetSourceMaxTex();
-				tex->remapTex.sourceMaxTexIndex = scene->texDefs.GetTextureIndex(sourceMaxTex);
-				const Texture *targetMinTex = rt->GetTargetMinTex();
-				tex->remapTex.targetMinTexIndex = scene->texDefs.GetTextureIndex(targetMinTex);
-				const Texture *targetMaxTex = rt->GetTargetMaxTex();
-				tex->remapTex.targetMaxTexIndex = scene->texDefs.GetTextureIndex(targetMaxTex);
+				auto& valueTex = rt.GetValueTex();
+				tex->remapTex.valueTexIndex = scene.GetTextures().GetTextureIndex(valueTex);
+				auto& sourceMinTex = rt.GetSourceMinTex();
+				tex->remapTex.sourceMinTexIndex = scene.GetTextures().GetTextureIndex(sourceMinTex);
+				auto& sourceMaxTex = rt.GetSourceMaxTex();
+				tex->remapTex.sourceMaxTexIndex = scene.GetTextures().GetTextureIndex(sourceMaxTex);
+				auto& targetMinTex = rt.GetTargetMinTex();
+				tex->remapTex.targetMinTexIndex = scene.GetTextures().GetTextureIndex(targetMinTex);
+				auto& targetMaxTex = rt.GetTargetMaxTex();
+				tex->remapTex.targetMaxTexIndex = scene.GetTextures().GetTextureIndex(targetMaxTex);
 				break;
 			}
 			case OBJECTID_TEX: {
@@ -2141,47 +2150,47 @@ void CompiledScene::CompileTextures() {
 				break;
 			}
 			case DOT_PRODUCT_TEX: {
-				const DotProductTexture *dpt = static_cast<const DotProductTexture *>(t);
+				auto& dpt = dynamic_cast<const DotProductTexture &>(t);
 
 				tex->type = slg::ocl::DOT_PRODUCT_TEX;
-				const Texture *tex1 = dpt->GetTexture1();
-				tex->dotProductTex.tex1Index = scene->texDefs.GetTextureIndex(tex1);
+				auto& tex1 = dpt.GetTexture1();
+				tex->dotProductTex.tex1Index = scene.GetTextures().GetTextureIndex(tex1);
 
-				const Texture *tex2 = dpt->GetTexture2();
-				tex->dotProductTex.tex2Index = scene->texDefs.GetTextureIndex(tex2);
+				auto& tex2 = dpt.GetTexture2();
+				tex->dotProductTex.tex2Index = scene.GetTextures().GetTextureIndex(tex2);
 				break;
 			}
 			case GREATER_THAN_TEX: {
-				const GreaterThanTexture *gtt = static_cast<const GreaterThanTexture *>(t);
+				auto& gtt = dynamic_cast<const GreaterThanTexture &>(t);
 
 				tex->type = slg::ocl::GREATER_THAN_TEX;
-				const Texture *tex1 = gtt->GetTexture1();
-				tex->greaterThanTex.tex1Index = scene->texDefs.GetTextureIndex(tex1);
+				auto& tex1 = gtt.GetTexture1();
+				tex->greaterThanTex.tex1Index = scene.GetTextures().GetTextureIndex(tex1);
 
-				const Texture *tex2 = gtt->GetTexture2();
-				tex->greaterThanTex.tex2Index = scene->texDefs.GetTextureIndex(tex2);
+				auto& tex2 = gtt.GetTexture2();
+				tex->greaterThanTex.tex2Index = scene.GetTextures().GetTextureIndex(tex2);
 				break;
 			}
 			case LESS_THAN_TEX: {
-				const LessThanTexture *ltt = static_cast<const LessThanTexture *>(t);
+				auto& ltt = dynamic_cast<const LessThanTexture &>(t);
 
 				tex->type = slg::ocl::LESS_THAN_TEX;
-				const Texture *tex1 = ltt->GetTexture1();
-				tex->lessThanTex.tex1Index = scene->texDefs.GetTextureIndex(tex1);
+				auto& tex1 = ltt.GetTexture1();
+				tex->lessThanTex.tex1Index = scene.GetTextures().GetTextureIndex(tex1);
 
-				const Texture *tex2 = ltt->GetTexture2();
-				tex->lessThanTex.tex2Index = scene->texDefs.GetTextureIndex(tex2);
+				auto& tex2 = ltt.GetTexture2();
+				tex->lessThanTex.tex2Index = scene.GetTextures().GetTextureIndex(tex2);
 				break;
 			}
 			case POWER_TEX: {
-				const PowerTexture *pt = static_cast<const PowerTexture *>(t);
+				auto& pt = dynamic_cast<const PowerTexture &>(t);
 
 				tex->type = slg::ocl::POWER_TEX;
-				const Texture *base = pt->GetBase();
-				tex->powerTex.baseTexIndex = scene->texDefs.GetTextureIndex(base);
+				auto& base = pt.GetBase();
+				tex->powerTex.baseTexIndex = scene.GetTextures().GetTextureIndex(base);
 
-				const Texture *exponent = pt->GetExponent();
-				tex->powerTex.exponentTexIndex = scene->texDefs.GetTextureIndex(exponent);
+				auto& exponent = pt.GetExponent();
+				tex->powerTex.exponentTexIndex = scene.GetTextures().GetTextureIndex(exponent);
 				break;
 			}
 			case SHADING_NORMAL_TEX: {
@@ -2193,108 +2202,108 @@ void CompiledScene::CompileTextures() {
 				break;
 			}
 			case SPLIT_FLOAT3: {
-				const SplitFloat3Texture *sf3t = static_cast<const SplitFloat3Texture *>(t);
+				auto& sf3t = dynamic_cast<const SplitFloat3Texture &>(t);
 
 				tex->type = slg::ocl::SPLIT_FLOAT3;
-				const Texture *t = sf3t->GetTexture();
-				tex->splitFloat3Tex.texIndex = scene->texDefs.GetTextureIndex(t);
+				auto& t = sf3t.GetTexture();
+				tex->splitFloat3Tex.texIndex = scene.GetTextures().GetTextureIndex(t);
 
-				tex->splitFloat3Tex.channelIndex = sf3t->GetChannel();
+				tex->splitFloat3Tex.channelIndex = sf3t.GetChannel();
 				break;
 			}
 			case MAKE_FLOAT3: {
-				const MakeFloat3Texture *mf3t = static_cast<const MakeFloat3Texture *>(t);
+				auto& mf3t = dynamic_cast<const MakeFloat3Texture &>(t);
 
 				tex->type = slg::ocl::MAKE_FLOAT3;
-				const Texture *t1 = mf3t->GetTexture1();
-				tex->makeFloat3Tex.tex1Index = scene->texDefs.GetTextureIndex(t1);
-				const Texture *t2 = mf3t->GetTexture2();
-				tex->makeFloat3Tex.tex2Index = scene->texDefs.GetTextureIndex(t2);
-				const Texture *t3 = mf3t->GetTexture3();
-				tex->makeFloat3Tex.tex3Index = scene->texDefs.GetTextureIndex(t3);
+				auto& t1 = mf3t.GetTexture1();
+				tex->makeFloat3Tex.tex1Index = scene.GetTextures().GetTextureIndex(t1);
+				auto& t2 = mf3t.GetTexture2();
+				tex->makeFloat3Tex.tex2Index = scene.GetTextures().GetTextureIndex(t2);
+				auto& t3 = mf3t.GetTexture3();
+				tex->makeFloat3Tex.tex3Index = scene.GetTextures().GetTextureIndex(t3);
 				break;
 			}
 			case BRIGHT_CONTRAST_TEX: {
-				const BrightContrastTexture *bct = static_cast<const BrightContrastTexture *>(t);
+				auto& bct = dynamic_cast<const BrightContrastTexture &>(t);
 
 				tex->type = slg::ocl::BRIGHT_CONTRAST_TEX;
-				const Texture *t = bct->GetTex();
-				tex->brightContrastTex.texIndex = scene->texDefs.GetTextureIndex(t);
-				const Texture *b = bct->GetBrightnessTex();
-				tex->brightContrastTex.brightnessTexIndex = scene->texDefs.GetTextureIndex(b);
-				const Texture *c = bct->GetContrastTex();
-				tex->brightContrastTex.contrastTexIndex = scene->texDefs.GetTextureIndex(c);
+				auto& t = bct.GetTex();
+				tex->brightContrastTex.texIndex = scene.GetTextures().GetTextureIndex(t);
+				auto& b = bct.GetBrightnessTex();
+				tex->brightContrastTex.brightnessTexIndex = scene.GetTextures().GetTextureIndex(b);
+				auto& c = bct.GetContrastTex();
+				tex->brightContrastTex.contrastTexIndex = scene.GetTextures().GetTextureIndex(c);
 				break;
 			}
 			case TRIPLANAR_TEX: {
-				const TriplanarTexture *trit = static_cast<const TriplanarTexture *>(t);
+				auto& trit = dynamic_cast<const TriplanarTexture &>(t);
 
 				tex->type = slg::ocl::TRIPLANAR_TEX;
-				CompileTextureMapping3D(&tex->triplanarTex.mapping, trit->GetTextureMapping());
-				const Texture *t1 = trit->GetTexture1();
-				tex->triplanarTex.tex1Index = scene->texDefs.GetTextureIndex(t1);
-				const Texture *t2 = trit->GetTexture2();
-				tex->triplanarTex.tex2Index = scene->texDefs.GetTextureIndex(t2);
-				const Texture *t3 = trit->GetTexture3();
-				tex->triplanarTex.tex3Index = scene->texDefs.GetTextureIndex(t3);
-				tex->triplanarTex.enableUVlessBumpMap = trit->IsUVlessBumpMap();
+				CompileTextureMapping3D(&tex->triplanarTex.mapping, trit.GetTextureMapping());
+				auto& t1 = trit.GetTexture1();
+				tex->triplanarTex.tex1Index = scene.GetTextures().GetTextureIndex(t1);
+				auto& t2 = trit.GetTexture2();
+				tex->triplanarTex.tex2Index = scene.GetTextures().GetTextureIndex(t2);
+				auto& t3 = trit.GetTexture3();
+				tex->triplanarTex.tex3Index = scene.GetTextures().GetTextureIndex(t3);
+				tex->triplanarTex.enableUVlessBumpMap = trit.IsUVlessBumpMap();
 				break;
 			}
 			case RANDOM_TEX: {
-				const RandomTexture *rt = static_cast<const RandomTexture *>(t);
+				auto& rt = dynamic_cast<const RandomTexture &>(t);
 
 				tex->type = slg::ocl::RANDOM_TEX;
-				const Texture *t1 = rt->GetTexture();
-				tex->randomTex.texIndex = scene->texDefs.GetTextureIndex(t1);
+				auto& t1 = rt.GetTexture();
+				tex->randomTex.texIndex = scene.GetTextures().GetTextureIndex(t1);
 				break;
 			}
 			case WIREFRAME_TEX: {
-				const WireFrameTexture *wft = static_cast<const WireFrameTexture *>(t);
+				auto& wft = dynamic_cast<const WireFrameTexture &>(t);
 
 				tex->type = slg::ocl::WIREFRAME_TEX;
-				tex->wireFrameTex.width = wft->GetWidth();
-				const Texture *borderTex = wft->GetBorderTex();
-				tex->wireFrameTex.borderTexIndex = scene->texDefs.GetTextureIndex(borderTex);
+				tex->wireFrameTex.width = wft.GetWidth();
+				auto& borderTex = wft.GetBorderTex();
+				tex->wireFrameTex.borderTexIndex = scene.GetTextures().GetTextureIndex(borderTex);
 
-				const Texture *insideTex = wft->GetInsideTex();
-				tex->wireFrameTex.insideTexIndex = scene->texDefs.GetTextureIndex(insideTex);
+				auto& insideTex = wft.GetInsideTex();
+				tex->wireFrameTex.insideTexIndex = scene.GetTextures().GetTextureIndex(insideTex);
 				break;
 			}
 			case DISTORT_TEX: {
-				const DistortTexture *dt = static_cast<const DistortTexture *>(t);
+				auto& dt = dynamic_cast<const DistortTexture &>(t);
 
 				tex->type = slg::ocl::DISTORT_TEX;
-				tex->distortTex.strength = dt->GetStrength();
-				const Texture *texture = dt->GetTex();
-				tex->distortTex.texIndex = scene->texDefs.GetTextureIndex(texture);
+				tex->distortTex.strength = dt.GetStrength();
+				auto& texture = dt.GetTex();
+				tex->distortTex.texIndex = scene.GetTextures().GetTextureIndex(texture);
 
-				const Texture *offsetTex = dt->GetOffset();
-				tex->distortTex.offsetTexIndex = scene->texDefs.GetTextureIndex(offsetTex);
+				auto& offsetTex = dt.GetOffset();
+				tex->distortTex.offsetTexIndex = scene.GetTextures().GetTextureIndex(offsetTex);
 				break;
 			}
 			case BOMBING_TEX: {
-				const BombingTexture *bt = static_cast<const BombingTexture *>(t);
+				auto& bt = dynamic_cast<const BombingTexture &>(t);
 
 				tex->type = slg::ocl::BOMBING_TEX;
-				
-				CompileTextureMapping2D(&tex->bombingTex.mapping, bt->GetTextureMapping());
-				
-				tex->bombingTex.randomScaleFactor = bt->GetRandomScaleFactor();
-				tex->bombingTex.useRandomRotation = bt->GetUseRandomRotation();
-				tex->bombingTex.multiBulletCount = bt->GetMultiBulletCount();
 
-				const Texture *backgroundTex = bt->GetBackgroundTex();
-				tex->bombingTex.backgroundTex = scene->texDefs.GetTextureIndex(backgroundTex);
-				const Texture *bulletTexIndex = bt->GetBulletTex();
-				tex->bombingTex.bulletTexIndex = scene->texDefs.GetTextureIndex(bulletTexIndex);
-				const Texture *bulletMaskTexIndex = bt->GetBulletMaskTex();
-				tex->bombingTex.bulletMaskTexIndex = scene->texDefs.GetTextureIndex(bulletMaskTexIndex);
+				CompileTextureMapping2D(&tex->bombingTex.mapping, bt.GetTextureMapping());
 
-				tex->bombingTex.randomImageMapIndex = scene->imgMapCache.GetImageMapIndex(ImageMapTexture::randomImageMap.get());
+				tex->bombingTex.randomScaleFactor = bt.GetRandomScaleFactor();
+				tex->bombingTex.useRandomRotation = bt.GetUseRandomRotation();
+				tex->bombingTex.multiBulletCount = bt.GetMultiBulletCount();
+
+				auto& backgroundTex = bt.GetBackgroundTex();
+				tex->bombingTex.backgroundTex = scene.GetTextures().GetTextureIndex(backgroundTex);
+				auto& bulletTexIndex = bt.GetBulletTex();
+				tex->bombingTex.bulletTexIndex = scene.GetTextures().GetTextureIndex(bulletTexIndex);
+				auto& bulletMaskTexIndex = bt.GetBulletMaskTex();
+				tex->bombingTex.bulletMaskTexIndex = scene.GetTextures().GetTextureIndex(bulletMaskTexIndex);
+
+				tex->bombingTex.randomImageMapIndex = scene.GetImageMaps().GetImageMapIndex(*ImageMapTexture::randomImageMap);
 				break;
 			}
 			default:
-				throw runtime_error("Unknown texture in CompiledScene::CompileTextures(): " + ToString(t->GetType()));
+				throw runtime_error("Unknown texture in CompiledScene::CompileTextures(): " + ToString(t.GetType()));
 		}
 	}
 
@@ -2305,3 +2314,4 @@ void CompiledScene::CompileTextures() {
 }
 
 #endif
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

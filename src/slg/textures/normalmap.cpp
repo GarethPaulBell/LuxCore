@@ -26,14 +26,14 @@ using namespace slg;
 // NormalMap texture
 //------------------------------------------------------------------------------
 
-NormalMapTexture::NormalMapTexture(const Texture *t, const float s) : tex(t), scale(s) {
+NormalMapTexture::NormalMapTexture(TextureConstRef t, const float s) : tex(t), scale(s) {
 }
 
 NormalMapTexture::~NormalMapTexture() {
 }
 
 Normal NormalMapTexture::Bump(const HitPoint &hitPoint, const float sampleDistance) const {
-    const Spectrum rgb = tex->GetSpectrumValue(hitPoint).Clamp(0.f, 1.f);
+    const Spectrum rgb = GetTexture().GetSpectrumValue(hitPoint).Clamp(0.f, 1.f);
 
 	// Normal from normal map
 	Vector n(rgb.c);
@@ -50,13 +50,14 @@ Normal NormalMapTexture::Bump(const HitPoint &hitPoint, const float sampleDistan
 	return shadeN;
 }
 
-Properties NormalMapTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
-	Properties props;
+PropertiesUPtr NormalMapTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+	auto props = std::make_unique<Properties>();
 	
 	const string name = GetName();
-	props.Set(Property("scene.textures." + name + ".type")("normalmap"));
-	props.Set(Property("scene.textures." + name + ".texture")(tex->GetSDLValue()));
-	props.Set(Property("scene.textures." + name + ".scale")(scale));
+	props->Set(Property("scene.textures." + name + ".type")("normalmap"));
+	props->Set(Property("scene.textures." + name + ".texture")(GetTexture().GetSDLValue()));
+	props->Set(Property("scene.textures." + name + ".scale")(scale));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

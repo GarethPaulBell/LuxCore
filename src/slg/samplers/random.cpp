@@ -18,7 +18,9 @@
 
 #include <boost/lexical_cast.hpp>
 
+#include "luxrays/usings.h"
 #include "luxrays/core/color/color.h"
+#include "slg/usings.h"
 #include "slg/samplers/sampler.h"
 #include "slg/samplers/random.h"
 #include "slg/utils/mortoncurve.h"
@@ -31,9 +33,9 @@ using namespace slg;
 // RandomSamplerSharedData
 //------------------------------------------------------------------------------
 
-RandomSamplerSharedData::RandomSamplerSharedData(Film *engineFlm) {
-	engineFilm = engineFlm;
-
+RandomSamplerSharedData::RandomSamplerSharedData(FilmPtr engineFlm) :
+	engineFilm(engineFlm)
+{
 	Reset();
 }
 
@@ -46,21 +48,25 @@ void RandomSamplerSharedData::GetNewBucket(const u_int bucketCount,
 	*newBucketIndex = AtomicInc(&bucketIndex) % bucketCount;
 }
 
-SamplerSharedData *RandomSamplerSharedData::FromProperties(const Properties &cfg,
-		RandomGenerator *rndGen, Film *film) {
-	return new RandomSamplerSharedData(film);
+std::unique_ptr<SamplerSharedData> RandomSamplerSharedData::FromProperties(
+	const Properties &cfg, const RandomGeneratorUPtr & rndGen, FilmPtr film
+) {
+	return std::make_unique<RandomSamplerSharedData>(film);
 }
 
 //------------------------------------------------------------------------------
 // Random sampler
 //------------------------------------------------------------------------------
 
-RandomSampler::RandomSampler(luxrays::RandomGenerator *rnd, Film *flm,
-		const FilmSampleSplatter *flmSplatter, const bool imgSamplesEnable,
+RandomSampler::RandomSampler(const RandomGeneratorUPtr & rnd, FilmPtr flm,
+		const FilmSampleSplatterUPtr& flmSplatter, const bool imgSamplesEnable,
 		const float adaptiveStr, const float adaptiveUserImpWeight,
 		const u_int bucketSz, const u_int tileSz, const u_int superSmpl,
-		const u_int overlap, RandomSamplerSharedData *samplerSharedData) :
-		Sampler(rnd, flm, flmSplatter, imgSamplesEnable), sharedData(samplerSharedData),
+		const u_int overlap,
+		SamplerSharedDataSPtr samplerSharedData
+) :
+		Sampler(rnd, flm, flmSplatter, imgSamplesEnable),
+		sharedData(static_pointer_cast<RandomSamplerSharedData>(samplerSharedData)),
 		adaptiveStrength(adaptiveStr), adaptiveUserImportanceWeight(adaptiveUserImpWeight),
 		bucketSize(bucketSz), tileSize(tileSz), superSampling(superSmpl), overlapping(overlap) {
 }
@@ -72,7 +78,7 @@ void RandomSampler::InitNewSample() {
 	u_int subRegionWidth, subRegionHeight, tiletWidthCount, tileHeightCount, bucketCount;
 
 	if (doImageSamples) {
-		filmSubRegion = film->GetSubRegion();
+		filmSubRegion = GetFilm().GetSubRegion();
 
 		subRegionWidth = filmSubRegion[1] - filmSubRegion[0] + 1;
 		subRegionHeight = filmSubRegion[3] - filmSubRegion[2] + 1;
@@ -123,15 +129,15 @@ void RandomSampler::InitNewSample() {
 			pixelY = filmSubRegion[2] + subRegionPixelY;
 
 			// Check if the current pixel is over or under the convergence threshold
-			const Film *film = sharedData->engineFilm;
-			if ((adaptiveStrength > 0.f) && film->HasChannel(Film::NOISE)) {
+			FilmConstRef film = sharedData->GetEngineFilm();
+			if ((adaptiveStrength > 0.f) && GetFilm().HasChannel(Film::NOISE)) {
 				// Pixels are sampled in accordance with how far from convergence they are
-				const float noise = *(film->channel_NOISE->GetPixel(pixelX, pixelY));
+				const float noise = *(GetFilm().channel_NOISE->GetPixel(pixelX, pixelY));
 
 				// Factor user driven importance sampling too
 				float threshold;
-				if (film->HasChannel(Film::USER_IMPORTANCE)) {
-					const float userImportance = *(film->channel_USER_IMPORTANCE->GetPixel(pixelX, pixelY));
+				if (GetFilm().HasChannel(Film::USER_IMPORTANCE)) {
+					const float userImportance = *(GetFilm().channel_USER_IMPORTANCE->GetPixel(pixelX, pixelY));
 
 					// Noise is initialized to INFINITY at start
 					if (isinf(noise))
@@ -201,7 +207,7 @@ void RandomSampler::NextSample(const vector<SampleResult> &sampleResults) {
 			default:
 				throw runtime_error("Unknown sample type in RandomSampler::NextSample(): " + ToString(sampleType));
 		}
-		film->AddSampleCount(threadIndex, pixelNormalizedCount, screenNormalizedCount);
+		GetFilm().AddSampleCount(threadIndex, pixelNormalizedCount, screenNormalizedCount);
 
 		AtomicAddSamplesToFilm(sampleResults);
 	}
@@ -209,74 +215,80 @@ void RandomSampler::NextSample(const vector<SampleResult> &sampleResults) {
 	InitNewSample();
 }
 
-Properties RandomSampler::ToProperties() const {
-	return Sampler::ToProperties() <<
+PropertiesUPtr RandomSampler::ToProperties() const {
+	auto props = std::make_unique<Properties>();
+	*props << Sampler::ToProperties() <<
 			Property("sampler.random.adaptive.strength")(adaptiveStrength) <<
 			Property("sampler.random.adaptive.userimportanceweight")(adaptiveUserImportanceWeight) <<
 			Property("sampler.random.bucketsize")(bucketSize) <<
 			Property("sampler.random.tilesize")(tileSize) <<
 			Property("sampler.random.supersampling")(superSampling) <<
 			Property("sampler.random.overlapping")(overlapping);
+	return props;
 }
 
 //------------------------------------------------------------------------------
 // Static methods used by SamplerRegistry
 //------------------------------------------------------------------------------
 
-Properties RandomSampler::ToProperties(const Properties &cfg) {
-	return Properties() <<
-			cfg.Get(GetDefaultProps().Get("sampler.type")) <<
-			cfg.Get(GetDefaultProps().Get("sampler.imagesamples.enable")) <<
-			cfg.Get(GetDefaultProps().Get("sampler.random.adaptive.strength")) <<
-			cfg.Get(GetDefaultProps().Get("sampler.random.adaptive.userimportanceweight")) <<
-			cfg.Get(GetDefaultProps().Get("sampler.random.bucketsize")) <<
-			cfg.Get(GetDefaultProps().Get("sampler.random.tilesize")) <<
-			cfg.Get(GetDefaultProps().Get("sampler.random.supersampling")) <<
-			cfg.Get(GetDefaultProps().Get("sampler.random.overlapping"));
+PropertiesUPtr RandomSampler::ToProperties(const Properties &cfg) {
+	PropertiesUPtr props = std::make_unique<Properties>();
+	*props <<
+				cfg.Get(GetDefaultProps()->Get("sampler.type")) <<
+			cfg.Get(GetDefaultProps()->Get("sampler.imagesamples.enable")) <<
+			cfg.Get(GetDefaultProps()->Get("sampler.random.adaptive.strength")) <<
+			cfg.Get(GetDefaultProps()->Get("sampler.random.adaptive.userimportanceweight")) <<
+			cfg.Get(GetDefaultProps()->Get("sampler.random.bucketsize")) <<
+			cfg.Get(GetDefaultProps()->Get("sampler.random.tilesize")) <<
+			cfg.Get(GetDefaultProps()->Get("sampler.random.supersampling")) <<
+			cfg.Get(GetDefaultProps()->Get("sampler.random.overlapping"));
+	return props;
 }
 
-Sampler *RandomSampler::FromProperties(const Properties &cfg, RandomGenerator *rndGen,
-		Film *film, const FilmSampleSplatter *flmSplatter, SamplerSharedData *sharedData) {
-	const bool imageSamplesEnable = cfg.Get(GetDefaultProps().Get("sampler.imagesamples.enable")).Get<bool>();
+SamplerUPtr RandomSampler::FromProperties(const Properties &cfg, const RandomGeneratorUPtr &  rndGen,
+		FilmPtr film, const FilmSampleSplatterUPtr& flmSplatter,
+		SamplerSharedDataSPtr sharedData) {
+	const bool imageSamplesEnable = cfg.Get(GetDefaultProps()->Get("sampler.imagesamples.enable")).Get<bool>();
 
-	const float adaptiveStrength = Clamp(cfg.Get(GetDefaultProps().Get("sampler.random.adaptive.strength")).Get<float>(), 0.f, .95f);
-	const float adaptiveUserImportanceWeight = cfg.Get(GetDefaultProps().Get("sampler.random.adaptive.userimportanceweight")).Get<float>();
-	const float bucketSize = RoundUpPow2(cfg.Get(GetDefaultProps().Get("sampler.random.bucketsize")).Get<u_int>());
-	const float tileSize = RoundUpPow2(cfg.Get(GetDefaultProps().Get("sampler.random.tilesize")).Get<u_int>());
-	const float superSampling = cfg.Get(GetDefaultProps().Get("sampler.random.supersampling")).Get<u_int>();
-	const float overlapping = cfg.Get(GetDefaultProps().Get("sampler.random.overlapping")).Get<u_int>();
+	const float adaptiveStrength = Clamp(cfg.Get(GetDefaultProps()->Get("sampler.random.adaptive.strength")).Get<double>(), 0.0, .95);
+	const float adaptiveUserImportanceWeight = cfg.Get(GetDefaultProps()->Get("sampler.random.adaptive.userimportanceweight")).Get<double>();
+	const float bucketSize = RoundUpPow2(cfg.Get(GetDefaultProps()->Get("sampler.random.bucketsize")).Get<u_int>());
+	const float tileSize = RoundUpPow2(cfg.Get(GetDefaultProps()->Get("sampler.random.tilesize")).Get<u_int>());
+	const float superSampling = cfg.Get(GetDefaultProps()->Get("sampler.random.supersampling")).Get<u_int>();
+	const float overlapping = cfg.Get(GetDefaultProps()->Get("sampler.random.overlapping")).Get<u_int>();
 
-	return new RandomSampler(rndGen, film, flmSplatter, imageSamplesEnable,
+	return std::make_unique<RandomSampler>(rndGen, film, flmSplatter, imageSamplesEnable,
 			adaptiveStrength, adaptiveUserImportanceWeight,
 			bucketSize, tileSize, superSampling, overlapping,
-			(RandomSamplerSharedData *)sharedData);
+			static_pointer_cast<RandomSamplerSharedData>(sharedData));
 }
 
 slg::ocl::Sampler *RandomSampler::FromPropertiesOCL(const Properties &cfg) {
 	slg::ocl::Sampler *oclSampler = new slg::ocl::Sampler();
 
 	oclSampler->type = slg::ocl::RANDOM;
-	oclSampler->random.adaptiveStrength = Clamp(cfg.Get(GetDefaultProps().Get("sampler.random.adaptive.strength")).Get<float>(), 0.f, .95f);
-	oclSampler->random.adaptiveUserImportanceWeight = cfg.Get(GetDefaultProps().Get("sampler.random.adaptive.userimportanceweight")).Get<float>();
-	oclSampler->random.bucketSize = RoundUpPow2(cfg.Get(GetDefaultProps().Get("sampler.random.bucketsize")).Get<u_int>());
-	oclSampler->random.tileSize = RoundUpPow2(cfg.Get(GetDefaultProps().Get("sampler.random.tilesize")).Get<u_int>());
-	oclSampler->random.superSampling = cfg.Get(GetDefaultProps().Get("sampler.random.supersampling")).Get<u_int>();
-	oclSampler->random.overlapping = cfg.Get(GetDefaultProps().Get("sampler.random.overlapping")).Get<u_int>();
+	oclSampler->random.adaptiveStrength = Clamp(cfg.Get(GetDefaultProps()->Get("sampler.random.adaptive.strength")).Get<double>(), 0.0, .95);
+	oclSampler->random.adaptiveUserImportanceWeight = cfg.Get(GetDefaultProps()->Get("sampler.random.adaptive.userimportanceweight")).Get<double>();
+	oclSampler->random.bucketSize = RoundUpPow2(cfg.Get(GetDefaultProps()->Get("sampler.random.bucketsize")).Get<u_int>());
+	oclSampler->random.tileSize = RoundUpPow2(cfg.Get(GetDefaultProps()->Get("sampler.random.tilesize")).Get<u_int>());
+	oclSampler->random.superSampling = cfg.Get(GetDefaultProps()->Get("sampler.random.supersampling")).Get<u_int>();
+	oclSampler->random.overlapping = cfg.Get(GetDefaultProps()->Get("sampler.random.overlapping")).Get<u_int>();
 
 	return oclSampler;
 }
 
 void RandomSampler::AddRequiredChannels(Film::FilmChannels &channels, const luxrays::Properties &cfg) {
-	const bool imageSamplesEnable = cfg.Get(GetDefaultProps().Get("sampler.imagesamples.enable")).Get<bool>();
+	const bool imageSamplesEnable = cfg.Get(GetDefaultProps()->Get("sampler.imagesamples.enable")).Get<bool>();
 
-	const float str = cfg.Get(GetDefaultProps().Get("sampler.random.adaptive.strength")).Get<float>();
+	const float str = cfg.Get(GetDefaultProps()->Get("sampler.random.adaptive.strength")).Get<double>();
 
 	if (imageSamplesEnable && (str > 0.f))
 		channels.insert(Film::NOISE);
 }
 
-const Properties &RandomSampler::GetDefaultProps() {
-	static Properties props = Properties() <<
+PropertiesUPtr RandomSampler::GetDefaultProps() {
+	auto props = std::make_unique<Properties>();
+	*props <<
 			Sampler::GetDefaultProps() <<
 			Property("sampler.type")(GetObjectTag()) <<
 			Property("sampler.random.adaptive.strength")(.95f) <<
@@ -288,3 +300,4 @@ const Properties &RandomSampler::GetDefaultProps() {
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

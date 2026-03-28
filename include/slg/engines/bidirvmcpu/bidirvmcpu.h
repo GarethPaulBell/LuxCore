@@ -64,7 +64,12 @@ private:
 	}
 
 	u_int Hash(const int ix, const int iy, const int iz) const {
-		return (u_int)((ix * 73856093) ^ (iy * 19349663) ^ (iz * 83492791)) % gridSize;
+		using myint = long long int;
+		return (u_int)(
+			(myint(ix) * 73856093)
+			^ (myint(iy) * 19349663)
+			^ (myint(iz) * 83492791)
+			) % gridSize;
 	}
 
 	u_int Hash(const luxrays::Point &p) const {
@@ -100,14 +105,20 @@ public:
 	friend class BiDirVMCPURenderEngine;
 
 private:
-	virtual boost::thread *AllocRenderThread() { return new boost::thread(&BiDirVMCPURenderThread::RenderFuncVM, this); }
+	virtual luxrays::JThreadUPtr AllocRenderThread() {
+		auto t = std::make_unique<luxrays::JThread>(
+			std::bind_front(&BiDirVMCPURenderThread::RenderFuncVM, this)
+		);
+		luxrays::SetThreadName(t, "LxBiDirVMCPU");
+		return std::move(t);
+	}
 
-	void RenderFuncVM();
+	void RenderFuncVM(std::stop_token stop_token);
 };
 
 class BiDirVMCPURenderEngine : public BiDirCPURenderEngine {
 public:
-	BiDirVMCPURenderEngine(const RenderConfig *cfg);
+	BiDirVMCPURenderEngine(RenderConfigRef cfg);
 
 	virtual RenderEngineType GetType() const { return GetObjectType(); }
 	virtual std::string GetTag() const { return GetObjectTag(); }
@@ -118,22 +129,23 @@ public:
 
 	static RenderEngineType GetObjectType() { return BIDIRVMCPU; }
 	static std::string GetObjectTag() { return "BIDIRVMCPU"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static RenderEngine *FromProperties(const RenderConfig *rcfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static RenderEngine *FromProperties(RenderConfigRef rcfg);
 
 	friend class BiDirVMCPURenderThread;
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	virtual void StartLockLess();
 
 private:
-	CPURenderThread *NewRenderThread(const u_int index, luxrays::IntersectionDevice *device) {
-		return new BiDirVMCPURenderThread(this, index, device);
+	CPURenderThreadUPtr NewRenderThread(const u_int index, luxrays::IntersectionDevice *device) {
+		return std::make_unique<BiDirVMCPURenderThread>(this, index, device);
 	}
 };
 
 }
 
 #endif	/* _SLG_BIDIRVMCPU_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

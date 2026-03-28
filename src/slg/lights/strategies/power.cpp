@@ -28,26 +28,25 @@ using namespace slg;
 // LightStrategyPower
 //------------------------------------------------------------------------------
 
-void LightStrategyPower::Preprocess(const Scene *scn, const LightStrategyTask taskType,
+void LightStrategyPower::Preprocess(SceneConstRef scene, const LightStrategyTask taskType,
 			const bool useRTMode) {
-	DistributionLightStrategy::Preprocess(scn, taskType);
+	DistributionLightStrategy::Preprocess(scene, taskType);
 
-	const u_int lightCount = scene->lightDefs.GetSize();
+	const u_int lightCount = scene.GetLightSources().GetSize();
 	if (lightCount == 0)
 		return;
 
-	const float envRadius = InfiniteLightSource::GetEnvRadius(*scene);
+	const float envRadius = InfiniteLightSource::GetEnvRadius(scene);
 	const float invEnvRadius2 = 1.f / (envRadius * envRadius);
 
 	vector<float> lightPower;
 	lightPower.reserve(lightCount);
 
-	const vector<LightSource *> &lights = scene->lightDefs.GetLightSources();
 	for (u_int i = 0; i < lightCount; ++i) {
-		const LightSource *l = lights[i];
-		float power = l->GetPower(*scene) * l->GetImportance();
+		auto& l = scene.GetLightSources().GetLightSource(i);
+		float power = l.GetPower(scene) * l.GetImportance();
 		// In order to avoid over-sampling of distant lights
-		if (l->IsInfinite())
+		if (l.IsInfinite())
 			power *= invEnvRadius2;
 
 		switch (taskType) {
@@ -56,14 +55,14 @@ void LightStrategyPower::Preprocess(const Scene *scn, const LightStrategyTask ta
 				break;
 			}
 			case TASK_ILLUMINATE: {
-				if (l->IsDirectLightSamplingEnabled())
+				if (l.IsDirectLightSamplingEnabled())
 					lightPower.push_back(power);
 				else
 					lightPower.push_back(0.f);
 				break;
 			}
 			case TASK_INFINITE_ONLY: {
-				if (l->IsInfinite())
+				if (l.IsInfinite())
 					lightPower.push_back(power);
 				else
 					lightPower.push_back(0.f);
@@ -81,19 +80,25 @@ void LightStrategyPower::Preprocess(const Scene *scn, const LightStrategyTask ta
 
 // Static methods used by LightStrategyRegistry
 
-Properties LightStrategyPower::ToProperties(const Properties &cfg) {
-	return Properties() <<
-			cfg.Get(GetDefaultProps().Get("lightstrategy.type"));
+PropertiesUPtr LightStrategyPower::ToProperties(const Properties &cfg) {
+	PropertiesUPtr props = std::make_unique<Properties>();
+	
+	*props <<
+				cfg.Get(GetDefaultProps()->Get("lightstrategy.type"));
+	
+	return props;
 }
 
-LightStrategy *LightStrategyPower::FromProperties(const Properties &cfg) {
-	return new LightStrategyPower();
+LightStrategyUPtr LightStrategyPower::FromProperties(const Properties &cfg) {
+	return std::make_unique<LightStrategyPower>();
 }
 
-const Properties &LightStrategyPower::GetDefaultProps() {
-	static Properties props = Properties() <<
+PropertiesUPtr LightStrategyPower::GetDefaultProps() {
+	auto props = std::make_unique<Properties>();
+	*props <<
 			LightStrategy::GetDefaultProps() <<
 			Property("lightstrategy.type")(GetObjectTag());
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

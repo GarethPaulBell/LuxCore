@@ -21,17 +21,15 @@
 
 #include <string>
 #include <vector>
-
-#include <boost/unordered_map.hpp>
+#include <ranges>
 
 #include "luxrays/devices/ocldevice.h"
+#include "slg/usings.h"
 #include "slg/imagemap/imagemap.h"
 #include "slg/imagemap/resizepolicies/resizepolicies.h"
 #include "slg/core/sdl.h"
 
 namespace slg {
-
-class Scene;
 
 //------------------------------------------------------------------------------
 // ImageMapCache
@@ -45,19 +43,37 @@ public:
 	void SetImageResizePolicy(ImageMapResizePolicy *policy);
 	const ImageMapResizePolicy *GetImageResizePolicy() const { return resizePolicy; }
 
-	void DefineImageMap(ImageMap *im);
+	// Prefered insertion will require a unique_ptr owned object
+	// However, we also have to handle the case of ImageMapTexture::randomImageMap,
+	// which is shared between ImageMapTexture and ImageMapCache
+	ImageMapRef DefineImageMap(ImageMapUPtr&& im);
+	ImageMapRef DefineImageMap(ImageMapSPtr im);
 
-	ImageMap *GetImageMap(const std::string &fileName, const ImageMapConfig &imgCfg,
+	ImageMapRef GetImageMap(const std::string &fileName, const ImageMapConfig &imgCfg,
 			const bool applyResizePolicy);
 
-	void DeleteImageMap(const ImageMap *im);
+	void DeleteImageMap(ImageMapConstRef im);
 
-	std::string GetSequenceFileName(const ImageMap *im) const;
-	u_int GetImageMapIndex(const ImageMap *im) const;
+	std::string GetSequenceFileName(ImageMapConstRef im) const;
+	u_int GetImageMapIndex(ImageMapConstRef im) const;
+	u_int GetImageMapIndex(ImageMapConstPtr p) const;
 
-	void GetImageMaps(std::vector<const ImageMap *> &ims);
+	void GetImageMaps(std::vector<std::reference_wrapper<const ImageMap>> &ims) const;
+
+	auto ViewImageMaps() const {
+		// Create and return a view of references to the values
+		return maps | std::views::transform([](const auto& ptr) -> const ImageMap&
+				{ return *ptr; });
+	}
+	auto GetImageMaps() const {
+		auto view = ViewImageMaps();
+		return std::vector<std::reference_wrapper<const ImageMap>>(view.begin(), view.end());
+	}
+
+
 	u_int GetSize()const { return static_cast<u_int>(mapByKey.size()); }
 	bool IsImageMapDefined(const std::string &name) const { return mapByKey.find(name) != mapByKey.end(); }
+
 
 	friend class Scene;
 	friend class ImageMapResizePolicy;
@@ -67,24 +83,47 @@ public:
 
 private:
 	// Used for the support of resize policies
-	void Preprocess(const Scene *scene, const bool useRTMode);
+	void Preprocess(SceneConstRef scene, const bool useRTMode);
+
+	// Add a new image to the container, at the last position, without checking
+	// existing images. Warning: this is just a helper; for secure inserting,
+	// use DefineImageMap
+	ImageMapRef AppendImageMap(
+		ImageMapSPtr im, const std::string& name, const std::string& key
+	) {
+		// Add the new image
+		maps.push_back(im);
+		auto& imRef = *maps.back();
+
+		// Update index
+		mapByKey.insert(make_pair(key, std::ref(imRef)));
+		mapNames.push_back(name);
+
+		return std::ref(imRef);
+	}
 
 	std::string GetCacheKey(const std::string &fileName,
 				const ImageMapConfig &imgCfg) const;
 	std::string GetCacheKey(const std::string &fileName) const;
-	
+
 	template<class Archive> void save(Archive &ar, const unsigned int version) const;
 	template<class Archive>	void load(Archive &ar, const unsigned int version);
 	BOOST_SERIALIZATION_SPLIT_MEMBER()
 
-	boost::unordered_map<std::string, ImageMap *> mapByKey;
+	// Here is the main owner of ImageMap objects
+	// However, this is a shared_ptr container, as we have to handle the case
+	// of ImageMapTexture::randomImageMap, which belongs also to ImageMapTexture
+	// as a class static singleton
+	std::vector<ImageMapSPtr> maps;
+
+	std::unordered_map<std::string, std::reference_wrapper<ImageMap> > mapByKey;
 	// Used to preserve insertion order and to retrieve insertion index
 	std::vector<std::string> mapNames;
-	std::vector<ImageMap *> maps;
 
 	ImageMapResizePolicy *resizePolicy;
 	std::vector<bool> resizePolicyToApply;
 };
+
 
 }
 
@@ -93,3 +132,4 @@ BOOST_CLASS_VERSION(slg::ImageMapCache, 2)
 BOOST_CLASS_EXPORT_KEY(slg::ImageMapCache)
 
 #endif	/* _SLG_IMAGEMAPCACHE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

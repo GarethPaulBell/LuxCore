@@ -26,11 +26,20 @@ using namespace slg;
 // Mix material
 //------------------------------------------------------------------------------
 
-MixMaterial::MixMaterial(const Texture *frontTransp, const Texture *backTransp,
-		const Texture *emitted, const Texture *bump,
-		const Material *mA, const Material *mB, const Texture *mix) :
-			Material(frontTransp, backTransp, emitted, bump),
-			matA(mA), matB(mB), mixFactor(mix) {
+MixMaterial::MixMaterial(
+	TextureConstPtr frontTransp,
+	TextureConstPtr backTransp,
+	TextureConstPtr emitted,
+	TextureConstPtr bump,
+	MaterialConstRef mA,
+	MaterialConstRef mB,
+	TextureConstPtr mix
+) :
+	Material(frontTransp, backTransp, emitted, bump),
+	matA(&mA),
+	matB(&mB),
+	mixFactor(mix)
+{
 	Preprocess();
 }
 
@@ -67,7 +76,7 @@ void MixMaterial::Preprocess() {
 	isDelta = IsDeltaImpl();
 }
 
-const Volume *MixMaterial::GetInteriorVolume(const HitPoint &hitPoint,
+VolumeConstPtr MixMaterial::GetInteriorVolume(const HitPoint &hitPoint,
 		const float passThroughEvent) const {
 	if (interiorVolume)
 		return interiorVolume;
@@ -82,7 +91,7 @@ const Volume *MixMaterial::GetInteriorVolume(const HitPoint &hitPoint,
 	}
 }
 
-const Volume *MixMaterial::GetExteriorVolume(const HitPoint &hitPoint,
+VolumeConstPtr MixMaterial::GetExteriorVolume(const HitPoint &hitPoint,
 		const float passThroughEvent) const {
 	if (exteriorVolume)
 		return exteriorVolume;
@@ -263,8 +272,8 @@ Spectrum MixMaterial::Sample(const HitPoint &hitPoint,
 	const float passThroughEventFirst = sampleMatA ? (passThroughEvent / weight1) : (passThroughEvent - weight1) / weight2;
 
 	// Sample the first material, evaluate the second
-	const Material *matFirst = sampleMatA ? matA : matB;
-	const Material *matSecond = sampleMatA ? matB : matA;
+	auto matFirst = sampleMatA ? matA : matB;
+	auto matSecond = sampleMatA ? matB : matA;
 
 	HitPoint &hitPoint1 = sampleMatA ? hitPointA : hitPointB;
 	HitPoint &hitPoint2 = sampleMatA ? hitPointB : hitPointA;
@@ -348,12 +357,12 @@ void MixMaterial::Pdf(const HitPoint &hitPoint,
 		*reversePdfW = weight1 * reversePdfWMatA + weight2 * reversePdfWMatB;
 }
 
-void MixMaterial::UpdateMaterialReferences(const Material *oldMat, const Material *newMat) {
-	if (matA == oldMat)
-		matA = newMat;
+void MixMaterial::UpdateMaterialReferences(MaterialConstRef oldMat, MaterialRef newMat) {
+	if (matA == &oldMat)
+		matA = &newMat;
 
-	if (matB == oldMat)
-		matB = newMat;
+	if (matB == &oldMat)
+		matB = &newMat;
 	
 	// Update volumes too
 	Material::UpdateMaterialReferences(oldMat, newMat);
@@ -361,22 +370,24 @@ void MixMaterial::UpdateMaterialReferences(const Material *oldMat, const Materia
 	Preprocess();
 }
 
-bool MixMaterial::IsReferencing(const Material *mat) const {
-	return matA == mat || matA->IsReferencing(mat) ||
-		matB == mat || matB->IsReferencing(mat);
+bool MixMaterial::IsReferencing(MaterialConstRef mat) const {
+	return matA == &mat || matA->IsReferencing(mat) ||
+		matB == &mat || matB->IsReferencing(mat);
 }
 
-void MixMaterial::AddReferencedMaterials(boost::unordered_set<const Material *> &referencedMats) const {
+void MixMaterial::AddReferencedMaterials(
+	std::unordered_set<const Material *> &referencedMats
+) const {
 	Material::AddReferencedMaterials(referencedMats);
 
-	referencedMats.insert(matA);
+	referencedMats.insert(matA.get());
 	matA->AddReferencedMaterials(referencedMats);
 
-	referencedMats.insert(matB);
+	referencedMats.insert(matB.get());
 	matB->AddReferencedMaterials(referencedMats);
 }
 
-void MixMaterial::AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+void MixMaterial::AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 	Material::AddReferencedTextures(referencedTexs);
 
 	matA->AddReferencedTextures(referencedTexs);
@@ -384,24 +395,25 @@ void MixMaterial::AddReferencedTextures(boost::unordered_set<const Texture *> &r
 	mixFactor->AddReferencedTextures(referencedTexs);
 }
 
-void MixMaterial::UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
-	if (mixFactor == oldTex)
-		mixFactor = newTex;
+void MixMaterial::UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
+	if (mixFactor == &oldTex)
+		mixFactor = &newTex;
 
 	Material::UpdateTextureReferences(oldTex, newTex);
 
 	Preprocess();
 }
 
-Properties MixMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
-	Properties props;
+PropertiesUPtr MixMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.materials." + name + ".type")("mix"));
-	props.Set(Property("scene.materials." + name + ".material1")(matA->GetName()));
-	props.Set(Property("scene.materials." + name + ".material2")(matB->GetName()));
-	props.Set(Property("scene.materials." + name + ".amount")(mixFactor->GetSDLValue()));
-	props.Set(Material::ToProperties(imgMapCache, useRealFileName));
+	props->Set(Property("scene.materials." + name + ".type")("mix"));
+	props->Set(Property("scene.materials." + name + ".material1")(matA->GetName()));
+	props->Set(Property("scene.materials." + name + ".material2")(matB->GetName()));
+	props->Set(Property("scene.materials." + name + ".amount")(mixFactor->GetSDLValue()));
+	props->Set(Material::ToProperties(imgMapCache, useRealFileName));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

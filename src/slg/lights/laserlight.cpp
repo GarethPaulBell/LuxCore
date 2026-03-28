@@ -83,11 +83,11 @@ void LaserLight::GetPreprocessedData(float *emittedFactorData, float *absolutePo
 	}
 }
 
-float LaserLight::GetPower(const Scene &scene) const {
+float LaserLight::GetPower(SceneConstRef scene) const {
 	return emittedFactor.Y() * M_PI * radius * radius;
 }
 
-Spectrum LaserLight::Emit(const Scene &scene,
+Spectrum LaserLight::Emit(SceneConstRef scene,
 		const float time, const float u0, const float u1,
 		const float u2, const float u3, const float passThroughEvent,
 		Ray &ray, float &emissionPdfW,
@@ -109,7 +109,7 @@ Spectrum LaserLight::Emit(const Scene &scene,
 	return emittedFactor;
 }
 
-Spectrum LaserLight::Illuminate(const Scene &scene, const BSDF &bsdf,
+Spectrum LaserLight::Illuminate(SceneConstRef scene, const BSDF &bsdf,
 		const float time, const float u0, const float u1, const float passThroughEvent,
         Ray &shadowRay, float &directPdfW,
 		float *emissionPdfW, float *cosThetaAtLight) const {
@@ -155,7 +155,7 @@ Spectrum LaserLight::Illuminate(const Scene &scene, const BSDF &bsdf,
 	return emittedFactor;
 }
 
-bool LaserLight::IsAlwaysInShadow(const Scene &scene,
+bool LaserLight::IsAlwaysInShadow(SceneConstRef scene,
 			const luxrays::Point &p, const luxrays::Normal &n) const {
 	const Point &rayOrig = p;
 	const Vector &rayDir = -absoluteLightDir;
@@ -179,18 +179,19 @@ bool LaserLight::IsAlwaysInShadow(const Scene &scene,
 		return true;
 }
 
-Properties LaserLight::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+PropertiesUPtr LaserLight::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
 	const string prefix = "scene.lights." + GetName();
-	Properties props = NotIntersectableLightSource::ToProperties(imgMapCache, useRealFileName);
+	PropertiesUPtr props = NotIntersectableLightSource::ToProperties(imgMapCache, useRealFileName);
 
-	props.Set(Property(prefix + ".type")("laser"));
-	props.Set(Property(prefix + ".color")(color));
-	props.Set(Property(prefix + ".power")(power));
-	props.Set(Property(prefix + ".normalizebycolor")(emittedPowerNormalize));
-	props.Set(Property(prefix + ".efficiency")(efficiency));
-	props.Set(Property(prefix + ".position")(localPos));
-	props.Set(Property(prefix + ".target")(localTarget));
-	props.Set(Property(prefix + ".radius")(radius));
+	props->Set(Property(prefix + ".type")("laser"));
+	props->Set(Property(prefix + ".color")(color));
+	props->Set(Property(prefix + ".power")(power));
+	props->Set(Property(prefix + ".normalizebycolor")(emittedPowerNormalize));
+	props->Set(Property(prefix + ".efficiency")(efficiency));
+	props->Set(Property(prefix + ".position")(localPos));
+	props->Set(Property(prefix + ".target")(localTarget));
+	props->Set(Property(prefix + ".radius")(radius));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

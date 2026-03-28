@@ -27,7 +27,7 @@ using namespace slg;
 //------------------------------------------------------------------------------
 
 float ModuloTexture::GetFloatValue(const HitPoint &hitPoint) const {
-    const float modulus = modulo->GetFloatValue(hitPoint);
+    const float modulus = GetModulo().GetFloatValue(hitPoint);
     if(modulus == 0) {
         // As the modulus value approaches zero, the texture will grow
         // darker and darker. I chose zero as the default return value
@@ -35,20 +35,21 @@ float ModuloTexture::GetFloatValue(const HitPoint &hitPoint) const {
         return 0.f;
     }
 
-    return fmod(texture->GetFloatValue(hitPoint), modulus);
+    return fmod(GetTexture().GetFloatValue(hitPoint), modulus);
 }
 
 Spectrum ModuloTexture::GetSpectrumValue(const HitPoint &hitPoint) const {
     return Spectrum(GetFloatValue(hitPoint));
 }
 
-Properties ModuloTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
-    Properties props;
+PropertiesUPtr ModuloTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+	auto props = std::make_unique<Properties>();
 
     const string name = GetName();
-    props.Set(Property("scene.textures." + name + ".type")("modulo"));
-    props.Set(Property("scene.textures." + name + ".texture")(texture->GetSDLValue()));
-    props.Set(Property("scene.textures." + name + ".modulo")(modulo->GetSDLValue()));
+    props->Set(Property("scene.textures." + name + ".type")("modulo"));
+    props->Set(Property("scene.textures." + name + ".texture")(GetTexture().GetSDLValue()));
+    props->Set(Property("scene.textures." + name + ".modulo")(GetModulo().GetSDLValue()));
 
     return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

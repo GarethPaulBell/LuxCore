@@ -162,7 +162,7 @@ public:
 	const DLSCParams &GetParams() const { return params; }
 	const DLSCBvh *GetBVH() const { return cacheEntriesBVH; }
 
-	void Build(const Scene *scene);
+	void Build(SceneConstRef scene);
 	
 	const luxrays::Distribution1D *GetLightDistribution(const luxrays::Point &p, const luxrays::Normal &n,
 			const bool isVolume) const;
@@ -171,14 +171,14 @@ public:
 
 private:
 	float SampleLight(const DLSCVisibilityParticle &visibilityParticle,
-		const LightSource *light, const u_int pass) const;
+		LightSourceConstRef light, const u_int pass, SceneConstRef scene) const;
 	
-	float EvaluateBestRadius();
-	void TraceVisibilityParticles();
+	float EvaluateBestRadius(SceneConstRef scene);
+	void TraceVisibilityParticles(SceneConstRef);
 	void InitCacheEntry(const u_int entryIndex);
-	void ComputeCacheEntryReceivedLuminance(const u_int entryIndex);
-	void BuildCacheEntryLightDistribution(const u_int entryIndex, const DLSCBvh &bvh);
-	void BuildCacheEntries();
+	void ComputeCacheEntryReceivedLuminance(const u_int entryIndex, SceneConstRef);
+	void BuildCacheEntryLightDistribution(const u_int entryIndex, const DLSCBvh &bvh, SceneConstRef);
+	void BuildCacheEntries(SceneConstRef scene);
 
 	void DebugExport(const std::string &fileName, const float sphereRadius) const;
 
@@ -188,7 +188,7 @@ private:
 	DLSCParams params;
 
 	// Used only during the building phase
-	const Scene *scene;
+	//SceneConstRef scene;
 	std::vector<DLSCVisibilityParticle> visibilityParticles;
 	std::vector<std::vector<float> > cacheEntriesReceivedLuminance;
 
@@ -208,3 +208,4 @@ BOOST_CLASS_EXPORT_KEY(slg::DLSCBvh)
 BOOST_CLASS_EXPORT_KEY(slg::DLSCParams)
 		
 #endif	/* _SLG_LIGHTSTRATEGY_DLSCACHEIMPL_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

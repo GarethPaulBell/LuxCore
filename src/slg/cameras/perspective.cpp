@@ -96,7 +96,7 @@ void PerspectiveCamera::InitCameraData() {
 			for (u_int x = 0; x < distributionWidth; ++x) {
 				const u_int index = x + y * distributionWidth;
 
-				data[index] = bokehDistributionImageMap->GetStorage()->GetFloat(index);
+				data[index] = bokehDistributionImageMap->GetStorage().GetFloat(index);
 			}
 		}
 
@@ -277,24 +277,25 @@ void PerspectiveCamera::GetPDF(const Ray &eyeRay, const float eyeDistance,
 	}
 }
 
-Properties PerspectiveCamera::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
-	Properties props = ProjectiveCamera::ToProperties(imgMapCache, useRealFileName);
+PropertiesUPtr PerspectiveCamera::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+	PropertiesUPtr props = ProjectiveCamera::ToProperties(imgMapCache, useRealFileName);
 
-	props.Set(Property("scene.camera.type")("perspective"));
-	props.Set(Property("scene.camera.oculusrift.barrelpostpro.enable")(enableOculusRiftBarrel));
-	props.Set(Property("scene.camera.fieldofview")(fieldOfView));
-	props.Set(Property("scene.camera.bokeh.blades")(bokehBlades));
-	props.Set(Property("scene.camera.bokeh.power")(bokehPower));
-	props.Set(Property("scene.camera.bokeh.distribution.type")(BokehDistributionType2String(bokehDistribution)));
+	props->Set(Property("scene.camera.type")("perspective"));
+	props->Set(Property("scene.camera.oculusrift.barrelpostpro.enable")(enableOculusRiftBarrel));
+	props->Set(Property("scene.camera.fieldofview")(fieldOfView));
+	props->Set(Property("scene.camera.bokeh.blades")(bokehBlades));
+	props->Set(Property("scene.camera.bokeh.power")(bokehPower));
+	props->Set(Property("scene.camera.bokeh.distribution.type")(BokehDistributionType2String(bokehDistribution)));
 
 	if (bokehDistributionImageMap) {
 		const string fileName = useRealFileName ?
-			bokehDistributionImageMap->GetName() : imgMapCache.GetSequenceFileName(bokehDistributionImageMap);
-		props.Set(Property("scene.camera.bokeh.distribution.image")(fileName));
+			bokehDistributionImageMap->GetName() :
+			imgMapCache.GetSequenceFileName(*bokehDistributionImageMap);
+		props->Set(Property("scene.camera.bokeh.distribution.image")(fileName));
 	}
 
-	props.Set(Property("scene.camera.bokeh.scale.x")(bokehScaleX));
-	props.Set(Property("scene.camera.bokeh.scale.y")(bokehScaleY));
+	props->Set(Property("scene.camera.bokeh.scale.x")(bokehScaleX));
+	props->Set(Property("scene.camera.bokeh.scale.y")(bokehScaleY));
 
 	return props;
 }
@@ -382,3 +383,4 @@ void PerspectiveCamera::OculusRiftBarrelPostprocess(const float x, const float y
 	*barrelX = (ex + 1.f) * .5f;
 	*barrelY = (ey + 1.f) * .5f;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

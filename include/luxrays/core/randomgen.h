@@ -231,3 +231,4 @@ inline double RadicalInverse(u_int n, u_int base) {
 }
 
 #endif	/* _LUXRAYS_RANDOM_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

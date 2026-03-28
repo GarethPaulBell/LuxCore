@@ -27,18 +27,17 @@ namespace slg {
 
 class RandomTriangleAOVShape : public Shape {
 public:
-	RandomTriangleAOVShape(luxrays::ExtTriangleMesh *srcMesh,
+	RandomTriangleAOVShape(luxrays::ExtTriangleMeshRef srcMesh,
 			const u_int srcDataIndex, const u_int dstDataIndex);
 	virtual ~RandomTriangleAOVShape();
 
-	virtual ShapeType GetType() const { return RANDOMTRIANGLEAOV; }
+	virtual ShapeType GetType() const override { return RANDOMTRIANGLEAOV; }
 
 protected:
-	virtual luxrays::ExtTriangleMesh *RefineImpl(const Scene *scene);
-
-	luxrays::ExtTriangleMesh *mesh;
+	virtual luxrays::ExtTriangleMeshUPtr RefineImpl(SceneConstRef scene) override;
 };
 
 }
 
 #endif	/* _SLG_RANDOMTRIANGLEAOVSHAPE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -390,3 +390,4 @@ static const float CIE_Z[nCIE] = {
 };
 
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

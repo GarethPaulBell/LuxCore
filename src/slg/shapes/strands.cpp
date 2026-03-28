@@ -284,10 +284,10 @@ private:
 // StrendsShape methods
 //------------------------------------------------------------------------------
 
-StrendsShape::StrendsShape(const Scene *scene,
+StrendsShape::StrendsShape(SceneConstRef scene,
 		const cyHairFile *hairFile, const TessellationType tesselType,
 		const u_int aMaxDepth, const float aError, const u_int sSideCount,
-		const bool sCapBottom, const bool sCapTop, const bool useCamPos) : mesh(NULL) {
+		const bool sCapBottom, const bool sCapTop, const bool useCamPos) {
 	adaptiveMaxDepth = aMaxDepth;
 	adaptiveError = aError;
 	solidSideCount = sSideCount;
@@ -298,8 +298,11 @@ StrendsShape::StrendsShape(const Scene *scene,
 	const cyHairFileHeader &header = hairFile->GetHeader();
 	if (header.hair_count == 0)
 		throw runtime_error("Empty strands shape are not supported");
-	if (useCameraPosition && !scene->camera)
-		throw runtime_error("The scene camera must be defined in order to enable strands useCameraPosition flag");
+	if (useCameraPosition && !scene.HasCamera())
+		throw runtime_error(
+			"The scene.GetCamera() must be defined "
+			"in order to enable strands useCameraPosition flag"
+		);
 
 	SLG_LOG("Refining " << header.hair_count << " strands");
 	const double start = WallClockTime();
@@ -404,7 +407,7 @@ StrendsShape::StrendsShape(const Scene *scene,
 		
 		// Check if I have to include vertex colors too
 		Spectrum *newMeshCols = NULL;
-		BOOST_FOREACH(const Spectrum &c, meshCols) {
+		for(const Spectrum &c: meshCols) {
 			if (c != Spectrum(1.f)) {
 				// The mesh uses vertex colors
 				SLG_LOG("Strands shape uses colors");
@@ -417,7 +420,7 @@ StrendsShape::StrendsShape(const Scene *scene,
 
 		// Check if I have to include vertex alpha too
 		float *newMeshTransps = NULL;
-		BOOST_FOREACH(const float &a, meshTransps) {
+		for(const float &a: meshTransps) {
 			if (a != 1.f) {
 				// The mesh uses vertex alphas
 				SLG_LOG("Strands shape uses alphas");
@@ -428,7 +431,7 @@ StrendsShape::StrendsShape(const Scene *scene,
 			}
 		}
 
-		mesh = new ExtTriangleMesh(meshVerts.size(), meshTris.size(),
+		mesh = std::make_unique<ExtTriangleMesh>(meshVerts.size(), meshTris.size(),
 				newMeshVerts, newMeshTris, newMeshNorms, newMeshUVs,
 				newMeshCols, newMeshTransps);
 	} else
@@ -438,7 +441,7 @@ StrendsShape::StrendsShape(const Scene *scene,
 	SLG_LOG("Refining time: " << std::setprecision(3) << dt << " secs");
 }
 
-void StrendsShape::TessellateRibbon(const Scene *scene,
+void StrendsShape::TessellateRibbon(SceneConstRef scene,
 		const vector<Point> &hairPoints,
 		const vector<float> &hairSizes, const vector<Spectrum> &hairCols,
 		const vector<UV> &hairUVs, const vector<float> &hairTransps,
@@ -449,8 +452,8 @@ void StrendsShape::TessellateRibbon(const Scene *scene,
 	const u_int baseOffset = meshVerts.size();
 
 	const Point cameraPosition =
-		(useCameraPosition && (scene->camera->GetType() == Camera::PERSPECTIVE)) ?
-		((PerspectiveCamera *)scene->camera)->orig :
+		(useCameraPosition && (scene.GetCamera().GetType() == Camera::PERSPECTIVE)) ?
+		(dynamic_cast<const PerspectiveCamera&>(scene.GetCamera())).orig :
 		Point();
 
 	Vector previousDir;
@@ -541,7 +544,7 @@ void StrendsShape::TessellateRibbon(const Scene *scene,
 	}
 }
 
-void StrendsShape::TessellateAdaptive(const Scene *scene,
+void StrendsShape::TessellateAdaptive(SceneConstRef scene,
 		const bool solid, const vector<Point> &hairPoints,
 		const vector<float> &hairSizes, const vector<Spectrum> &hairCols,
 		const vector<UV> &hairUVs, const vector<float> &hairTransps,
@@ -580,7 +583,7 @@ void StrendsShape::TessellateAdaptive(const Scene *scene,
 			meshVerts, meshNorms, meshTris, meshUVs, meshCols, meshTransps);
 }
 
-void StrendsShape::TessellateSolid(const Scene *scene,
+void StrendsShape::TessellateSolid(SceneConstRef scene,
 		const vector<Point> &hairPoints,
 		const vector<float> &hairSizes, const vector<Spectrum> &hairCols,
 		const vector<UV> &hairUVs, const vector<float> &hairTransps,
@@ -735,10 +738,9 @@ void StrendsShape::TessellateSolid(const Scene *scene,
 }
 
 StrendsShape::~StrendsShape() {
-	if (!refined)
-		delete mesh;
 }
 
-ExtTriangleMesh *StrendsShape::RefineImpl(const Scene *scene) {
-	return mesh;
+ExtTriangleMeshUPtr StrendsShape::RefineImpl(SceneConstRef scene) {
+	return std::move(mesh);
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

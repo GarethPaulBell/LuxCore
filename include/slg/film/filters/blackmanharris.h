@@ -48,14 +48,14 @@ public:
 
 	static FilterType GetObjectType() { return FILTER_BLACKMANHARRIS; }
 	static std::string GetObjectTag() { return "BLACKMANHARRIS"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static Filter *FromProperties(const luxrays::Properties &cfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static FilterUPtr FromProperties(const luxrays::Properties &cfg);
 	static slg::ocl::Filter *FromPropertiesOCL(const luxrays::Properties &cfg);
 
 	friend class boost::serialization::access;
 
 private:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	// Used by serialization
 	BlackmanHarrisFilter() { }
@@ -84,3 +84,4 @@ BOOST_CLASS_VERSION(slg::BlackmanHarrisFilter, 2)
 BOOST_CLASS_EXPORT_KEY(slg::BlackmanHarrisFilter)
 
 #endif	/* _SLG_BLACKMANNHARRIS_FILTER_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

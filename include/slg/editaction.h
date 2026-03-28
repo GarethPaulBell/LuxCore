@@ -61,7 +61,7 @@ public:
 	friend std::ostream &operator<<(std::ostream &os, const EditActionList &eal);
 
 private:
-	u_int actions;
+	std::atomic<u_int> actions;
 };
 
 inline std::ostream &operator<<(std::ostream &os, const EditActionList &eal) {
@@ -116,3 +116,4 @@ inline std::ostream &operator<<(std::ostream &os, const EditActionList &eal) {
 }
 
 #endif	/* _SLG_SLG_EDITACTION_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

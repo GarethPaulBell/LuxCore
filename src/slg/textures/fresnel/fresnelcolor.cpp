@@ -27,23 +27,23 @@ using namespace slg;
 //------------------------------------------------------------------------------
 
 float FresnelColorTexture::GetFloatValue(const HitPoint &hitPoint) const {
-	return kr->GetFloatValue(hitPoint);
+	return GetKr().GetFloatValue(hitPoint);
 }
 
 Spectrum FresnelColorTexture::GetSpectrumValue(const HitPoint &hitPoint) const {
-	return kr->GetSpectrumValue(hitPoint);
+	return GetKr().GetSpectrumValue(hitPoint);
 }
 
 float FresnelColorTexture::Y() const {
-	return kr->Y();
+	return GetKr().Y();
 }
 
 float FresnelColorTexture::Filter() const {
-	return kr->Filter();
+	return GetKr().Filter();
 }
 
 Spectrum FresnelColorTexture::Evaluate(const HitPoint &hitPoint, const float cosi) const {
-	const Spectrum c = kr->GetSpectrumValue(hitPoint);
+	const Spectrum c = GetKr().GetSpectrumValue(hitPoint);
 
 	const Spectrum n = ApproxN(c);
 	const Spectrum k = ApproxK(c);
@@ -51,12 +51,13 @@ Spectrum FresnelColorTexture::Evaluate(const HitPoint &hitPoint, const float cos
 	return GeneralEvaluate(n, k, cosi);
 }
 
-Properties FresnelColorTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
-	Properties props;
+PropertiesUPtr FresnelColorTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.textures." + name + ".type")("fresnelcolor"));
-	props.Set(Property("scene.textures." + name + ".kr")(kr->GetSDLValue()));
+	props->Set(Property("scene.textures." + name + ".type")("fresnelcolor"));
+	props->Set(Property("scene.textures." + name + ".kr")(GetKr().GetSDLValue()));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

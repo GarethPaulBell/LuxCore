@@ -54,7 +54,7 @@ def ensure_nvrtc():
 
     2 strategies:
     - Linux: we preload libnvrtc.so
-    - Windows: we preload nvrtc64_120, to ensure it is serviceable,
+    - Windows: we preload nvrtc64_xxx, to ensure it is serviceable,
         but we also add the dll path to the process DLL search path
 
     Please note that MacOS is out-of-scope.
@@ -64,7 +64,7 @@ def ensure_nvrtc():
 
     # Find path to nvidia-cuda-nvrtc libs
     try:
-        nvrtc_mod = importlib.import_module("nvidia.cuda_nvrtc")
+        nvrtc_mod = importlib.import_module("nvidia.cu13")
     except ModuleNotFoundError:
         print("nvrtc: Python module not found")
         return
@@ -73,13 +73,17 @@ def ensure_nvrtc():
     if platform.system() == "Linux":
         libpath = modpath / "lib"
     elif platform.system() == "Windows":
-        libpath = modpath / "bin"
+        libpath = modpath / "bin" / "x86_64"
     else:
         return
 
     # Select main libs (not alt flavors) and order them so that main lib is the
     # 1st item in the list
-    libs = [str(f) for f in libpath.iterdir() if "alt" not in f.name and "nvrtc" in f.name]
+    libs = [
+        str(f)
+        for f in libpath.iterdir()
+        if "alt" not in f.name and "nvrtc" in f.name
+    ]
     libs.sort(key=len)
     assert libs
 

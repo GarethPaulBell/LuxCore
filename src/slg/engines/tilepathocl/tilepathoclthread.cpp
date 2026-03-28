@@ -18,6 +18,9 @@
 
 #if !defined(LUXRAYS_DISABLE_OPENCL)
 
+#include <thread>
+#include <mutex>
+
 #include "luxrays/devices/ocldevice.h"
 
 #include "slg/slg.h"
@@ -27,6 +30,7 @@
 using namespace std;
 using namespace luxrays;
 using namespace slg;
+using namespace std::chrono_literals;
 
 //------------------------------------------------------------------------------
 // TilePathOCLRenderThread
@@ -62,8 +66,8 @@ void TilePathOCLRenderThread::UpdateSamplerData(const TileWork &tileWork,
 
 	// To have an asynchronous EnqueueWriteBuffer(), I need to keep a copy of
 	// sharedData around.
-	sharedData.cameraFilmWidth = engine->film->GetWidth();
-	sharedData.cameraFilmHeight =  engine->film->GetHeight();
+	sharedData.cameraFilmWidth = engine->GetFilm().GetWidth();
+	sharedData.cameraFilmHeight =  engine->GetFilm().GetHeight();
 	sharedData.tileStartX =  tileWork.GetCoord().x;
 	sharedData.tileStartY =  tileWork.GetCoord().y;
 	sharedData.tileWidth =  tileWork.GetCoord().width;
@@ -81,22 +85,22 @@ void TilePathOCLRenderThread::RenderTileWork(const TileWork &tileWork,
 		const u_int filmIndex) {
 	TilePathOCLRenderEngine *engine = (TilePathOCLRenderEngine *)renderEngine;
 
-	threadFilms[filmIndex]->film->Reset();
-	if (threadFilms[filmIndex]->film->GetDenoiser().IsEnabled())
-		threadFilms[filmIndex]->film->GetDenoiser().CopyReferenceFilm(engine->film);
+	threadFilms[filmIndex]->GetFilm().Reset();
+	if (threadFilms[filmIndex]->GetFilm().GetDenoiser().IsEnabled())
+		threadFilms[filmIndex]->GetFilm().GetDenoiser().CopyReferenceFilm(FilmPtr(&engine->GetFilm()));
 
 	// Clear the frame buffer
 	threadFilms[filmIndex]->ClearFilm(intersectionDevice, filmClearKernel, filmClearWorkGroupSize);
 
 	// Clear the frame buffer
-	const u_int filmPixelCount = threadFilms[filmIndex]->film->GetWidth() * threadFilms[filmIndex]->film->GetHeight();
+	const u_int filmPixelCount = threadFilms[filmIndex]->GetFilm().GetWidth() * threadFilms[filmIndex]->GetFilm().GetHeight();
 	intersectionDevice->EnqueueKernel(filmClearKernel,
 		HardwareDeviceRange(RoundUp<u_int>(filmPixelCount, filmClearWorkGroupSize)),
 		HardwareDeviceRange(filmClearWorkGroupSize));
 
 	// Update all kernel args
 	{
-		boost::unique_lock<boost::mutex> lock(engine->setKernelArgsMutex);
+		std::unique_lock<std::mutex> lock(engine->setKernelArgsMutex);
 
 		SetInitKernelArgs(filmIndex);
 
@@ -122,7 +126,7 @@ void TilePathOCLRenderThread::RenderTileWork(const TileWork &tileWork,
 
 	// Async. transfer of the Film buffers
 	threadFilms[filmIndex]->RecvFilm(intersectionDevice);
-	threadFilms[filmIndex]->film->AddSampleCount(0,
+	threadFilms[filmIndex]->GetFilm().AddSampleCount(0,
 			tileWork.GetCoord().width * tileWork.GetCoord().height *
 			engine->aaSamples * engine->aaSamples, 0.0);
 }
@@ -131,105 +135,99 @@ static void PGICUpdateCallBack(CompiledScene *compiledScene) {
 	compiledScene->RecompilePhotonGI();
 }
 
-void TilePathOCLRenderThread::RenderThreadImpl() {
+void TilePathOCLRenderThread::RenderThreadImpl(std::stop_token stop_token) {
 	//SLG_LOG("[TilePathOCLRenderThread::" << threadIndex << "] Rendering thread started");
 
 	TilePathOCLRenderEngine *engine = (TilePathOCLRenderEngine *)renderEngine;
 
 	intersectionDevice->PushThreadCurrentDevice();
 
-	try {
-		//----------------------------------------------------------------------
-		// Initialization
-		//----------------------------------------------------------------------
+        //----------------------------------------------------------------------
+        // Initialization
+        //----------------------------------------------------------------------
 
-		const u_int taskCount = engine->taskCount;
+        const u_int taskCount = engine->taskCount;
 
-		// Initialize random number generator seeds
-		intersectionDevice->EnqueueKernel(initSeedKernel,
-				HardwareDeviceRange(taskCount), HardwareDeviceRange(initWorkGroupSize));
+        // Initialize random number generator seeds
+        intersectionDevice->EnqueueKernel(initSeedKernel,
+                        HardwareDeviceRange(taskCount), HardwareDeviceRange(initWorkGroupSize));
 
-		//----------------------------------------------------------------------
-		// Extract the tile to render
-		//----------------------------------------------------------------------
+        //----------------------------------------------------------------------
+        // Extract the tile to render
+        //----------------------------------------------------------------------
 
-		vector<TileWork> tileWorks(1);
-		vector<slg::ocl::TilePathSamplerSharedData> samplerDatas(1);
-		const boost::function<void()> pgicUpdateCallBack = boost::bind(PGICUpdateCallBack, engine->compiledScene);
-		while (!boost::this_thread::interruption_requested()) {
-			// Check if we are in pause mode
-			if (engine->pauseMode) {
-				// Check every 100ms if I have to continue the rendering
-				while (!boost::this_thread::interruption_requested() && engine->pauseMode)
-					boost::this_thread::sleep(boost::posix_time::millisec(100));
+        vector<TileWork> tileWorks(1);
+        vector<slg::ocl::TilePathSamplerSharedData> samplerDatas(1);
+        const std::function<void()> pgicUpdateCallBack = std::bind(PGICUpdateCallBack, engine->compiledScene);
 
-				if (boost::this_thread::interruption_requested())
-					break;
-			}
+        while (!stop_token.stop_requested()) {
+                // Check if we are in pause mode
+                if (engine->pauseMode) {
+                        // Check every 100ms if I have to continue the rendering
+                        while (!stop_token.stop_requested() && engine->pauseMode)
+                                std::this_thread::sleep_for(100ms);
 
-			const double t0 = WallClockTime();
+                        if (stop_token.stop_requested())
+                                break;
+                }
 
-			// Enqueue the rendering of all tiles
+                const double t0 = WallClockTime();
 
-			bool allTileDone = true;
-			for (u_int i = 0; i < tileWorks.size(); ++i) {
-				if (engine->tileRepository->NextTile(engine->film, engine->filmMutex, tileWorks[i], threadFilms[i]->film)) {
-					//SLG_LOG("[TilePathOCLRenderThread::" << threadIndex << "] TileWork: " << tileWork);
+                // Enqueue the rendering of all tiles
 
-					// Render the tile
-					RenderTileWork(tileWorks[i], samplerDatas[i], i);
+                bool allTileDone = true;
+                for (u_int i = 0; i < tileWorks.size(); ++i) {
+                        if (engine->tileRepository->NextTile(engine->GetFilm(), engine->filmMutex, tileWorks[i], threadFilms[i]->GetFilm())) {
+                                //SLG_LOG("[TilePathOCLRenderThread::" << threadIndex << "] TileWork: " << tileWork);
 
-					allTileDone = false;
-				} else
-					tileWorks[i].Reset();
-			}
+                                // Render the tile
+                                RenderTileWork(tileWorks[i], samplerDatas[i], i);
 
-			// Async. transfer of GPU task statistics
-			intersectionDevice->EnqueueReadBuffer(
-				taskStatsBuff,
-				CL_FALSE,
-				sizeof(slg::ocl::pathoclbase::GPUTaskStats) * taskCount,
-				gpuTaskStats);
+                                allTileDone = false;
+                        } else
+                                tileWorks[i].Reset();
+                }
 
-			intersectionDevice->FinishQueue();
+                // Async. transfer of GPU task statistics
+                intersectionDevice->EnqueueReadBuffer(
+                        taskStatsBuff,
+                        CL_FALSE,
+                        sizeof(slg::ocl::pathoclbase::GPUTaskStats) * taskCount,
+                        gpuTaskStats);
 
-			const double t1 = WallClockTime();
-			const double renderingTime = t1 - t0;
-			//SLG_LOG("[TilePathOCLRenderThread::" << threadIndex << "] " << tiles.size() << "xTile(s) rendering time: " << (u_int)(renderingTime * 1000.0) << "ms");
+                intersectionDevice->FinishQueue();
 
-			if (allTileDone)
-				break;
+                const double t1 = WallClockTime();
+                const double renderingTime = t1 - t0;
+                //SLG_LOG("[TilePathOCLRenderThread::" << threadIndex << "] " << tiles.size() << "xTile(s) rendering time: " << (u_int)(renderingTime * 1000.0) << "ms");
 
-			// Check the the time spent, if it is too small (< 400ms) get more tiles
-			// (avoid to increase the number of tiles on CPU devices, it is useless)
-			if ((tileWorks.size() < engine->maxTilePerDevice) && (renderingTime < 0.4) && 
-					(intersectionDevice->GetDeviceDesc()->GetType() != DEVICE_TYPE_OPENCL_CPU)) {
-				IncThreadFilms();
-				tileWorks.resize(tileWorks.size() + 1);
-				samplerDatas.resize(samplerDatas.size() + 1);
+                if (allTileDone)
+                        break;
 
-				SLG_LOG("[TilePathOCLRenderThread::" << threadIndex << "] Increased the number of rendered tiles to: " << tileWorks.size());
-			}
+                // Check the the time spent, if it is too small (< 400ms) get more tiles
+                // (avoid to increase the number of tiles on CPU devices, it is useless)
+                if ((tileWorks.size() < engine->maxTilePerDevice) && (renderingTime < 0.4) && 
+                                (intersectionDevice->GetDeviceDesc()->GetType() != DEVICE_TYPE_OPENCL_CPU)) {
+                        IncThreadFilms();
+                        tileWorks.resize(tileWorks.size() + 1);
+                        samplerDatas.resize(samplerDatas.size() + 1);
 
-			if (engine->photonGICache) {
-				try {
-					const u_int spp = engine->film->GetTotalEyeSampleCount() / engine->film->GetPixelCount();
+                        SLG_LOG("[TilePathOCLRenderThread::" << threadIndex << "] Increased the number of rendered tiles to: " << tileWorks.size());
+                }
 
-					if (engine->photonGICache->Update(threadIndex, spp, pgicUpdateCallBack)) {
-						InitPhotonGI();
-						SetKernelArgs();
-					}
-				} catch (boost::thread_interrupted &ti) {
-					// I have been interrupted, I must stop
-					break;
-				}
-			}
-		}
+                if (stop_token.stop_requested())
+                        break;
+                if (engine->photonGICache) {
+                        const u_int spp = engine->GetFilm().GetTotalEyeSampleCount() / engine->GetFilm().GetPixelCount();
 
-		//SLG_LOG("[TilePathOCLRenderThread::" << threadIndex << "] Rendering thread halted");
-	} catch (boost::thread_interrupted) {
+                        if (engine->photonGICache->Update(threadIndex, spp, pgicUpdateCallBack)) {
+                                InitPhotonGI();
+                                SetKernelArgs();
+                        }
+                }
+        }
+        if (stop_token.stop_requested())
 		SLG_LOG("[TilePathOCLRenderThread::" << threadIndex << "] Rendering thread halted");
-	}
 
 	threadDone = true;
 
@@ -238,8 +236,9 @@ void TilePathOCLRenderThread::RenderThreadImpl() {
 	// halt condition is satisfied.
 	if (engine->photonGICache)
 		engine->photonGICache->FinishUpdate(threadIndex);
-	
+
 	intersectionDevice->PopThreadCurrentDevice();
 }
 
 #endif
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

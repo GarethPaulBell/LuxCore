@@ -17,8 +17,11 @@
  ***************************************************************************/
 
 #include <cstddef>
+#include <stdexcept>
 
+#include "luxrays/usings.h"
 #include "slg/bsdf/bsdf.h"
+#include "slg/usings.h"
 #include "slg/volumes/volume.h"
 #include "slg/utils/pathvolumeinfo.h"
 
@@ -31,39 +34,57 @@ using namespace slg;
 //------------------------------------------------------------------------------
 
 PathVolumeInfo::PathVolumeInfo() {
-	currentVolume = NULL;
+	currentVolume = nullptr;
 	volumeListSize = 0;
 
 	scatteredStart = false;
 }
 
-void PathVolumeInfo::AddVolume(const Volume *vol) {
-	if ((!vol) || (volumeListSize == PATHVOLUMEINFO_SIZE)) {
-		// NULL volume or out of space, I just ignore the volume
+void PathVolumeInfo::AddVolume(VolumeConstRef vol) {
+	if (volumeListSize == PATHVOLUMEINFO_SIZE) {
+		// Out of space, I just ignore the volume
 		return;
 	}
 
+
 	// Update the current volume. ">=" because I want to catch the last added volume.
-	if (!currentVolume || (vol->GetPriority() >= currentVolume->GetPriority()))
+	if (!HasCurrentVolume() || (vol.GetPriority() >= GetCurrentVolume().GetPriority())) {
+		currentVolume = &vol;
+	}
+
+	// Add the volume to the list
+	volumeList[volumeListSize++] = VolumeConstPtr(&vol);
+}
+
+void PathVolumeInfo::AddVolume(VolumeConstPtr vol) {
+	if (!vol || volumeListSize == PATHVOLUMEINFO_SIZE) {
+		// Out of space, I just ignore the volume
+		return;
+	}
+
+
+	// Update the current volume. ">=" because I want to catch the last added volume.
+	if (!HasCurrentVolume() || (vol->GetPriority() >= GetCurrentVolume().GetPriority())) {
 		currentVolume = vol;
+	}
 
 	// Add the volume to the list
 	volumeList[volumeListSize++] = vol;
 }
 
-void PathVolumeInfo::RemoveVolume(const Volume *vol) {
-	if ((!vol) || (volumeListSize == 0)) {
-		// NULL volume or empty volume list
+void PathVolumeInfo::RemoveVolume(VolumeConstPtr vol) {
+	if (!vol || volumeListSize == 0) {
+		// empty volume list
 		return;
 	}
 
 	// Update the current volume and the list
 	bool found = false;
-	currentVolume = NULL;
+	currentVolume = nullptr;
 	for (u_int i = 0; i < volumeListSize; ++i) {
 		if (found) {
 			// Re-compact the list
-			volumeList[i - 1] = volumeList[i];
+			SetVolume(i - 1, VolumeConstPtr(&GetVolume(i)));
 		} else if (volumeList[i] == vol) {
 			// Found the volume to remove
 			found = true;
@@ -71,47 +92,65 @@ void PathVolumeInfo::RemoveVolume(const Volume *vol) {
 		}
 
 		// Update currentVolume. ">=" because I want to catch the last added volume.
-		if (!currentVolume || (volumeList[i]->GetPriority() >= currentVolume->GetPriority()))
-			currentVolume = volumeList[i];
+		if (
+			not HasCurrentVolume()
+			or GetVolume(i).GetPriority() >= GetCurrentVolume().GetPriority()
+		) {
+			SetCurrentVolume(GetVolume(i));
+		}
 	}
 
 	// Update the list size
 	--volumeListSize;
 }
 
-const Volume *PathVolumeInfo::SimulateAddVolume(const Volume *vol) const {
+VolumeConstPtr PathVolumeInfo::SimulateAddVolume(VolumeConstPtr vol) const {
 	// A volume wins over current if and only if it is the same volume or has an
 	// higher priority
 
-	if (currentVolume) {
+	if (HasCurrentVolume()) {
 		if (vol) {
-			return (currentVolume->GetPriority() > vol->GetPriority()) ? currentVolume : vol;
-		} else
-			return currentVolume;
-	} else
-		return vol;
+			auto curPriority = GetCurrentVolume().GetPriority();
+			auto volPriority = vol->GetPriority();
+			return
+				curPriority > volPriority ?
+				VolumeConstPtr(&GetCurrentVolume()) :
+				vol;
+		} else {
+			return VolumeConstPtr(&GetCurrentVolume());
+		}
+	} else return vol;
 }
 
-const Volume *PathVolumeInfo::SimulateRemoveVolume(const Volume *vol) const {
-	if ((!vol) || (volumeListSize == 0)) {
+VolumeConstPtr PathVolumeInfo::SimulateRemoveVolume(VolumeConstPtr vol) const {
+
+
+	if (not vol || volumeListSize == 0) {
 		// NULL volume or empty volume list
-		return currentVolume;
+		return HasCurrentVolume() ? VolumeConstPtr(&GetCurrentVolume()) : nullptr;
 	}
 
 	// Update the current volume
 	bool found = false;
-	const Volume *newCurrentVolume = NULL;
+	VolumeConstPtr newCurrentVolume = nullptr;
 	for (u_int i = 0; i < volumeListSize; ++i) {
-		if (!found && volumeList[i] == vol) {
+		if (!found && &GetVolume(i) == vol) {
 			// Found the volume to remove
 			found = true;
 			continue;
 		}
 
-		// Update newCurrentVolume. ">=" because I want to catch the last added volume.
-		if (!newCurrentVolume || (volumeList[i]->GetPriority() >= newCurrentVolume->GetPriority()))
-			newCurrentVolume = volumeList[i];
-	}
+		if (!newCurrentVolume) {
+			newCurrentVolume = std::addressof(GetVolume(i));
+			continue;
+		}
+
+		if (GetVolume(i).GetPriority() >= newCurrentVolume->GetPriority()) {
+			newCurrentVolume = std::addressof(GetVolume(i));
+			continue;
+		}
+
+	}  // for i
 
 	return newCurrentVolume;
 }
@@ -132,20 +171,19 @@ void PathVolumeInfo::Update(const BSDFEvent eventType, const BSDF &bsdf) {
 	}
 }
 
-bool PathVolumeInfo::CompareVolumePriorities(const Volume *vol1, const Volume *vol2) {
+bool PathVolumeInfo::CompareVolumePriorities(
+	VolumeConstPtr vol1,
+	VolumeConstPtr vol2
+) {
+	// Special cases: one or both are empty
+	if (not vol1) return false;
+	if (not vol2) return false;
+
 	// A volume wins over another if and only if it is the same volume or has an
 	// higher priority
 
-	if (vol1) {
-		if (vol2) {
-			if (vol1 == vol2)
-				return true;
-			else
-				return (vol1->GetPriority() > vol2->GetPriority());
-		} else
-			return false;
-	} else
-		return false;
+	if (vol1 == vol2) return true;
+	return (vol1->GetPriority() > vol2->GetPriority());
 }
 
 bool PathVolumeInfo::ContinueToTrace(const BSDF &bsdf) const {
@@ -162,7 +200,7 @@ bool PathVolumeInfo::ContinueToTrace(const BSDF &bsdf) const {
 		// 2) I'm exiting an object, the material is NULL and I'm not leaving
 		// the current volume.
 
-		const Volume *bsdfInteriorVol = bsdf.GetMaterialInteriorVolume();
+		VolumeConstPtr bsdfInteriorVol = bsdf.GetMaterialInteriorVolume();
 
 		// Condition #1
 		if (bsdf.hitPoint.intoObject && CompareVolumePriorities(currentVolume, bsdfInteriorVol))
@@ -182,57 +220,62 @@ bool PathVolumeInfo::ContinueToTrace(const BSDF &bsdf) const {
 }
 
 void  PathVolumeInfo::SetHitPointVolumes(HitPoint &hitPoint,
-		const Volume *matInteriorVolume,
-		const Volume *matExteriorVolume,
-		const Volume *defaultWorldVolume) const {
+		VolumeConstPtr matInteriorVolume,
+		VolumeConstPtr matExteriorVolume,
+		VolumeConstPtr defaultWorldVolume) const {
 	// Set interior and exterior volumes
 
 	if (hitPoint.intoObject) {
 		// From outside to inside the object
 
-		hitPoint.interiorVolume = SimulateAddVolume(matInteriorVolume);
+		if (matInteriorVolume) {
+			hitPoint.interiorVolume = SimulateAddVolume(matInteriorVolume);
+		} else {
+			hitPoint.interiorVolume = nullptr;
+		}
 
-		if (!currentVolume)
+		if (not HasCurrentVolume())
 			hitPoint.exteriorVolume = matExteriorVolume;
 		else {
 			// if (!material->GetExteriorVolume()) there may be conflict here
 			// between the material definition and the currentVolume value.
 			// The currentVolume value wins.
-			hitPoint.exteriorVolume = currentVolume;
+			hitPoint.exteriorVolume = &GetCurrentVolume();
 		}
-		
-		if (!hitPoint.exteriorVolume) {
+
+		if (not hitPoint.exteriorVolume) {
 			// No volume information, I use the default volume
 			hitPoint.exteriorVolume = defaultWorldVolume;
 		}
 	} else {
 		// From inside to outside the object
 
-		if (!currentVolume)
+		if (!HasCurrentVolume())
 			hitPoint.interiorVolume = matInteriorVolume;
 		else {
 			// if (!material->GetInteriorVolume()) there may be conflict here
 			// between the material definition and the currentVolume value.
 			// The currentVolume value wins.
-			hitPoint.interiorVolume = currentVolume;
+			hitPoint.interiorVolume = &GetCurrentVolume();
 		}
-		
+
 		if (!hitPoint.interiorVolume) {
 			// No volume information, I use the default volume
 			hitPoint.interiorVolume = defaultWorldVolume;
 		}
-
-		hitPoint.exteriorVolume = SimulateRemoveVolume(matInteriorVolume);
+		if (matInteriorVolume) {
+			hitPoint.exteriorVolume = SimulateRemoveVolume(matInteriorVolume);
+		}
 	}
 }
 
 namespace slg {
 
 ostream &operator<<(ostream &os, const PathVolumeInfo &pvi) {
-	os << "PathVolumeInfo[" << (pvi.GetCurrentVolume() ? pvi.GetCurrentVolume()->GetName() : "NULL") << ", ";
+	os << "PathVolumeInfo[" << (pvi.HasCurrentVolume() ? pvi.GetCurrentVolume().GetName() : "NULL") << ", ";
 
 	for (u_int i = 0; i < pvi.GetListSize(); ++i)
-		os << "#" << i << " => " << (pvi.GetCurrentVolume() ? pvi.GetCurrentVolume()->GetName() : "NULL") << ", ";
+		os << "#" << i << " => " << (pvi.HasCurrentVolume() ? pvi.GetCurrentVolume().GetName() : "NULL") << ", ";
 	
 	os << pvi.IsScatteredStart() << "]";
 
@@ -240,3 +283,4 @@ ostream &operator<<(ostream &os, const PathVolumeInfo &pvi) {
 }
 
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

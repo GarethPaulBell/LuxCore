@@ -17,8 +17,6 @@
  ***************************************************************************/
 
 #include <stdexcept>
-#include <boost/foreach.hpp>
-#include <boost/regex.hpp>
 
 #include "luxrays/kernels/kernels.h"
 #include "slg/kernels/kernels.h"
@@ -119,3 +117,4 @@ void MistPlugin::Apply(Film &film, const u_int index) {
 
 
 
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -30,37 +30,35 @@ using namespace slg;
 // PathCPURenderEngine
 //------------------------------------------------------------------------------
 
-PathCPURenderEngine::PathCPURenderEngine(const RenderConfig *rcfg) :
+PathCPURenderEngine::PathCPURenderEngine(RenderConfigRef rcfg) :
 		CPUNoTileRenderEngine(rcfg), photonGICache(nullptr),
 		lightSampleSplatter(nullptr), lightSamplerSharedData(nullptr) {
 }
 
 PathCPURenderEngine::~PathCPURenderEngine() {
 	delete photonGICache;
-	delete lightSampleSplatter;
-	delete lightSamplerSharedData;
 }
 
 void PathCPURenderEngine::InitFilm() {
-	film->AddChannel(Film::RADIANCE_PER_PIXEL_NORMALIZED);
+	GetFilm().AddChannel(Film::RADIANCE_PER_PIXEL_NORMALIZED);
 
 	// pathTracer has not yet been initialized
-	const bool hybridBackForwardEnable = renderConfig->cfg.Get(PathTracer::GetDefaultProps().
+	const bool hybridBackForwardEnable = renderConfig.GetConfig().Get(PathTracer::GetDefaultProps()->
 			Get("path.hybridbackforward.enable")).Get<bool>();
 	if (hybridBackForwardEnable)
-		film->AddChannel(Film::RADIANCE_PER_SCREEN_NORMALIZED);
+		GetFilm().AddChannel(Film::RADIANCE_PER_SCREEN_NORMALIZED);
 
-	film->SetRadianceGroupCount(renderConfig->scene->lightDefs.GetLightGroupCount());
-	film->SetThreadCount(renderThreads.size());
-	film->Init();
+	GetFilm().SetRadianceGroupCount(renderConfig.GetScene().GetLightSources().GetLightGroupCount());
+	GetFilm().SetThreadCount(renderThreads.size());
+	GetFilm().Init();
 }
 
-RenderState *PathCPURenderEngine::GetRenderState() {
-	return new PathCPURenderState(bootStrapSeed, photonGICache);
+RenderStateSPtr PathCPURenderEngine::GetRenderState() {
+	return std::make_shared<PathCPURenderState>(bootStrapSeed, photonGICache);
 }
 
 void PathCPURenderEngine::StartLockLess() {
-	const Properties &cfg = renderConfig->cfg;
+	auto& cfg = renderConfig.GetConfig();
 
 	//--------------------------------------------------------------------------
 	// Check to have the right sampler settings
@@ -83,7 +81,7 @@ void PathCPURenderEngine::StartLockLess() {
 			throw runtime_error("RTPATHCPU render engine can use only RTPATHCPUSAMPLER");
 	} else {
 		if (samplerType == "RTPATHCPUSAMPLER")
-			throw runtime_error("PATHCPU render engine can not use RTPATHCPUSAMPLER");		
+			throw runtime_error("PATHCPU render engine can not use RTPATHCPUSAMPLER");
 	}
 
 	//--------------------------------------------------------------------------
@@ -94,24 +92,23 @@ void PathCPURenderEngine::StartLockLess() {
 		// Check if the render state is of the right type
 		startRenderState->CheckEngineTag(GetObjectTag());
 
-		PathCPURenderState *rs = (PathCPURenderState *)startRenderState;
+		auto rs = static_pointer_cast<PathCPURenderState>(startRenderState);
 
 		// Use a new seed to continue the rendering
 		const u_int newSeed = rs->bootStrapSeed + 1;
 		SLG_LOG("Continuing the rendering with new PATHCPU seed: " + ToString(newSeed));
 		SetSeed(newSeed);
-		
+
 		// Transfer the ownership of PhotonGI cache pointer
 		photonGICache = rs->photonGICache;
 		rs->photonGICache = nullptr;
-		
+
 		// I have to set the scene pointer in photonGICache because it is not
 		// saved by serialization
 		if (photonGICache)
-			photonGICache->SetScene(renderConfig->scene);
+			photonGICache->SetScene(renderConfig.GetScene());
 
-		delete startRenderState;
-		startRenderState = NULL;
+		startRenderState = nullptr;
 	}
 
 	//--------------------------------------------------------------------------
@@ -120,7 +117,7 @@ void PathCPURenderEngine::StartLockLess() {
 
 	// note: photonGICache could have been restored from the render state
 	if ((GetType() != RTPATHCPU) && !photonGICache) {
-		photonGICache = PhotonGICache::FromProperties(renderConfig->scene, cfg);
+		photonGICache = PhotonGICache::FromProperties(renderConfig.GetScene(), cfg);
 
 		// photonGICache will be nullptr if the cache is disabled
 		if (photonGICache)
@@ -131,19 +128,19 @@ void PathCPURenderEngine::StartLockLess() {
 	// Initialize the PathTracer class with rendering parameters
 	//--------------------------------------------------------------------------
 
-	pathTracer.ParseOptions(cfg, GetDefaultProps());
+	pathTracer.ParseOptions(cfg, *GetDefaultProps());
 
 	if (pathTracer.hybridBackForwardEnable)
-		lightSamplerSharedData = MetropolisSamplerSharedData::FromProperties(Properties(), &seedBaseGenerator, film);
+		lightSamplerSharedData = MetropolisSamplerSharedData::FromProperties(Properties(), seedBaseGenerator, GetFilm());
 
-	pathTracer.InitPixelFilterDistribution(pixelFilter);
+	pathTracer.InitPixelFilterDistribution(GetPixelFilter());
 
-	delete lightSampleSplatter;
+	lightSampleSplatter.reset();
 	if (pathTracer.hybridBackForwardEnable)
-		lightSampleSplatter = new FilmSampleSplatter(pixelFilter);
+		lightSampleSplatter = std::make_unique<FilmSampleSplatter>(GetPixelFilter());
 
 	pathTracer.SetPhotonGICache(photonGICache);
-	
+
 	//--------------------------------------------------------------------------
 
 	CPUNoTileRenderEngine::StartLockLess();
@@ -153,11 +150,6 @@ void PathCPURenderEngine::StopLockLess() {
 	CPUNoTileRenderEngine::StopLockLess();
 
 	pathTracer.DeletePixelFilterDistribution();
-	delete lightSampleSplatter;
-	lightSampleSplatter = NULL;
-
-	delete lightSamplerSharedData;
-	lightSamplerSharedData = nullptr;
 
 	delete photonGICache;
 	photonGICache = nullptr;
@@ -174,23 +166,24 @@ void PathCPURenderEngine::EndSceneEditLockLess(const EditActionList &editActions
 // Static methods used by RenderEngineRegistry
 //------------------------------------------------------------------------------
 
-Properties PathCPURenderEngine::ToProperties(const Properties &cfg) {
-	Properties props;
-	
-	props << CPUNoTileRenderEngine::ToProperties(cfg) <<
-			cfg.Get(GetDefaultProps().Get("renderengine.type")) <<
+PropertiesUPtr PathCPURenderEngine::ToProperties(const Properties &cfg) {
+	PropertiesUPtr props = std::make_unique<Properties>();
+
+	*props << *CPUNoTileRenderEngine::ToProperties(cfg) <<
+				cfg.Get(GetDefaultProps()->Get("renderengine.type")) <<
 			PathTracer::ToProperties(cfg) <<
 			PhotonGICache::ToProperties(cfg);
 
 	return props;
 }
 
-RenderEngine *PathCPURenderEngine::FromProperties(const RenderConfig *rcfg) {
+RenderEngine *PathCPURenderEngine::FromProperties(RenderConfigRef rcfg) {
 	return new PathCPURenderEngine(rcfg);
 }
 
-const Properties &PathCPURenderEngine::GetDefaultProps() {
-	static Properties props = Properties() <<
+PropertiesUPtr PathCPURenderEngine::GetDefaultProps() {
+	auto props = std::make_unique<Properties>();
+	*props <<
 			CPUNoTileRenderEngine::GetDefaultProps() <<
 			Property("renderengine.type")(GetObjectTag()) <<
 			PathTracer::GetDefaultProps() <<
@@ -198,3 +191,4 @@ const Properties &PathCPURenderEngine::GetDefaultProps() {
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

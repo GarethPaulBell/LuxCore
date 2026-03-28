@@ -17,8 +17,6 @@
  ***************************************************************************/
 
 #include <stdexcept>
-#include <boost/foreach.hpp>
-#include <boost/regex.hpp>
 
 #include "luxrays/kernels/kernels.h"
 #include "slg/kernels/kernels.h"
@@ -35,8 +33,7 @@ using namespace slg;
 
 BOOST_CLASS_EXPORT_IMPLEMENT(slg::BackgroundImgPlugin)
 
-BackgroundImgPlugin::BackgroundImgPlugin(ImageMap *map) {
-	imgMap = map;
+BackgroundImgPlugin::BackgroundImgPlugin(ImageMapUPtr&& map) : imgMap(std::move(map)) {
 	filmImageMap = nullptr;
 
 	hardwareDevice = nullptr;
@@ -47,7 +44,6 @@ BackgroundImgPlugin::BackgroundImgPlugin(ImageMap *map) {
 }
 
 BackgroundImgPlugin::BackgroundImgPlugin() {
-	filmImageMap = nullptr;
 
 	hardwareDevice = nullptr;
 	hwFilmImageMapDesc = nullptr;
@@ -64,8 +60,6 @@ BackgroundImgPlugin::~BackgroundImgPlugin() {
 		hardwareDevice->FreeBuffer(&hwFilmImageMap);
 	}
 
-	delete imgMap;
-	delete filmImageMap;
 }
 
 ImagePipelinePlugin *BackgroundImgPlugin::Copy() const {
@@ -78,13 +72,10 @@ void BackgroundImgPlugin::UpdateFilmImageMap(const Film &film) {
 
 	// Check if I have to resample the image map
 	if ((!filmImageMap) ||
-			(filmImageMap->GetWidth() != width) || (filmImageMap->GetHeight() != height)) {
-		delete filmImageMap;
-		filmImageMap = nullptr;
-
-		filmImageMap = imgMap->Copy();
-		filmImageMap->Resize(width, height);
-		filmImageMap->Preprocess();
+			(GetFilmImageMap().GetWidth() != width) || (GetFilmImageMap().GetHeight() != height)) {
+		filmImageMap = std::move(imgMap->Copy());
+		GetFilmImageMap().Resize(width, height);
+		GetFilmImageMap().Preprocess();
 	}
 }
 
@@ -124,9 +115,11 @@ void BackgroundImgPlugin::Apply(Film &film, const u_int index) {
 
 				// Need to flip the along the Y axis for the image
 				const u_int imgPixelIndex = x + (height - y - 1) * width;
-				pixels[filmPixelIndex] = Lerp(alpha,
-						filmImageMap->GetStorage()->GetSpectrum(imgPixelIndex),
-						pixels[filmPixelIndex]);
+				pixels[filmPixelIndex] = Lerp(
+					alpha,
+					GetFilmImageMap().GetStorage().GetSpectrum(imgPixelIndex),
+					pixels[filmPixelIndex]
+				);
 			}
 		}
 	}
@@ -156,18 +149,18 @@ void BackgroundImgPlugin::ApplyHW(Film &film, const u_int index) {
 		hardwareDevice = film.hardwareDevice;
 
 		slg::ocl::ImageMap imgMapDesc;
-		imgMapDesc.channelCount = filmImageMap->GetChannelCount();
-		imgMapDesc.width = filmImageMap->GetWidth();
-		imgMapDesc.height = filmImageMap->GetHeight();
+		imgMapDesc.channelCount = GetFilmImageMap().GetChannelCount();
+		imgMapDesc.width = GetFilmImageMap().GetWidth();
+		imgMapDesc.height = GetFilmImageMap().GetHeight();
 		imgMapDesc.pageIndex = 0;
 		imgMapDesc.pixelsIndex = 0;
-		imgMapDesc.storageType = (slg::ocl::ImageMapStorageType)filmImageMap->GetStorage()->GetStorageType();
+		imgMapDesc.storageType = (slg::ocl::ImageMapStorageType)GetFilmImageMap().GetStorage().GetStorageType();
 
 		// Allocate OpenCL buffers
 		hardwareDevice->AllocBufferRO(&hwFilmImageMapDesc, &imgMapDesc, sizeof(slg::ocl::ImageMap),
 						"BackgroundImg image map description");
-		hardwareDevice->AllocBufferRO(&hwFilmImageMap, filmImageMap->GetStorage()->GetPixelsData(),
-						filmImageMap->GetStorage()->GetMemorySize(), "BackgroundImg image map");
+		hardwareDevice->AllocBufferRO(&hwFilmImageMap, GetFilmImageMap().GetStorage().GetPixelsData(),
+						GetFilmImageMap().GetStorage().GetMemorySize(), "BackgroundImg image map");
 
 		// Compile sources
 		const double tStart = WallClockTime();
@@ -220,3 +213,4 @@ void BackgroundImgPlugin::ApplyHW(Film &film, const u_int index) {
 	hardwareDevice->EnqueueKernel(applyKernel, HardwareDeviceRange(RoundUp(film.GetWidth() * film.GetHeight(), 256u)),
 			HardwareDeviceRange(256));
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

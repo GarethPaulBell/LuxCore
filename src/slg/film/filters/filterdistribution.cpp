@@ -26,8 +26,9 @@ using namespace slg;
 // PrecomputedFilter
 //------------------------------------------------------------------------------
 
-FilterDistribution::FilterDistribution(const Filter *f, const u_int s) {
-	filter = f;
+FilterDistribution::FilterDistribution(const FilterUPtr& f, const u_int s) :
+	filter(f)
+{
 	size = s;
 	distrib = NULL;
 
@@ -128,3 +129,4 @@ FilterLUTs::~FilterLUTs() {
 
 	delete[] luts;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

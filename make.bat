@@ -8,6 +8,7 @@ REM SPDX-License-Identifier: Apache-2.0
 REM Convenience wrapper for CMake commands
 
 REM Script command (1st parameter)
+
 set COMMAND=%1
 
 
@@ -15,7 +16,7 @@ if "%LUX_PYTHON%" == "" (
     set LUX_PYTHON=python
 )
 
-set LUX_CMAKE="%LUX_PYTHON%" -u build-helpers\make\cmake.py
+set LUXMAKE="%LUX_PYTHON%" -u -m build-system.luxmake
 
 if "%COMMAND%" == "" (
     call :Config
@@ -53,44 +54,86 @@ if "%COMMAND%" == "" (
     call :Clear
 ) else if "%COMMAND%" == "deps" (
     call :Deps
+) else if "%COMMAND%" == "win-recompose" (
+    call :WinRecompose %2
 ) else if "%COMMAND%" == "list-presets" (
     call :ListPresets
+) else if "%COMMAND%" == "wheel-test" (
+    call :WheelTest
+) else if "%COMMAND%" == "msvc-init" (
+    call :MsvcInit
+) else if "%COMMAND%" == "windebug" (
+    call :WinDebug
 ) else (
-    echo Command "%COMMAND%" unknown
+    echo Unknown command: "%COMMAND%"
 )
 exit /B
 
 :Deps
-call %LUX_CMAKE% deps
+call %LUXMAKE% deps
 goto :EOF
 
 :ListPresets
-call %LUX_CMAKE% list-presets
+call %LUXMAKE% list-presets
 goto :EOF
 
 :Config
-call %LUX_CMAKE% config
+call %LUXMAKE% config
 goto :EOF
 
 :BuildAndInstall
-call %LUX_CMAKE% build-and-install %1
+call %LUXMAKE% build-and-install %1
 goto :EOF
 
 :Install
 IF "%~1" == "" (
-    %LUX_CMAKE% all
+    %LUXMAKE% all
 ) else (
-    %LUX_CMAKE% %1
+    %LUXMAKE% %1
 )
 goto :EOF
 
-:Clean
-call %LUX_CMAKE% clean
+:WinRecompose
+call %LUXMAKE% win-recompose %1
 goto :EOF
+
+:Clean
+call %LUXMAKE% clean
+goto :EOF
+
+:WheelTest
+call %LUXMAKE% config
+call %LUXMAKE% build-and-install pyluxcore
+call %LUXMAKE% wheel-test
+goto :EOF
+
+:MsvcInit
+REM 'setup_x64.bat' must be in PATH
+set CMAKE_CXX_COMPILER_LAUNCHER=ccache
+set CMAKE_C_COMPILER_LAUNCHER=ccache
+set BUILD_CMAKE_ARGS="-DCMAKE_VERBOSE_MAKEFILE=ON"
+set CCACHE_DIRECT=true
+set CCACHE_DEPEND=true
+call setup_x64.bat
+goto :EOF
+
+:WinDebug
+REM Special (quick & dirty) custom config for debugging on Windows platform
+REM Run it under cmd.exe
+REM 'setup_x64.bat' must be in PATH
+call :MsvcInit
+set LUX_BUILD_TYPE=Debug
+set LUX_SANITIZER=1
+set CMAKE_BUILD_PARALLEL_LEVEL=1
+call :Config
+call :BuildAndInstall luxcore
+call :BuildAndInstall luxcoreui
+call :BuildAndInstall luxcoreconsole
+call :BuildAndInstall pyluxcore 
 
 :Clear
 REM rmdir /S /Q
-call %LUX_CMAKE% clear
+call %LUXMAKE% clear
 goto :EOF
 
 :EOF

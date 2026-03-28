@@ -18,9 +18,8 @@
 
 #include <iostream>
 #include <memory>
+#include <unordered_set>
 #include <boost/format.hpp>
-#include <boost/foreach.hpp>
-#include <boost/unordered_set.hpp>
 
 #include "luxcoreapp.h"
 
@@ -257,23 +256,23 @@ FilmOutputsWindow::~FilmOutputsWindow() {
 	DeleteAllWindow();
 }
 
-Properties FilmOutputsWindow::GetFilmOutputsProperties(const Properties &cfgProps) const {
-	return cfgProps.GetAllProperties("film.outputs");
+std::unique_ptr<Properties> FilmOutputsWindow::GetFilmOutputsProperties(const std::unique_ptr<Properties> & cfgProps) const {
+	return cfgProps->GetAllProperties("film.outputs");
 }
 
-void FilmOutputsWindow::RefreshObjectProperties(Properties &props) {
-	RenderConfig *config = app->config;
+void FilmOutputsWindow::RefreshObjectProperties(const std::unique_ptr<Properties> & props) {
+	auto& config = app->config;
 	try {
-		props = GetFilmOutputsProperties(config->ToProperties());
+		props->Set(GetFilmOutputsProperties(config->ToProperties()));
 	} catch(exception &ex) {
 		LA_LOG("FilmOutputs parsing error: " << endl << ex.what());
 
 		// Just revert to the initialized properties (note: they will include the error)
-		props = GetFilmOutputsProperties(config->GetProperties());
+		props->Set(GetFilmOutputsProperties(config->GetProperties()));
 	}
 }
 
-void FilmOutputsWindow::ParseObjectProperties(const Properties &props) {
+void FilmOutputsWindow::ParseObjectProperties(const std::unique_ptr<Properties> & props) {
 	app->RenderConfigParse(GetFilmOutputsProperties(props));
 }
 
@@ -286,7 +285,7 @@ void FilmOutputsWindow::Close() {
 }
 
 void FilmOutputsWindow::DeleteAllWindow() {
-	BOOST_FOREACH(FilmOutputWindowMap::value_type e, filmOutputWindows)
+	for(FilmOutputWindowMap::value_type e: filmOutputWindows)
 		DeleteWindow(e.first);
 }
 
@@ -325,7 +324,7 @@ void FilmOutputsWindow::DrawShowCheckBox(const string &label,
 	}
 }
 
-bool FilmOutputsWindow::DrawObjectGUI(Properties &props, bool &modifiedProps) {
+bool FilmOutputsWindow::DrawObjectGUI(const std::unique_ptr<Properties> & props, bool &modifiedProps) {
 	//--------------------------------------------------------------------------
 	// To add a new output
 	//--------------------------------------------------------------------------
@@ -403,7 +402,7 @@ bool FilmOutputsWindow::DrawObjectGUI(Properties &props, bool &modifiedProps) {
 				list.push_back(0);
 			}
 			list.push_back(0);
-			
+
 			ImGui::Combo("Group", &newID, list.c_str());
 			ImGui::SameLine();
 			ImGui::TextDisabled("(?)");
@@ -414,7 +413,7 @@ bool FilmOutputsWindow::DrawObjectGUI(Properties &props, bool &modifiedProps) {
 		// Add button
 		const string newOutputName(newOutputNameBuff);
 		if (ImGui::Button("Add") && (newOutputName.length() > 0)) {
-			props <<
+			*props <<
 					Property(prefix + ".type")(tag) <<
 					Property(prefix + ".filename")(newOutputName + imageExt);
 			if ((tag == "MATERIAL_ID_MASK") ||
@@ -422,7 +421,7 @@ bool FilmOutputsWindow::DrawObjectGUI(Properties &props, bool &modifiedProps) {
 				(tag == "BY_MATERIAL_ID") ||
 				(tag == "OBJECT_ID_MASK") ||
 				(tag == "BY_OBJECT_ID"))
-				props << Property(prefix + ".id")(newID);
+				*props << Property(prefix + ".id")(newID);
 
 			newType = 0;
 			newOutputNameBuff[0] = '\0';
@@ -438,9 +437,9 @@ bool FilmOutputsWindow::DrawObjectGUI(Properties &props, bool &modifiedProps) {
 	//--------------------------------------------------------------------------
 
 	if (ImGui::CollapsingHeader("Current Film output(s)", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
-		boost::unordered_set<string> outputNames;
-		boost::unordered_map<string, unsigned int> typeCount;
-		vector<string> outputKeys = props.GetAllNames("film.outputs.");
+		std::unordered_set<string> outputNames;
+		std::unordered_map<string, unsigned int> typeCount;
+		vector<string> outputKeys = props->GetAllNames("film.outputs.");
 		for (vector<string>::const_iterator outputKey = outputKeys.begin(); outputKey != outputKeys.end(); ++outputKey) {
 			const string &key = *outputKey;
 			const size_t dot1 = key.find(".", string("film.outputs.").length());
@@ -460,7 +459,7 @@ bool FilmOutputsWindow::DrawObjectGUI(Properties &props, bool &modifiedProps) {
 
 			ImGui::PushID(outputName.c_str());
 
-			const string type = props.Get("film.outputs." + outputName + ".type").Get<string>();
+			const string type = props->Get("film.outputs." + outputName + ".type").Get<string>();
 
 			if (typeCount.find(type) == typeCount.end())
 				typeCount[type] = 0;
@@ -470,12 +469,12 @@ bool FilmOutputsWindow::DrawObjectGUI(Properties &props, bool &modifiedProps) {
 
 			ImGui::SetNextItemOpen(true, ImGuiCond_Appearing);
 			if (ImGui::TreeNode(type.c_str())) {
-				const string fileName = props.Get("film.outputs." + outputName + ".filename").Get<string>();
+				const string fileName = props->Get("film.outputs." + outputName + ".filename").Get<string>();
 				char fileNameBuff[4 * 1024];
 				const size_t len = fileName.copy(fileNameBuff, 4 * 1024);
 				fileNameBuff[len] = '\0';
 				if (ImGui::InputText("File name", fileNameBuff, 4 * 1024)) {
-					props.Set(Property("film.outputs." + outputName + ".filename")(string(fileNameBuff)));
+					props->Set(Property("film.outputs." + outputName + ".filename")(string(fileNameBuff)));
 					modifiedProps = true;
 				}
 
@@ -484,9 +483,9 @@ bool FilmOutputsWindow::DrawObjectGUI(Properties &props, bool &modifiedProps) {
 						(type == "BY_MATERIAL_ID") ||
 						(type == "OBJECT_ID_MASK") ||
 						(type == "BY_OBJECT_ID")) {
-					int id = props.Get("film.outputs." + outputName + ".id").Get<int>();
+					int id = props->Get("film.outputs." + outputName + ".id").Get<int>();
 					if (ImGui::InputInt("ID", &id)) {
-						props.Set(Property("film.outputs." + outputName + ".id")(id));
+						props->Set(Property("film.outputs." + outputName + ".id")(id));
 						modifiedProps = true;
 					}
 				}
@@ -497,7 +496,7 @@ bool FilmOutputsWindow::DrawObjectGUI(Properties &props, bool &modifiedProps) {
 					DeleteAllWindow();
 
 				if (ImGui::Button("Remove")) {
-					props.DeleteAll(props.GetAllNames("film.outputs." + outputName));
+					props->DeleteAll(props->GetAllNames("film.outputs." + outputName));
 					modifiedProps = true;
 				}
 
@@ -513,7 +512,7 @@ bool FilmOutputsWindow::DrawObjectGUI(Properties &props, bool &modifiedProps) {
 	//--------------------------------------------------------------------------
 
 	if (ImGui::CollapsingHeader("Current Film channel(s)", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
-		const Film &film = app->session->GetFilm();
+		auto& film = app->session->GetFilm();
 		unsigned int count;
 
 		count = film.GetChannelCount(Film::CHANNEL_RADIANCE_PER_PIXEL_NORMALIZED);
@@ -649,7 +648,7 @@ void FilmOutputsWindow::Draw() {
 
 	if (opened) {
 		// Draw all channel windows
-		BOOST_FOREACH(FilmOutputWindowMap::value_type e, filmOutputWindows)
+		for(FilmOutputWindowMap::value_type e: filmOutputWindows)
 			e.second->Draw();
 	} else
 		DeleteAllWindow();

@@ -316,7 +316,7 @@ void SkyLight2::GetPreprocessedData(float *absoluteSunDirData, float *absoluteUp
 		*elvc = visibilityMapCache;
 }
 
-float SkyLight2::GetPower(const Scene &scene) const {
+float SkyLight2::GetPower(SceneConstRef scene) const {
 	const float envRadius = GetEnvRadius(scene);
 	
 	float power = 0.f;
@@ -331,7 +331,7 @@ float SkyLight2::GetPower(const Scene &scene) const {
 	return power * (4.f * M_PI * envRadius * envRadius) * 2.f * M_PI;
 }
 
-Spectrum SkyLight2::GetRadiance(const Scene &scene,
+Spectrum SkyLight2::GetRadiance(SceneConstRef scene,
 		const BSDF *bsdf, const Vector &dir,
 		float *directPdfA, float *emissionPdfW) const {
 	const Vector globalDir = -dir;
@@ -358,7 +358,7 @@ Spectrum SkyLight2::GetRadiance(const Scene &scene,
 	return ComputeRadiance(globalDir);
 }
 
-Spectrum SkyLight2::Emit(const Scene &scene,
+Spectrum SkyLight2::Emit(SceneConstRef scene,
 		const float time, const float u0, const float u1,
 		const float u2, const float u3, const float passThroughEvent,
 		Ray &ray, float &emissionPdfW,
@@ -384,7 +384,7 @@ Spectrum SkyLight2::Emit(const Scene &scene,
     float d1, d2;
     ConcentricSampleDisk(u2, u3, &d1, &d2);
 
-	const Point worldCenter = scene.dataSet->GetBSphere().center;
+	const Point worldCenter = scene.GetDataSet().GetBSphere().center;
 	const float envRadius = GetEnvRadius(scene);
 	const Point pDisk = worldCenter + envRadius * (d1 * x + d2 * y);
 	const Point rayOrig = pDisk - envRadius * rayDir;
@@ -406,7 +406,7 @@ Spectrum SkyLight2::Emit(const Scene &scene,
 	return result;
 }
 
-Spectrum SkyLight2::Illuminate(const Scene &scene, const BSDF &bsdf,
+Spectrum SkyLight2::Illuminate(SceneConstRef scene, const BSDF &bsdf,
 		const float time, const float u0, const float u1, const float passThroughEvent,
         Ray &shadowRay, float &directPdfW,
 		float *emissionPdfW, float *cosThetaAtLight) const {
@@ -425,7 +425,7 @@ Spectrum SkyLight2::Illuminate(const Scene &scene, const BSDF &bsdf,
 	if (latLongMappingPdf == 0.f)
 		return Spectrum();
 
-	const Point worldCenter = scene.dataSet->GetBSphere().center;
+	const Point worldCenter = scene.GetDataSet().GetBSphere().center;
 	const float envRadius = GetEnvRadius(scene);
 
 	const Point shadowRayOrig = bsdf.GetRayOrigin(shadowRayDir);
@@ -463,7 +463,7 @@ UV SkyLight2::GetEnvUV(const luxrays::Vector &dir) const {
 	return uv;
 }
 
-void SkyLight2::UpdateVisibilityMap(const Scene *scene, const bool useRTMode) {
+void SkyLight2::UpdateVisibilityMap(SceneConstRef scene, const bool useRTMode) {
 	delete visibilityMapCache;
 	visibilityMapCache = nullptr;
 
@@ -475,11 +475,11 @@ void SkyLight2::UpdateVisibilityMap(const Scene *scene, const bool useRTMode) {
 		visibilityMapCache = nullptr;
 
 		// Build a luminance map of the sky
-		unique_ptr<ImageMap> luminanceMapImage(ImageMap::AllocImageMap(1,
+		ImageMapUPtr luminanceMapImage(ImageMap::AllocImageMap(1,
 				EnvLightVisibilityCache::defaultLuminanceMapWidth, EnvLightVisibilityCache::defaultLuminanceMapHeight,
 				ImageMapConfig()));
 
-		float *pixels = (float *)luminanceMapImage->GetStorage()->GetPixelsData();
+		float *pixels = (float *)luminanceMapImage->GetStorage().GetPixelsData();
 		for (u_int y = 0; y < EnvLightVisibilityCache::defaultLuminanceMapHeight; ++y) {
 			for (u_int x = 0; x < EnvLightVisibilityCache::defaultLuminanceMapWidth; ++x)
 				pixels[x + y * EnvLightVisibilityCache::defaultLuminanceMapWidth] = ComputeRadiance(UniformSampleSphere(
@@ -487,29 +487,31 @@ void SkyLight2::UpdateVisibilityMap(const Scene *scene, const bool useRTMode) {
 						(x + .5f) / EnvLightVisibilityCache::defaultLuminanceMapWidth)).Y();
 		}
 
-		visibilityMapCache = new EnvLightVisibilityCache(scene, this,
-				luminanceMapImage.get(), visibilityMapCacheParams);		
+		visibilityMapCache = new EnvLightVisibilityCache(
+			scene, this, std::move(luminanceMapImage), visibilityMapCacheParams
+		);
 		visibilityMapCache->Build();
 	}
 }
 
-Properties SkyLight2::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+PropertiesUPtr SkyLight2::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
 	const string prefix = "scene.lights." + GetName();
-	Properties props = EnvLightSource::ToProperties(imgMapCache, useRealFileName);
+	PropertiesUPtr props = EnvLightSource::ToProperties(imgMapCache, useRealFileName);
 
-	props.Set(Property(prefix + ".type")("sky2"));
-	props.Set(Property(prefix + ".dir")(localSunDir));
-	props.Set(Property(prefix + ".turbidity")(turbidity));
-	props.Set(Property(prefix + ".groundalbedo")(groundAlbedo));
-	props.Set(Property(prefix + ".ground.enable")(hasGround));
-	props.Set(Property(prefix + ".ground.color")(groundColor));
-	props.Set(Property(prefix + ".ground.autoscale")(hasGroundAutoScale));
-	props.Set(Property(prefix + ".distribution.width")(distributionWidth));
-	props.Set(Property(prefix + ".distribution.height")(distributionHeight));
+	props->Set(Property(prefix + ".type")("sky2"));
+	props->Set(Property(prefix + ".dir")(localSunDir));
+	props->Set(Property(prefix + ".turbidity")(turbidity));
+	props->Set(Property(prefix + ".groundalbedo")(groundAlbedo));
+	props->Set(Property(prefix + ".ground.enable")(hasGround));
+	props->Set(Property(prefix + ".ground.color")(groundColor));
+	props->Set(Property(prefix + ".ground.autoscale")(hasGroundAutoScale));
+	props->Set(Property(prefix + ".distribution.width")(distributionWidth));
+	props->Set(Property(prefix + ".distribution.height")(distributionHeight));
 
-	props.Set(Property(prefix + ".visibilitymapcache.enable")(useVisibilityMapCache));
+	props->Set(Property(prefix + ".visibilitymapcache.enable")(useVisibilityMapCache));
 	if (useVisibilityMapCache)
-		props << EnvLightVisibilityCache::Params2Props(prefix, visibilityMapCacheParams);
-
+		*props << EnvLightVisibilityCache::Params2Props(prefix, visibilityMapCacheParams);
+	
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

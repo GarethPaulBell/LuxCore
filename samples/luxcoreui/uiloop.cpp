@@ -17,12 +17,10 @@
  ***************************************************************************/
 
 #include <iostream>
-#include <boost/filesystem.hpp>
+#include <filesystem>
 #include <boost/lexical_cast.hpp>
 #include <boost/format.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/thread/thread.hpp> 
-#include <boost/function.hpp>
+#include <thread>
 
 #include <imgui.h>
 #include "imgui_impl_glfw.h"
@@ -208,8 +206,8 @@ void LuxCoreApp::DrawRendering() {
 void LuxCoreApp::DrawTiles(const Property &propCoords, const Property &propPasses,
     const Property &propPendingPasses,  const Property &propErrors,
     const unsigned int tileCount, const unsigned int tileWidth, const unsigned int tileHeight, const ImU32 col) {
-  const bool showPassCount = config->GetProperties().Get(Property("screen.tiles.passcount.show")(false)).Get<bool>();
-  const bool showError = config->GetProperties().Get(Property("screen.tiles.error.show")(false)).Get<bool>();
+  const bool showPassCount = config->GetProperties()->Get(Property("screen.tiles.passcount.show")(false)).Get<bool>();
+  const bool showError = config->GetProperties()->Get(Property("screen.tiles.error.show")(false)).Get<bool>();
 
   int frameBufferWidth, frameBufferHeight;
   glfwGetFramebufferSize(window, &frameBufferWidth, &frameBufferHeight);
@@ -266,14 +264,14 @@ void LuxCoreApp::DrawTiles(const Property &propCoords, const Property &propPasse
 
 void LuxCoreApp::DrawTiles() {
   // Draw the pending, converged and not converged tiles for TILEPATHCPU or TILEPATHOCL
-  const Properties &stats = session->GetStats();
+  const auto& stats = *session->GetStats();
 
-  const string engineType = config->ToProperties().Get("renderengine.type").Get<string>();
+  const string engineType = config->ToProperties()->Get("renderengine.type").Get<string>();
   if ((engineType == "TILEPATHCPU") || (engineType == "TILEPATHOCL")) {
     const unsigned int tileWidth = stats.Get("stats.tilepath.tiles.size.x").Get<unsigned int>();
     const unsigned int tileHeight = stats.Get("stats.tilepath.tiles.size.y").Get<unsigned int>();
 
-    if (config->GetProperties().Get(Property("screen.tiles.converged.show")(false)).Get<bool>()) {
+    if (config->GetProperties()->Get(Property("screen.tiles.converged.show")(false)).Get<bool>()) {
       // Draw converged tiles borders
       glColor3f(0.f, 1.f, 0.f);
       ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.f, 1.f, 0.f, 1.f));
@@ -288,7 +286,7 @@ void LuxCoreApp::DrawTiles() {
       ImGui::PopStyleColor();
     }
 
-    if (config->GetProperties().Get(Property("screen.tiles.notconverged.show")(false)).Get<bool>()) {
+    if (config->GetProperties()->Get(Property("screen.tiles.notconverged.show")(false)).Get<bool>()) {
       // Draw converged tiles borders
       glColor3f(1.f, 0.f, 0.f);
       ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 0.f, 0.f, 1.f));
@@ -319,7 +317,7 @@ void LuxCoreApp::DrawTiles() {
 }
 
 void LuxCoreApp::DrawCaptions() {
-  const Properties &stats = session->GetStats();
+  const Properties &stats = *session->GetStats();
   int frameBufferWidth, frameBufferHeight;
   glfwGetFramebufferSize(window, &frameBufferWidth, &frameBufferHeight);
 
@@ -397,7 +395,10 @@ static void CenterWindow(GLFWwindow *window) {
 // UI loop
 //------------------------------------------------------------------------------
 
-void LuxCoreApp::RunApp(luxcore::RenderState *startState, luxcore::Film *startFilm) {
+void LuxCoreApp::RunApp(
+	std::shared_ptr<luxcore::RenderState> startState,
+	const std::unique_ptr<luxcore::Film>& startFilm
+) {
   //--------------------------------------------------------------------------
   // Initialize GLFW
   //--------------------------------------------------------------------------
@@ -433,9 +434,13 @@ void LuxCoreApp::RunApp(luxcore::RenderState *startState, luxcore::Film *startFi
 
       targetFilmWidth = windowWidth / 2;
       targetFilmHeight = windowHeight / 2;
-      config->Parse(Properties() <<
-          Property("film.width")(targetFilmWidth) <<
-          Property("film.height")(targetFilmHeight));
+
+		auto props = std::make_unique<Properties>();
+		*props
+			  << Property("film.width")(targetFilmWidth)
+			  << Property("film.height")(targetFilmHeight);
+		config->Parse(props);
+
     } else {
       config->GetFilmSize(&windowWidth, &windowHeight, NULL);
       targetFilmWidth = windowWidth;
@@ -569,9 +574,11 @@ void LuxCoreApp::RunApp(luxcore::RenderState *startState, luxcore::Film *startFi
             unsigned int filmHeight = targetFilmHeight;
             AdjustFilmResolutionToWindowSize(&filmWidth, &filmHeight);
 
-            RenderSessionParse(Properties() <<
+			auto props = std::make_unique<Properties>();
+			*props <<
                 Property("film.width")(filmWidth) <<
-                Property("film.height")(filmHeight));
+                Property("film.height")(filmHeight);
+            RenderSessionParse(props);
           }
 
           lastFrameBufferWidth = currentFrameBufferWidth;
@@ -672,7 +679,7 @@ void LuxCoreApp::RunApp(luxcore::RenderState *startState, luxcore::Film *startFi
         // I refresh the rendering once every 5secs in image view mode
         const double screenRefreshTime = (currentTool == TOOL_IMAGE_VIEW) ?
           5.0 :
-          config->ToProperties().Get("screen.refresh.interval").Get<unsigned int>() / 1000.0;
+          config->ToProperties()->Get("screen.refresh.interval").Get<unsigned int>() / 1000.0;
 
         currentTime = WallClockTime();
         if (currentTime - lastScreenRefresh >= screenRefreshTime) {
@@ -707,7 +714,7 @@ void LuxCoreApp::RunApp(luxcore::RenderState *startState, luxcore::Film *startFi
           //LA_LOG("Sleep time: " << msSleepTime << "ms");
 
           if (msSleepTime > 0) {
-            boost::this_thread::sleep_for(boost::chrono::milliseconds(msSleepTime));
+            std::this_thread::sleep_for(std::chrono::milliseconds(msSleepTime));
           }
 
           // The average over last 200 frames
@@ -717,7 +724,7 @@ void LuxCoreApp::RunApp(luxcore::RenderState *startState, luxcore::Film *startFi
         } // if guiLoopTimeLongAvg
       }
     } else {
-      boost::this_thread::sleep_for(boost::chrono::milliseconds(20));
+      std::this_thread::sleep_for(20ms);
     }
 
     ++currentFrame;
@@ -727,8 +734,8 @@ void LuxCoreApp::RunApp(luxcore::RenderState *startState, luxcore::Film *startFi
   // Stop the rendering
   //--------------------------------------------------------------------------
 
-  delete session;
-  session = NULL;
+  session.reset();
+  session = nullptr;
 
   //--------------------------------------------------------------------------
   // Exit
@@ -741,3 +748,4 @@ void LuxCoreApp::RunApp(luxcore::RenderState *startState, luxcore::Film *startFi
   glfwDestroyWindow(window);
   glfwTerminate();
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

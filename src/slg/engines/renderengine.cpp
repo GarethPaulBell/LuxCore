@@ -18,7 +18,6 @@
 
 #include <limits>
 #include <boost/format.hpp>
-#include <boost/thread/condition_variable.hpp>
 
 #include "slg/renderconfig.h"
 #include "slg/engines/renderengine.h"
@@ -49,32 +48,34 @@ using namespace slg;
 // RenderEngine
 //------------------------------------------------------------------------------
 
-RenderEngine::RenderEngine(const RenderConfig *cfg) :
-	bootStrapSeed(131), seedBaseGenerator(131) {
-	renderConfig = cfg;
-	pixelFilter = NULL;
-	film = NULL;
-	filmMutex = NULL;
-	started = false;
-	editMode = false;
-	pauseMode = false;
+RenderEngine::RenderEngine(RenderConfigRef cfg) :
+	renderConfig(cfg),
+	bootStrapSeed(131),
+	seedBaseGenerator(std::make_unique<luxrays::RandomGenerator>(131)),
+	pixelFilter(nullptr),
+	started(false),
+	editMode(false),
+	pauseMode(false)
+{
 
-	if (renderConfig->cfg.IsDefined("renderengine.seed")) {
-		const u_int seed = Max(1u, renderConfig->cfg.Get("renderengine.seed").Get<u_int>());
-		seedBaseGenerator.init(seed);
+	if (renderConfig.GetConfig().IsDefined("renderengine.seed")) {
+		const u_int seed = Max(1u, renderConfig.GetConfig().Get("renderengine.seed").Get<u_int>());
+		seedBaseGenerator->init(seed);
 	}
 	GenerateNewSeedBase();
 
 	// Create LuxRays context
-	const Properties cfgProps = renderConfig->ToProperties();
-	ctx = new Context(LuxRays_DebugHandler ? LuxRays_DebugHandler : NullDebugHandler,
-			Properties() <<
-			cfgProps.Get("opencl.platform.index") <<
-			cfgProps.GetAllProperties("accelerator.") <<
-			cfgProps.GetAllProperties("context."));
+	const auto& cfgProps = *renderConfig.ToProperties();
+	auto config = std::make_unique<Properties>();
+	*config <<
+		cfgProps.Get("opencl.platform.index") <<
+		cfgProps.GetAllProperties("accelerator.") <<
+		cfgProps.GetAllProperties("context.");
 
-	startRenderState = nullptr;
-	startFilm = nullptr;
+	ctx = std::make_unique<Context>(
+		LuxRays_DebugHandler ? LuxRays_DebugHandler : NullDebugHandler,
+		std::move(config)
+	);
 }
 
 RenderEngine::~RenderEngine() {
@@ -82,42 +83,40 @@ RenderEngine::~RenderEngine() {
 		EndSceneEdit(EditActionList());
 	if (started)
 		Stop();
-
-	delete ctx;
-
-	delete startRenderState;
-	delete startFilm;
-	delete pixelFilter;
 }
 
-void RenderEngine::SetRenderState(RenderState *state, Film *oldFilm) {
+void RenderEngine::SetRenderState(RenderStateSPtr state, FilmPtr oldFilm) {
 	startRenderState = state;
 	startFilm = oldFilm;
 }
 
-void RenderEngine::Start(Film *flm, boost::mutex *flmMutex) {
-	boost::unique_lock<boost::mutex> lock(engineMutex);
+void RenderEngine::Start(FilmRef flm, std::mutex *flmMutex) {
+	std::lock_guard<std::recursive_mutex> lock(engineMutex);
 
 	assert (!started);
 	started = true;
 
 	// Update the film pointer
-	film = flm;
+	film = &flm;
 	filmMutex = flmMutex;
 
-	delete pixelFilter;
-	pixelFilter = renderConfig->AllocPixelFilter();
+	pixelFilter = renderConfig.AllocPixelFilter();
 
-	const float epsilonMin = renderConfig->GetProperty("scene.epsilon.min").Get<float>();
+	const float epsilonMin = renderConfig.GetProperty("scene.epsilon.min").Get<double>();
 	MachineEpsilon::SetMin(epsilonMin);
-	const float epsilonMax = renderConfig->GetProperty("scene.epsilon.max").Get<float>();
+	const float epsilonMax = renderConfig.GetProperty("scene.epsilon.max").Get<double>();
 	MachineEpsilon::SetMax(epsilonMax);
 
 	// Force a complete preprocessing
-	Scene *scene = renderConfig->scene;
-	scene->editActions.AddAllAction();
-	scene->Preprocess(ctx, film->GetWidth(), film->GetHeight(), film->GetSubRegion(),
-			IsRTMode());
+	SceneRef& scene = renderConfig.GetScene();
+	scene.GetEditActions().AddAllAction();
+	scene.Preprocess(
+		*ctx,
+		film->GetWidth(),
+		film->GetHeight(),
+		film->GetSubRegion(),
+		IsRTMode()
+	);
 
 	// InitFilm() has to be called after scene preprocessing
 	InitFilm();
@@ -128,8 +127,6 @@ void RenderEngine::Start(Film *flm, boost::mutex *flmMutex) {
 		assert (film->IsInitiliazed());
 
 		film->AddFilm(*startFilm);
-		delete startFilm;
-		startFilm = nullptr;
 	}
 
 	StartLockLess();
@@ -138,24 +135,26 @@ void RenderEngine::Start(Film *flm, boost::mutex *flmMutex) {
 }
 
 void RenderEngine::Stop() {
-	boost::unique_lock<boost::mutex> lock(engineMutex);
+	{
+		std::lock_guard<std::recursive_mutex> lock(engineMutex);
 
-	StopLockLess();
+		StopLockLess();
 
-	assert (started);
-	started = false;
+		assert (started);
+		started = false;
 
-	if (ctx->IsRunning())
-		ctx->Stop();
+		if (ctx->IsRunning())
+			ctx->Stop();
 
-	UpdateFilmLockLess();
-	
-	delete pixelFilter;
-	pixelFilter = NULL;
+		UpdateFilmLockLess();
+	}
+
+	pixelFilter.reset();
 }
 
 void RenderEngine::BeginSceneEdit() {
-	boost::unique_lock<boost::mutex> lock(engineMutex);
+	std::lock_guard<std::recursive_mutex> lock(engineMutex);
+
 
 	assert (started);
 	assert (!editMode);
@@ -165,13 +164,13 @@ void RenderEngine::BeginSceneEdit() {
 }
 
 void RenderEngine::EndSceneEdit(const EditActionList &editActions) {
-	boost::unique_lock<boost::mutex> lock(engineMutex);
+	std::lock_guard<std::recursive_mutex> lock(engineMutex);
 
 	assert (started);
 	assert (editMode);
 
 	// Pre-process scene data
-	renderConfig->scene->Preprocess(ctx, film->GetWidth(), film->GetHeight(), film->GetSubRegion(),
+	renderConfig.GetScene().Preprocess(*ctx, film->GetWidth(), film->GetHeight(), film->GetSubRegion(),
 			IsRTMode());
 
 	// Reset halt conditions
@@ -183,7 +182,7 @@ void RenderEngine::EndSceneEdit(const EditActionList &editActions) {
 }
 
 void RenderEngine::Pause() {
-	assert (!pauseMode);	
+	assert (!pauseMode);
 	pauseMode = true;
 }
 
@@ -196,8 +195,8 @@ void RenderEngine::BeginFilmEdit() {
 	Stop();
 }
 
-void RenderEngine::EndFilmEdit(Film *flm, boost::mutex *flmMutex) {
-	film = NULL;
+void RenderEngine::EndFilmEdit(FilmRef flm, std::mutex *flmMutex) {
+	film = nullptr;
 	filmMutex = NULL;
 
 	Start(flm, flmMutex);
@@ -205,17 +204,17 @@ void RenderEngine::EndFilmEdit(Film *flm, boost::mutex *flmMutex) {
 
 void RenderEngine::SetSeed(const unsigned long seed) {
 	bootStrapSeed = seed;
-	seedBaseGenerator.init(seed);
+	seedBaseGenerator->init(seed);
 
 	GenerateNewSeedBase();
 }
 
 void RenderEngine::GenerateNewSeedBase() {
-	seedBase = seedBaseGenerator.uintValue();
+	seedBase = seedBaseGenerator->uintValue();
 }
 
 void RenderEngine::UpdateFilm() {
-	boost::unique_lock<boost::mutex> lock(engineMutex);
+	std::lock_guard<std::recursive_mutex> lock(engineMutex);
 
 	if (started) {
 		UpdateFilmLockLess();
@@ -244,7 +243,7 @@ void RenderEngine::CheckSamplersForTile(const string &engineName, const Properti
 		throw runtime_error(engineName + " render engine can use only " + TilePathSampler::GetObjectTag() + " sampler");
 }
 
-Properties RenderEngine::ToProperties() const {
+PropertiesUPtr RenderEngine::ToProperties() const {
 	throw runtime_error("Called RenderEngine::ToProperties()");
 }
 
@@ -252,24 +251,26 @@ Properties RenderEngine::ToProperties() const {
 // Static methods used by RenderEngineRegistry
 //------------------------------------------------------------------------------
 
-Properties RenderEngine::ToProperties(const Properties &cfg) {
+PropertiesUPtr RenderEngine::ToProperties(const Properties &cfg) {
 	const string type = cfg.Get(Property("renderengine.type")(PathCPURenderEngine::GetObjectTag())).Get<string>();
-
+	auto props = std::make_unique<Properties>();
 	RenderEngineRegistry::ToProperties func;
 
 	if (RenderEngineRegistry::STATICTABLE_NAME(ToProperties).Get(type, func)) {
-		return func(cfg) <<
+		*props <<
+				func(cfg) <<
 				Filter::ToProperties(cfg) <<
-				cfg.Get(GetDefaultProps().Get("opencl.platform.index"));
+				cfg.Get(GetDefaultProps()->Get("opencl.platform.index"));
+		return props;
 	} else
 		throw runtime_error("Unknown render engine type in RenderEngine::ToProperties(): " + type);
 }
 
-RenderEngine *RenderEngine::FromProperties(const RenderConfig *rcfg) {
-	const string type = rcfg->cfg.Get(Property("renderengine.type")(PathCPURenderEngine::GetObjectTag())).Get<string>();
+RenderEngineUPtr RenderEngine::FromProperties(RenderConfigRef rcfg) {
+	const string type = rcfg.GetConfig().Get(Property("renderengine.type")(PathCPURenderEngine::GetObjectTag())).Get<string>();
 	RenderEngineRegistry::FromProperties func;
 	if (RenderEngineRegistry::STATICTABLE_NAME(FromProperties).Get(type, func))
-		return func(rcfg);
+		return std::unique_ptr<RenderEngine>(func(rcfg));
 	else
 		throw runtime_error("Unknown render engine type in RenderEngine::FromProperties(): " + type);
 }
@@ -294,11 +295,29 @@ string RenderEngine::RenderEngineType2String(const RenderEngineType type) {
 		throw runtime_error("Unknown render engine type in RenderEngine::RenderEngineType2String(): " + ToString(type));
 }
 
-const Properties &RenderEngine::GetDefaultProps() {
-	static Properties props = Properties() <<
+PropertiesUPtr RenderEngine::GetDefaultProps() {
+	auto props = std::make_unique<Properties>();
+	*props <<
 		Property("opencl.platform.index")(-1);
 
 	return props;
+}
+
+// Splattering
+FilmSampleSplatterRPtr RenderEngine::GetSampleSplatter() const {
+	return sampleSplatter;
+}
+
+void RenderEngine::SetSampleSplatter(FilmSampleSplatterUPtr&& s) {
+	sampleSplatter = std::move(s);
+}
+
+void RenderEngine::SetSampleSplatter(FilterRPtr filter) {
+	SetSampleSplatter(std::make_unique<FilmSampleSplatter>(filter));
+}
+
+void RenderEngine::ResetSampleSplatter() {
+	sampleSplatter.reset();
 }
 
 //------------------------------------------------------------------------------
@@ -333,3 +352,4 @@ OBJECTSTATICREGISTRY_REGISTER(RenderEngineRegistry, TilePathOCLRenderEngine);
 OBJECTSTATICREGISTRY_REGISTER(RenderEngineRegistry, RTPathCPURenderEngine);
 OBJECTSTATICREGISTRY_REGISTER(RenderEngineRegistry, BakeCPURenderEngine);
 // Just add here any new RenderEngine (don't forget in the .h too)
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

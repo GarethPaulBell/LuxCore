@@ -16,12 +16,12 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include <functional>
 #include <limits>
 #include <algorithm>
 #include <exception>
 
 #include <boost/lexical_cast.hpp>
-#include <boost/foreach.hpp>
 
 #include <OpenImageIO/imageio.h>
 #include <OpenImageIO/imagebuf.h>
@@ -247,11 +247,19 @@ bool Film::HasOutput(const FilmOutputs::FilmOutputType type) const {
 
 void Film::Output() {
 	for (u_int i = 0; i < filmOutputs.GetCount(); ++i)
-		Output(filmOutputs.GetFileName(i), filmOutputs.GetType(i),&filmOutputs.GetProperties(i));
+		Output(
+			filmOutputs.GetFileName(i),
+			filmOutputs.GetType(i),
+			filmOutputs.GetProperties(i)
+		);
 }
 
-void Film::Output(const string &fileName,const FilmOutputs::FilmOutputType type,
-		const Properties *props, const bool executeImagePipeline) { 
+void Film::Output(
+	const string &fileName,
+	const FilmOutputs::FilmOutputType type,
+	PropertiesRPtr props,
+	const bool executeImagePipeline
+) {
 	// Handle the special case of the serialized film output
 	if (type == FilmOutputs::SERIALIZED_FILM) {
 		if (!filmOutputs.HasType(FilmOutputs::SERIALIZED_FILM))
@@ -262,12 +270,12 @@ void Film::Output(const string &fileName,const FilmOutputs::FilmOutputType type,
 		if (filmOutputs.UseSafeSave()) {
 			SafeSave safeSave(fileName);
 
-			Film::SaveSerialized(safeSave.GetSaveFileName(), this);
+			Film::SaveSerialized(safeSave.GetSaveFileName(), *this);
 
 			safeSave.Process();
 		} else
-			Film::SaveSerialized(fileName, this);
-		
+			Film::SaveSerialized(fileName, *this);
+
 		return;
 	}
 
@@ -559,20 +567,21 @@ void Film::Output(const string &fileName,const FilmOutputs::FilmOutputType type,
 		ImageSpec spec(width, height, channelCount, TypeDesc::UINT8);
 		buffer.reset(spec);
 
-		GenericFrameBuffer<1, 0, u_int> *channel;
-		switch (type) {
-			case FilmOutputs::MATERIAL_ID:
-				channel = channel_MATERIAL_ID;
-				break;
-			case FilmOutputs::OBJECT_ID:
-				channel = channel_OBJECT_ID;
-				break;
-			case FilmOutputs::SAMPLECOUNT:
-				channel = channel_SAMPLECOUNT;
-				break;
-			default:
-				throw runtime_error("Unknown film output type in Film::Output(): " + ToString(type));
-		}
+		using Buffer10 = std::unique_ptr< GenericFrameBuffer<1, 0, u_int> >;
+
+		std::optional<std::reference_wrapper<Buffer10>> _channel;
+		auto selector = [&](const FilmOutputs::FilmOutputType t) -> const Buffer10 &
+		{
+			switch (t) {
+				case FilmOutputs::MATERIAL_ID: return std::ref(channel_MATERIAL_ID);
+				case FilmOutputs::OBJECT_ID: return std::ref(channel_OBJECT_ID);
+				case FilmOutputs::SAMPLECOUNT: return std::ref(channel_SAMPLECOUNT);
+				default: throw runtime_error(
+					"Unknown film output type in Film::Output(): " + ToString(type)
+				);
+			}
+		};
+		auto& channel = selector(type);
 
 		for (ImageBuf::ConstIterator<BYTE> it(buffer); !it.done(); ++it) {
 			u_int x = it.x();
@@ -1157,3 +1166,4 @@ template<> void Film::GetOutput<u_int>(const FilmOutputs::FilmOutputType type, u
 			throw runtime_error("Unknown film output type in Film::GetOutput<u_int>(): " + ToString(type));
 	}
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

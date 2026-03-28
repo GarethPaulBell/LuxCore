@@ -16,7 +16,8 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
-#include <boost/thread/barrier.hpp>
+#include <barrier>
+#include <mutex>
 
 #include "slg/engines/bakecpu/bakecpu.h"
 #include "slg/engines/bakecpu/bakecpurenderstate.h"
@@ -32,11 +33,15 @@ using namespace slg;
 // BakeCPURenderEngine
 //------------------------------------------------------------------------------
 
-BakeCPURenderEngine::BakeCPURenderEngine(const RenderConfig *rcfg) :
-		CPUNoTileRenderEngine(rcfg), photonGICache(nullptr), sampleSplatter(nullptr),
-		lightSamplerSharedData(nullptr), mapFilm(nullptr), currentSceneObjsDist(nullptr),
-		threadsSyncBarrier(nullptr) {
-	const Properties &cfg = rcfg->cfg;
+BakeCPURenderEngine::BakeCPURenderEngine(RenderConfigRef rcfg) :
+	CPUNoTileRenderEngine(rcfg),
+	photonGICache(nullptr),
+	lightSamplerSharedData(nullptr),
+	mapFilm(nullptr),
+	currentSceneObjsDist(nullptr),
+	threadsSyncBarrier(nullptr)
+{
+	auto& cfg = rcfg.GetConfig();
 
 	minMapAutoSize = cfg.Get(Property("bake.minmapautosize")(32u)).Get<u_int>();
 	maxMapAutoSize = Max(cfg.Get(Property("bake.maxmapautosize")(1024u)).Get<u_int>(), minMapAutoSize);
@@ -50,7 +55,7 @@ BakeCPURenderEngine::BakeCPURenderEngine(const RenderConfig *rcfg) :
 	skipExistingMapFiles = cfg.Get(Property("bake.skipexistingmapfiles")(false)).Get<bool>();
 
 	marginPixels = Max(cfg.Get(Property("bake.margin")(0u)).Get<u_int>(), 0u);
-	marginSamplesThreshold = Max(cfg.Get(Property("bake.marginsamplesthreshold")(0.f)).Get<float>(), 0.f);
+	marginSamplesThreshold = Max(cfg.Get(Property("bake.marginsamplesthreshold")(0.0)).Get<double>(), 0.0);
 
 	// Read the list of bake maps to render
 	vector<string> mapKeys = cfg.GetAllUniqueSubNames("bake.maps");
@@ -98,32 +103,29 @@ BakeCPURenderEngine::~BakeCPURenderEngine() {
 	currentSceneObjDist.clear();
 	delete currentSceneObjsDist;
 	delete photonGICache;
-	delete lightSamplerSharedData;
-	delete sampleSplatter;
-	delete mapFilm;
 	delete threadsSyncBarrier;
 }
 
 void BakeCPURenderEngine::InitFilm() {
-	film->AddChannel(Film::RADIANCE_PER_PIXEL_NORMALIZED);
+	GetFilm().AddChannel(Film::RADIANCE_PER_PIXEL_NORMALIZED);
 
 	// pathTracer has not yet been initialized
-	const bool hybridBackForwardEnable = renderConfig->cfg.Get(PathTracer::GetDefaultProps().
+	const bool hybridBackForwardEnable = renderConfig.GetConfig().Get(PathTracer::GetDefaultProps()->
 			Get("path.hybridbackforward.enable")).Get<bool>();
 	if (hybridBackForwardEnable)
-		film->AddChannel(Film::RADIANCE_PER_SCREEN_NORMALIZED);
+		GetFilm().AddChannel(Film::RADIANCE_PER_SCREEN_NORMALIZED);
 
-	film->SetRadianceGroupCount(renderConfig->scene->lightDefs.GetLightGroupCount());
-	film->SetThreadCount(renderThreads.size());
-	film->Init();
+	GetFilm().SetRadianceGroupCount(renderConfig.GetScene().GetLightSources().GetLightGroupCount());
+	GetFilm().SetThreadCount(renderThreads.size());
+	GetFilm().Init();
 }
 
-RenderState *BakeCPURenderEngine::GetRenderState() {
-	return new BakeCPURenderState(bootStrapSeed, photonGICache);
+RenderStateSPtr BakeCPURenderEngine::GetRenderState() {
+	return std::make_shared<BakeCPURenderState>(bootStrapSeed, photonGICache);
 }
 
 void BakeCPURenderEngine::StartLockLess() {
-	const Properties &cfg = renderConfig->cfg;
+	auto& cfg = renderConfig.GetConfig();
 
 	//--------------------------------------------------------------------------
 	// Check to have the right sampler settings
@@ -137,7 +139,7 @@ void BakeCPURenderEngine::StartLockLess() {
 
 	const string samplerType = cfg.Get(Property("sampler.type")(SobolSampler::GetObjectTag())).Get<string>();
 	if (samplerType == "RTPATHCPUSAMPLER")
-		throw runtime_error("BAKECPU render engine can not use RTPATHCPUSAMPLER");		
+		throw runtime_error("BAKECPU render engine can not use RTPATHCPUSAMPLER");
 
 	//--------------------------------------------------------------------------
 	// Restore render state if there is one
@@ -147,7 +149,7 @@ void BakeCPURenderEngine::StartLockLess() {
 		// Check if the render state is of the right type
 		startRenderState->CheckEngineTag(GetObjectTag());
 
-		BakeCPURenderState *rs = (BakeCPURenderState *)startRenderState;
+		auto rs = static_pointer_cast<BakeCPURenderState>(startRenderState);
 
 		// Use a new seed to continue the rendering
 		const u_int newSeed = rs->bootStrapSeed + 1;
@@ -161,10 +163,9 @@ void BakeCPURenderEngine::StartLockLess() {
 		// I have to set the scene pointer in photonGICache because it is not
 		// saved by serialization
 		if (photonGICache)
-			photonGICache->SetScene(renderConfig->scene);
+			photonGICache->SetScene(renderConfig.GetScene());
 
-		delete startRenderState;
-		startRenderState = NULL;
+		startRenderState = nullptr;
 	}
 
 	//--------------------------------------------------------------------------
@@ -173,7 +174,7 @@ void BakeCPURenderEngine::StartLockLess() {
 
 	// note: photonGICache could have been restored from the render state
 	if (!photonGICache) {
-		photonGICache = PhotonGICache::FromProperties(renderConfig->scene, cfg);
+		photonGICache = PhotonGICache::FromProperties(renderConfig.GetScene(), cfg);
 
 		// photonGICache will be nullptr if the cache is disabled
 		if (photonGICache)
@@ -184,20 +185,23 @@ void BakeCPURenderEngine::StartLockLess() {
 	// Initialize the PathTracer class with rendering parameters
 	//--------------------------------------------------------------------------
 
-	pathTracer.ParseOptions(cfg, GetDefaultProps());
+	pathTracer.ParseOptions(cfg, *GetDefaultProps());
 
-	if (pathTracer.hybridBackForwardEnable)
-		lightSamplerSharedData = MetropolisSamplerSharedData::FromProperties(Properties(), &seedBaseGenerator, film);
+	if (pathTracer.hybridBackForwardEnable) {
+		auto sharedData = MetropolisSamplerSharedData::FromProperties(
+			Properties(), seedBaseGenerator, GetFilm()
+		);
+		lightSamplerSharedData = std::move(sharedData);
+	}
 
-	pathTracer.InitPixelFilterDistribution(pixelFilter);
+	pathTracer.InitPixelFilterDistribution(GetPixelFilter());
 	pathTracer.SetPhotonGICache(photonGICache);
 
-	delete sampleSplatter;
-	sampleSplatter = new FilmSampleSplatter(pixelFilter);
+	SetSampleSplatter(std::make_unique<FilmSampleSplatter>(GetPixelFilter()));
 
 	//--------------------------------------------------------------------------
 	
-	threadsSyncBarrier = new boost::barrier(renderThreads.size());
+	threadsSyncBarrier = new std::barrier(renderThreads.size(), completion_t());
 
 	//--------------------------------------------------------------------------
 	// Auto map size support
@@ -216,17 +220,14 @@ void BakeCPURenderEngine::StartLockLess() {
 		const BakeMapInfo &mapInfo = mapInfos[mapInfoIndex];
 
 		for (auto const &objName : mapInfo.objectNames) {
-			const SceneObject *sceneObj = renderConfig->scene->objDefs.GetSceneObject(objName);
-			if (sceneObj) {
-				const ExtMesh *mesh = sceneObj->GetExtMesh();
-				
-				Transform localToWorld;
-				sceneObj->GetExtMesh()->GetLocal2World(0.f, localToWorld);
+			auto& sceneObj = renderConfig.GetScene().GetObjects().GetSceneObject(objName);
+			auto& mesh = sceneObj.GetExtMesh();
 
-				for (u_int triIndex = 0; triIndex < mesh->GetTotalTriangleCount(); ++triIndex)
-					mapMeshesArea[mapInfoIndex] += mesh->GetTriangleArea(localToWorld, triIndex);
-			} else
-				SLG_LOG("WARNING: Unknown object to bake ignored (" << objName << ")");
+			Transform localToWorld;
+			sceneObj.GetExtMesh().GetLocal2World(0.f, localToWorld);
+
+			for (u_int triIndex = 0; triIndex < mesh.GetTotalTriangleCount(); ++triIndex)
+				mapMeshesArea[mapInfoIndex] += mesh.GetTriangleArea(localToWorld, triIndex);
 		}
 	}
 
@@ -244,7 +245,7 @@ void BakeCPURenderEngine::StartLockLess() {
 
 		if (mapInfo.useAutoMapSize) {
 			if (maxMapArea - minMapArea > 0.f) {
-				const float scale = (mapMeshesArea[mapInfoIndex] - minMapArea) / (maxMapArea - minMapArea);	
+				const float scale = (mapMeshesArea[mapInfoIndex] - minMapArea) / (maxMapArea - minMapArea);
 
 				u_int size = (u_int)Lerp<float>(scale, minMapAutoSize, maxMapAutoSize);
 				if (powerOf2AutoSize)
@@ -255,7 +256,7 @@ void BakeCPURenderEngine::StartLockLess() {
 
 				SLG_LOG("Setting bake map #" << ToString(mapInfoIndex) << " auto size to: " << size);
 				mapInfo.width = size;
-				mapInfo.height = size;				
+				mapInfo.height = size;
 			} else {
 				// Something wrong
 				mapInfo.width = minMapAutoSize;
@@ -281,35 +282,28 @@ void BakeCPURenderEngine::StopLockLess() {
 	
 	pathTracer.DeletePixelFilterDistribution();
 
-	delete lightSamplerSharedData;
-	lightSamplerSharedData = nullptr;
-
+	lightSamplerSharedData.reset();
+	
 	delete photonGICache;
 	photonGICache = nullptr;
-
-	delete sampleSplatter;
-	sampleSplatter = nullptr;
-
-	delete mapFilm;
-	mapFilm = nullptr;
 
 	delete threadsSyncBarrier;
 	threadsSyncBarrier = nullptr;
 }
 
 void BakeCPURenderEngine::UpdateFilmLockLess() {
-	boost::unique_lock<boost::mutex> lock(*filmMutex);
+	std::unique_lock<std::mutex> lock(*filmMutex);
 
 	// Film may have been not initialized because of an error during Start()
-	if (film->IsInitiliazed()) {
-		film->Clear();
-		film->GetDenoiser().Clear();
+	if (GetFilm().IsInitiliazed()) {
+		GetFilm().Clear();
+		GetFilm().GetDenoiser().Clear();
 
 		if (mapFilm) {
-			film->AddFilm(*mapFilm,
+			GetFilm().AddFilm(*mapFilm,
 					0, 0,
-					Min(mapFilm->GetWidth(), film->GetWidth()),
-					Min(mapFilm->GetHeight(), film->GetHeight()),
+					Min(mapFilm->GetWidth(), GetFilm().GetWidth()),
+					Min(mapFilm->GetHeight(), GetFilm().GetHeight()),
 					0, 0);
 
 			// Time to run the halt test on mapFilm too
@@ -322,25 +316,26 @@ void BakeCPURenderEngine::UpdateFilmLockLess() {
 // Static methods used by RenderEngineRegistry
 //------------------------------------------------------------------------------
 
-Properties BakeCPURenderEngine::ToProperties(const Properties &cfg) {
-	Properties props;
+PropertiesUPtr BakeCPURenderEngine::ToProperties(const Properties &cfg) {
+	PropertiesUPtr props = std::make_unique<Properties>();
 	
-	props << CPUNoTileRenderEngine::ToProperties(cfg) <<
-			cfg.Get(GetDefaultProps().Get("renderengine.type")) <<
-			PathTracer::ToProperties(cfg) <<
-			PhotonGICache::ToProperties(cfg);
+	*props << *CPUNoTileRenderEngine::ToProperties(cfg) <<
+				cfg.Get(GetDefaultProps()->Get("renderengine.type")) <<
+			*PathTracer::ToProperties(cfg) <<
+			*PhotonGICache::ToProperties(cfg);
 
-	props << cfg.GetAllProperties("bake.maps.");
-
+	*props << *cfg.GetAllProperties("bake.maps.");
+	
 	return props;
 }
 
-RenderEngine *BakeCPURenderEngine::FromProperties(const RenderConfig *rcfg) {
+RenderEngine *BakeCPURenderEngine::FromProperties(RenderConfigRef rcfg) {
 	return new BakeCPURenderEngine(rcfg);
 }
 
-const Properties &BakeCPURenderEngine::GetDefaultProps() {
-	static Properties props = Properties() <<
+PropertiesUPtr BakeCPURenderEngine::GetDefaultProps() {
+	auto props = std::make_unique<Properties>();
+	*props <<
 			CPUNoTileRenderEngine::GetDefaultProps() <<
 			Property("renderengine.type")(GetObjectTag()) <<
 			PathTracer::GetDefaultProps() <<
@@ -348,3 +343,4 @@ const Properties &BakeCPURenderEngine::GetDefaultProps() {
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

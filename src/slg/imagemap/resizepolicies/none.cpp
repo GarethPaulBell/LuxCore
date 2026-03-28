@@ -26,9 +26,10 @@ using namespace slg;
 // ImageMapResizeNonePolicy::ApplyResizePolicy()
 //------------------------------------------------------------------------------
 
-ImageMap *ImageMapResizeNonePolicy::ApplyResizePolicy(const std::string &fileName,
+ImageMapUPtr ImageMapResizeNonePolicy::ApplyResizePolicy(const std::string &fileName,
 		const ImageMapConfig &imgCfg, bool &toApply) const {
 	toApply = false;
 	
-	return new ImageMap(fileName, imgCfg);
+	return std::make_unique<ImageMap>(fileName, imgCfg);
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -28,11 +28,11 @@ using namespace slg;
 // Glass material
 //------------------------------------------------------------------------------
 
-GlassMaterial::GlassMaterial(const Texture *frontTransp, const Texture *backTransp,
-		const Texture *emitted, const Texture *bump,
-		const Texture *refl, const Texture *trans,
-		const Texture *exteriorIorFact, const Texture *interiorIorFact,
-		const Texture *B, const Texture *filmThickness, const Texture *filmIor) :
+GlassMaterial::GlassMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
+		TextureConstPtr emitted, TextureConstPtr bump,
+		TextureConstPtr refl, TextureConstPtr trans,
+		TextureConstPtr exteriorIorFact, TextureConstPtr interiorIorFact,
+		TextureConstPtr B, TextureConstPtr filmThickness, TextureConstPtr filmIor) :
 			Material(frontTransp, backTransp, emitted, bump),
 			Kr(refl), Kt(trans), exteriorIor(exteriorIorFact), interiorIor(interiorIorFact),
 			cauchyB(B), filmThickness(filmThickness), filmIor(filmIor) {
@@ -265,7 +265,7 @@ void GlassMaterial::Pdf(const HitPoint &hitPoint,
 		*reversePdfW = 0.f;
 }
 
-void GlassMaterial::AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+void GlassMaterial::AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 	Material::AddReferencedTextures(referencedTexs);
 
 	Kr->AddReferencedTextures(referencedTexs);
@@ -280,41 +280,42 @@ void GlassMaterial::AddReferencedTextures(boost::unordered_set<const Texture *> 
 		filmIor->AddReferencedTextures(referencedTexs);
 }
 
-void GlassMaterial::UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
+void GlassMaterial::UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
 	Material::UpdateTextureReferences(oldTex, newTex);
 
-	if (Kr == oldTex)
-		Kr = newTex;
-	if (Kt == oldTex)
-		Kt = newTex;
-	if (exteriorIor == oldTex)
-		exteriorIor = newTex;
-	if (interiorIor == oldTex)
-		interiorIor = newTex;
-	if (filmThickness == oldTex)
-		filmThickness = newTex;
-	if (filmIor == oldTex)
-		filmIor = newTex;
+	if (Kr == &oldTex)
+		Kr = &newTex;
+	if (Kt == &oldTex)
+		Kt = &newTex;
+	if (exteriorIor == &oldTex)
+		exteriorIor = &newTex;
+	if (interiorIor == &oldTex)
+		interiorIor = &newTex;
+	if (filmThickness == &oldTex)
+		filmThickness = &newTex;
+	if (filmIor == &oldTex)
+		filmIor = &newTex;
 }
 
-Properties GlassMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
-	Properties props;
+PropertiesUPtr GlassMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.materials." + name + ".type")("glass"));
-	props.Set(Property("scene.materials." + name + ".kr")(Kr->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".kt")(Kt->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".type")("glass"));
+	props->Set(Property("scene.materials." + name + ".kr")(Kr->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".kt")(Kt->GetSDLValue()));
 	if (exteriorIor)
-		props.Set(Property("scene.materials." + name + ".exteriorior")(exteriorIor->GetSDLValue()));
+		props->Set(Property("scene.materials." + name + ".exteriorior")(exteriorIor->GetSDLValue()));
 	if (interiorIor)
-		props.Set(Property("scene.materials." + name + ".interiorior")(interiorIor->GetSDLValue()));
+		props->Set(Property("scene.materials." + name + ".interiorior")(interiorIor->GetSDLValue()));
 	if (cauchyB)
-		props.Set(Property("scene.materials." + name + ".cauchyb")(cauchyB->GetSDLValue()));
+		props->Set(Property("scene.materials." + name + ".cauchyb")(cauchyB->GetSDLValue()));
 	if (filmThickness)
-		props.Set(Property("scene.materials." + name + ".filmthickness")(filmThickness->GetSDLValue()));
+		props->Set(Property("scene.materials." + name + ".filmthickness")(filmThickness->GetSDLValue()));
 	if (filmIor)
-		props.Set(Property("scene.materials." + name + ".filmior")(filmIor->GetSDLValue()));
-	props.Set(Material::ToProperties(imgMapCache, useRealFileName));
+		props->Set(Property("scene.materials." + name + ".filmior")(filmIor->GetSDLValue()));
+	props->Set(Material::ToProperties(imgMapCache, useRealFileName));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

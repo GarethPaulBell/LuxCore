@@ -113,3 +113,4 @@ BOOST_CLASS_VERSION(luxrays::Property, 3)
 BOOST_CLASS_VERSION(luxrays::Properties, 3)
 
 #endif	/* _LUXRAYS_PROPUTILS_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

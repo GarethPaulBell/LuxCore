@@ -28,6 +28,7 @@ typedef enum {
 
 typedef struct {
     float sinTheta, cosTheta, uScale, vScale, uDelta, vDelta;
+	bool centerrotation;
 } UVMapping2DParam;
 
 typedef enum {
@@ -99,3 +100,4 @@ typedef struct {
 		LocalRandomMapping3DParam localRandomMapping;
 	};
 } TextureMapping3D;
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

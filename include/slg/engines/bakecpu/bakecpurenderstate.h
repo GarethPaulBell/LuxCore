@@ -56,3 +56,4 @@ BOOST_CLASS_VERSION(slg::BakeCPURenderState, 1)
 BOOST_CLASS_EXPORT_KEY(slg::BakeCPURenderState)
 
 #endif	/* _SLG_BAKECPURENDERSTATE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -28,14 +28,14 @@ namespace luxrays {
 
 // OptixAccel Method Definitions
 
-OptixAccel::OptixAccel(const Context *context) : ctx(context) {
+OptixAccel::OptixAccel(const Context & context) : ctx(context) {
 	initialized = false;
 }
 
 OptixAccel::~OptixAccel() {
 }
 
-void OptixAccel::Init(const deque<const Mesh *> &ms, const u_longlong totVert,
+void OptixAccel::Init(const deque<const Mesh * > &ms, const u_longlong totVert,
 		const u_longlong totTri) {
 	assert (!initialized);
 
@@ -61,3 +61,4 @@ bool OptixAccel::Intersect(const Ray *initialRay, RayHit *rayHit) const {
 }
 
 #endif
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

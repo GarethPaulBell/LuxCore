@@ -19,8 +19,6 @@
 #ifndef _SLG_RTPATHOCL_H
 #define	_SLG_RTPATHOCL_H
 
-#include <boost/thread.hpp>
-
 #if !defined(LUXRAYS_DISABLE_OPENCL)
 
 #include "slg/engines/tilepathocl/tilepathocl.h"
@@ -47,7 +45,7 @@ public:
 	friend class RTPathOCLRenderEngine;
 
 protected:
-	virtual void RenderThreadImpl();
+	virtual void RenderThreadImpl(std::stop_token stop_token);
 
 	void UpdateOCLBuffers(const EditActionList &updateActions);
 	void UpdateAllThreadsOCLBuffers();
@@ -72,7 +70,7 @@ typedef enum {
 
 class RTPathOCLRenderEngine : public TilePathOCLRenderEngine {
 public:
-	RTPathOCLRenderEngine(const RenderConfig *cfg);
+	RTPathOCLRenderEngine(RenderConfigRef cfg);
 	virtual ~RTPathOCLRenderEngine();
 
 	virtual RenderEngineType GetType() const { return GetObjectType(); }
@@ -83,7 +81,7 @@ public:
 	virtual void EndSceneEdit(const EditActionList &editActions);
 
 	virtual void BeginFilmEdit();
-	virtual void EndFilmEdit(Film *film, boost::mutex *flmMutex);
+	virtual void EndFilmEdit(FilmRef film, std::mutex *flmMutex);
 
 	virtual void WaitNewFrame();
 
@@ -93,8 +91,8 @@ public:
 
 	static RenderEngineType GetObjectType() { return RTPATHOCL; }
 	static std::string GetObjectTag() { return "RTPATHOCL"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static RenderEngine *FromProperties(const RenderConfig *rcfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static RenderEngine *FromProperties(RenderConfigRef rcfg);
 
 	friend class TilePathOCLRenderEngine;
 	friend class RTPathOCLRenderThread;
@@ -103,8 +101,12 @@ public:
 	u_int previewResolutionReduction, previewResolutionReductionStep;
 	u_int resolutionReduction;
 
+    struct completion_t {
+        void operator()() noexcept { }
+    };
+
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	virtual void InitGPUTaskConfiguration();
 	virtual bool IsRTMode() const { return true; }
@@ -123,13 +125,13 @@ protected:
 	bool useFastCameraEditPath, cameraIsUsingCustomBokeh;
 
 	// Used by RTPathOCLRenderEngine code to sync. with render thread 0
-	boost::barrier *syncBarrier;
-	RTPathOCLSyncType syncType;
+	std::barrier<completion_t> *syncBarrier;
+	std::atomic<RTPathOCLSyncType> syncType;
 
 	// Used by all render threads to sync.
-	boost::barrier *frameBarrier;
+	std::barrier<completion_t> *frameBarrier;
 
-	double frameTime;
+	std::atomic<double> frameTime;
 };
 
 }
@@ -137,3 +139,4 @@ protected:
 #endif
 
 #endif	/* _SLG_RTPATHOCL_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

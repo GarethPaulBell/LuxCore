@@ -20,6 +20,7 @@
 #define	_SLG_FRESNELCOLORTEX_H
 
 #include "slg/textures/fresnel/fresneltexture.h"
+#include "slg/usings.h"
 
 namespace slg {
 
@@ -29,7 +30,7 @@ namespace slg {
 
 class FresnelColorTexture : public FresnelTexture {
 public:
-	FresnelColorTexture(const Texture *c) : kr(c) { }
+	FresnelColorTexture(TextureRef c) : kr(c) { }
 	virtual ~FresnelColorTexture() { }
 
 	virtual TextureType GetType() const { return FRESNELCOLOR_TEX; }
@@ -40,25 +41,28 @@ public:
 
 	virtual luxrays::Spectrum Evaluate(const HitPoint &hitPoint, const float cosi) const;
 
-	virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+	virtual void AddReferencedTextures(
+		std::unordered_set<const Texture *>  &referencedTexs
+	) const {
 		Texture::AddReferencedTextures(referencedTexs);
 
-		kr->AddReferencedTextures(referencedTexs);
+		GetKr().AddReferencedTextures(referencedTexs);
 	}
 
-	virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
-		if (kr == oldTex)
-			kr = newTex;
+	virtual void UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
+		if (kr == &oldTex)
+			kr == newTex;
 	}
 
-	const Texture *GetKr() const { return kr; };
+	TextureConstRef GetKr() const { return kr; };
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
-	const Texture *kr;
+	std::reference_wrapper<Texture> kr;
 };
 
 }
 
 #endif	/* _SLG_FRESNELCOLORTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

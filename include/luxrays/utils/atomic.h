@@ -21,9 +21,7 @@
 
 #include <atomic>
 
-#include <boost/version.hpp>
 #include <boost/interprocess/detail/atomic.hpp>
-#include <boost/atomic.hpp>
 
 namespace luxrays {
 
@@ -183,22 +181,22 @@ inline bool AtomicMin(unsigned int *val, const unsigned int a) {
 class SpinLock {
 public:
 	SpinLock() {
-		lock.store(true, boost::memory_order_release);
+		lock.store(true, std::memory_order_release);
 	}
 
-	boost::atomic<bool> lock;
+	std::atomic<bool> lock;
 };
 
 class SpinLocker {
 public:
 	SpinLocker(SpinLock &lock) : spinLock(lock) {
-		while (spinLock.lock.exchange(false, boost::memory_order_acquire) == false) {
+		while (spinLock.lock.exchange(false, std::memory_order_acquire) == false) {
 			// Busy-wait
 		}
 	}
 
 	~SpinLocker() {
-		spinLock.lock.store(true, boost::memory_order_release);
+		spinLock.lock.store(true, std::memory_order_release);
 	}
 
 private:
@@ -208,3 +206,4 @@ private:
 }
 
 #endif	/* _LUXRAYS_ATOMIC_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

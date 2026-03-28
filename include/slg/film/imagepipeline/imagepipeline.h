@@ -111,3 +111,4 @@ BOOST_CLASS_VERSION(slg::ImagePipeline, 3)
 BOOST_CLASS_EXPORT_KEY(slg::ImagePipeline)
 
 #endif	/*  _SLG_IMAGEPIPELINE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

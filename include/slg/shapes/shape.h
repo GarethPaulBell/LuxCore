@@ -21,6 +21,8 @@
 
 #include <vector>
 
+#include "slg/usings.h"
+
 namespace luxrays {
 	class ExtTriangleMesh;
 }
@@ -44,7 +46,8 @@ public:
 		RANDOMTRIANGLEAOV,
 		EDGEDETECTORAOV,
 		BEVEL,
-		CAMERAPROJUV
+		CAMERAPROJUV,
+		MERGEONDISTANCE
 	} ShapeType;
 
 	Shape() : refined(false) { }
@@ -52,16 +55,25 @@ public:
 
 	virtual ShapeType GetType() const = 0;
 
-	// Note: this method can be called only once and the object is not usable
-	// anymore (this is mostly due to optimize memory management).
-	luxrays::ExtTriangleMesh *Refine(const Scene *scene);
+	// Shape::Refine is the main method of the API. It is intended to be called
+	// during shape parsing (see Scene::ParseShapes)
+	// Note: it can be called only once and the object is not usable anymore
+	// (it is moved to caller)
+	luxrays::ExtTriangleMeshUPtr Refine(SceneConstRef scene);
 
 protected:
-	virtual luxrays::ExtTriangleMesh *RefineImpl(const Scene *scene) = 0;
-	
+	// RefineImpl implements refining for derived classes. It is called by
+	// Shape::Refine under the hood.
+	virtual luxrays::ExtTriangleMeshUPtr RefineImpl(SceneConstRef scene) = 0;
+
 	bool refined;
+
+	// Derived classes store the shape which they construct into a
+	// std::unique_ptr usually named 'mesh', that they define on their own.
+	luxrays::ExtTriangleMeshUPtr mesh;
 };
 
 }
 
 #endif	/* _SLG_SHAPE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

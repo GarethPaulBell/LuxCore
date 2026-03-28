@@ -146,3 +146,4 @@ inline std::ostream &operator<<(std::ostream &os, const LightPathInfo &lpi) {
 }
 
 #endif	/* _SLG_PATHINFO_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

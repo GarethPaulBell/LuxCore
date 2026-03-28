@@ -31,20 +31,18 @@ using namespace slg;
 //------------------------------------------------------------------------------
 
 InfiniteLight::InfiniteLight() :
-	imageMap(NULL), imageMapDistribution(nullptr), visibilityMapCache(nullptr) {
+	imageMap(nullptr), imageMapDistribution(nullptr), visibilityMapCache(nullptr) {
 }
 
 InfiniteLight::~InfiniteLight() {
-	delete imageMapDistribution;
-	delete visibilityMapCache;
 }
 
 void InfiniteLight::Preprocess() {
 	EnvLightSource::Preprocess();
 
-	const ImageMapStorage *imageMapStorage = imageMap->GetStorage();
+	auto& imageMapStorage = imageMap->GetStorage();
 
-	vector<float> data(imageMap->GetWidth() * imageMap->GetHeight());
+	std::vector<float> data(imageMap->GetWidth() * imageMap->GetHeight());
 	//float maxVal = -INFINITY;
 	//float minVal = INFINITY;
 	for (u_int y = 0; y < imageMap->GetHeight(); ++y) {
@@ -54,7 +52,7 @@ void InfiniteLight::Preprocess() {
 			if (sampleUpperHemisphereOnly && (y > imageMap->GetHeight() / 2))
 				data[index] = 0.f;
 			else
-				data[index] = imageMapStorage->GetFloat(index);
+				data[index] = imageMapStorage.GetFloat(index);
 
 			if (!IsValid(data[index]))
 				throw runtime_error("Pixel (" + ToString(x) + ", " + ToString(y) + ") in infinite light has an invalid value: " + ToString(data[index]));
@@ -66,18 +64,21 @@ void InfiniteLight::Preprocess() {
 	
 	//SLG_LOG("InfiniteLight luminance  Max=" << maxVal << " Min=" << minVal);
 
-	imageMapDistribution = new Distribution2D(&data[0], imageMap->GetWidth(), imageMap->GetHeight());
+	imageMapDistribution = std::make_unique<Distribution2D>(&data[0], imageMap->GetWidth(), imageMap->GetHeight());
 }
 
-void InfiniteLight::GetPreprocessedData(const Distribution2D **imageMapDistributionData,
-		const EnvLightVisibilityCache **elvc) const {
+
+void InfiniteLight::GetPreprocessedData(
+	const Distribution2D **imageMapDistributionData,
+	const EnvLightVisibilityCache **elvc
+) const {
 	if (imageMapDistributionData)
-		*imageMapDistributionData = imageMapDistribution;
+		*imageMapDistributionData = imageMapDistribution.get();
 	if (elvc)
-		*elvc = visibilityMapCache;
+		*elvc = visibilityMapCache.get();
 }
 
-float InfiniteLight::GetPower(const Scene &scene) const {
+float InfiniteLight::GetPower(SceneConstRef scene) const {
 	const float envRadius = GetEnvRadius(scene);
 
 	// TODO: I should consider sampleUpperHemisphereOnly here
@@ -93,7 +94,7 @@ UV InfiniteLight::GetEnvUV(const luxrays::Vector &dir) const {
 	return uv;
 }
 
-Spectrum InfiniteLight::GetRadiance(const Scene &scene,
+Spectrum InfiniteLight::GetRadiance(SceneConstRef scene,
 		const BSDF *bsdf, const Vector &dir,
 		float *directPdfA, float *emissionPdfW) const {
 	const Vector localDir = Normalize(Inverse(lightToWorld) * -dir);
@@ -121,7 +122,7 @@ Spectrum InfiniteLight::GetRadiance(const Scene &scene,
 	return temperatureScale * gain * imageMap->GetSpectrum(UV(u, v));
 }
 
-Spectrum InfiniteLight::Emit(const Scene &scene,
+Spectrum InfiniteLight::Emit(SceneConstRef scene,
 		const float time, const float u0, const float u1,
 		const float u2, const float u3, const float passThroughEvent,
 		Ray &ray, float &emissionPdfW,
@@ -147,7 +148,7 @@ Spectrum InfiniteLight::Emit(const Scene &scene,
     float d1, d2;
     ConcentricSampleDisk(u2, u3, &d1, &d2);
 
-	const Point worldCenter = scene.dataSet->GetBSphere().center;
+	const Point worldCenter = scene.GetDataSet().GetBSphere().center;
 	const float envRadius = GetEnvRadius(scene);
 	const Point pDisk = worldCenter + envRadius * (d1 * x + d2 * y);
 	const Point rayOrig = pDisk - envRadius * rayDir;
@@ -169,7 +170,7 @@ Spectrum InfiniteLight::Emit(const Scene &scene,
 	return result;
 }
 
-Spectrum InfiniteLight::Illuminate(const Scene &scene, const BSDF &bsdf,
+Spectrum InfiniteLight::Illuminate(SceneConstRef scene, const BSDF &bsdf,
 		const float time, const float u0, const float u1, const float passThroughEvent,
         Ray &shadowRay, float &directPdfW,
 		float *emissionPdfW, float *cosThetaAtLight) const {
@@ -190,7 +191,7 @@ Spectrum InfiniteLight::Illuminate(const Scene &scene, const BSDF &bsdf,
 
 	const Vector shadowRayDir = Normalize(lightToWorld * localDir);
 	
-	const Point worldCenter = scene.dataSet->GetBSphere().center;
+	const Point worldCenter = scene.GetDataSet().GetBSphere().center;
 	const float envRadius = GetEnvRadius(scene);
 
 	const Point shadowRayOrig = bsdf.GetRayOrigin(shadowRayDir);
@@ -223,41 +224,42 @@ Spectrum InfiniteLight::Illuminate(const Scene &scene, const BSDF &bsdf,
 	return result;
 }
 
-void InfiniteLight::UpdateVisibilityMap(const Scene *scene, const bool useRTMode) {
-	delete visibilityMapCache;
-	visibilityMapCache = nullptr;
+void InfiniteLight::UpdateVisibilityMap(SceneConstRef scene, const bool useRTMode) {
+	visibilityMapCache.reset();
 
 	if (useRTMode)
 		return;
 
 	if (useVisibilityMapCache) {
 		// Scale the infinitelight image map to the requested size
-		unique_ptr<ImageMap> luminanceMapImage(imageMap->Copy());
+		ImageMapUPtr luminanceMapImage(imageMap->Copy());
 		// Select the image luminance
 		luminanceMapImage->SelectChannel(ImageMapStorage::WEIGHTED_MEAN);
 		luminanceMapImage->Preprocess();
 
-		visibilityMapCache = new EnvLightVisibilityCache(scene, this,
-				luminanceMapImage.get(), visibilityMapCacheParams);		
+		visibilityMapCache = std::make_unique<EnvLightVisibilityCache>(
+			scene, this, std::move(luminanceMapImage), visibilityMapCacheParams
+		);
 		visibilityMapCache->Build();
 	}
 }
 
-Properties InfiniteLight::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+PropertiesUPtr InfiniteLight::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
 	const string prefix = "scene.lights." + GetName();
-	Properties props = EnvLightSource::ToProperties(imgMapCache, useRealFileName);
+	PropertiesUPtr props = EnvLightSource::ToProperties(imgMapCache, useRealFileName);
 
-	props.Set(Property(prefix + ".type")("infinite"));
+	props->Set(Property(prefix + ".type")("infinite"));
 	const string fileName = useRealFileName ?
-		imageMap->GetName() : imgMapCache.GetSequenceFileName(imageMap);
-	props.Set(Property(prefix + ".file")(fileName));
-	props.Set(imageMap->ToProperties(prefix, false));
-	props.Set(Property(prefix + ".gamma")(1.f));
-	props.Set(Property(prefix + ".sampleupperhemisphereonly")(sampleUpperHemisphereOnly));
+		imageMap->GetName() : imgMapCache.GetSequenceFileName(*imageMap);
+	props->Set(Property(prefix + ".file")(fileName));
+	props->Set(imageMap->ToProperties(prefix, false));
+	props->Set(Property(prefix + ".gamma")(1.f));
+	props->Set(Property(prefix + ".sampleupperhemisphereonly")(sampleUpperHemisphereOnly));
 
-	props.Set(Property(prefix + ".visibilitymapcache.enable")(useVisibilityMapCache));
+	props->Set(Property(prefix + ".visibilitymapcache.enable")(useVisibilityMapCache));
 	if (useVisibilityMapCache)
-		props << EnvLightVisibilityCache::Params2Props(prefix, visibilityMapCacheParams);
+		*props << EnvLightVisibilityCache::Params2Props(prefix, visibilityMapCacheParams);
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

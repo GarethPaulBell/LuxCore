@@ -26,11 +26,11 @@ using namespace slg;
 // Two-sided material
 //------------------------------------------------------------------------------
 
-TwoSidedMaterial::TwoSidedMaterial(const Texture *frontTransp, const Texture *backTransp,
-		const Texture *emitted, const Texture *bump,
-		const Material *frontMat, const Material *backMat) :
+TwoSidedMaterial::TwoSidedMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
+		TextureConstPtr emitted, TextureConstPtr bump,
+		MaterialConstRef frontMat, MaterialConstRef backMat) :
 			Material(frontTransp, backTransp, emitted, bump),
-			frontMat(frontMat), backMat(backMat) {
+			frontMat(&frontMat), backMat(&backMat) {
 	Preprocess();
 }
 
@@ -67,7 +67,7 @@ void TwoSidedMaterial::Preprocess() {
 	isDelta = IsDeltaImpl();
 }
 
-const Volume *TwoSidedMaterial::GetInteriorVolume(const HitPoint &hitPoint,
+VolumeConstPtr TwoSidedMaterial::GetInteriorVolume(const HitPoint &hitPoint,
 		const float passThroughEvent) const {
 	if (interiorVolume)
 		return interiorVolume;
@@ -79,7 +79,7 @@ const Volume *TwoSidedMaterial::GetInteriorVolume(const HitPoint &hitPoint,
 	}
 }
 
-const Volume *TwoSidedMaterial::GetExteriorVolume(const HitPoint &hitPoint,
+VolumeConstPtr TwoSidedMaterial::GetExteriorVolume(const HitPoint &hitPoint,
 		const float passThroughEvent) const {
 	if (exteriorVolume)
 		return exteriorVolume;
@@ -191,55 +191,58 @@ void TwoSidedMaterial::Pdf(const HitPoint &hitPoint,
 	}
 }
 
-void TwoSidedMaterial::UpdateMaterialReferences(const Material *oldMat, const Material *newMat) {
-	if (frontMat == oldMat)
-		frontMat = newMat;
+void TwoSidedMaterial::UpdateMaterialReferences(MaterialConstRef oldMat, MaterialRef newMat) {
+	if (frontMat == &oldMat)
+		frontMat = &newMat;
 
-	if (backMat == oldMat)
-		backMat = newMat;
-	
+	if (backMat == &oldMat)
+		backMat = &newMat;
+
 	// Update volumes too
 	Material::UpdateMaterialReferences(oldMat, newMat);
-	
+
 	Preprocess();
 }
 
-bool TwoSidedMaterial::IsReferencing(const Material *mat) const {
-	return frontMat == mat || frontMat->IsReferencing(mat) ||
-		backMat == mat || backMat->IsReferencing(mat);
+bool TwoSidedMaterial::IsReferencing(MaterialConstRef mat) const {
+	return frontMat == &mat || frontMat->IsReferencing(mat) ||
+		backMat == &mat || backMat->IsReferencing(mat);
 }
 
-void TwoSidedMaterial::AddReferencedMaterials(boost::unordered_set<const Material *> &referencedMats) const {
+void TwoSidedMaterial::AddReferencedMaterials(
+	std::unordered_set<const Material *> &referencedMats
+) const {
 	Material::AddReferencedMaterials(referencedMats);
 
-	referencedMats.insert(frontMat);
+	referencedMats.insert(frontMat.get());
 	frontMat->AddReferencedMaterials(referencedMats);
 
-	referencedMats.insert(backMat);
+	referencedMats.insert(backMat.get());
 	backMat->AddReferencedMaterials(referencedMats);
 }
 
-void TwoSidedMaterial::AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+void TwoSidedMaterial::AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 	Material::AddReferencedTextures(referencedTexs);
 
 	frontMat->AddReferencedTextures(referencedTexs);
 	backMat->AddReferencedTextures(referencedTexs);
 }
 
-void TwoSidedMaterial::UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
+void TwoSidedMaterial::UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
 	Material::UpdateTextureReferences(oldTex, newTex);
 
 	Preprocess();
 }
 
-Properties TwoSidedMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
-	Properties props;
+PropertiesUPtr TwoSidedMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.materials." + name + ".type")("twosided"));
-	props.Set(Property("scene.materials." + name + ".frontmaterial")(frontMat->GetName()));
-	props.Set(Property("scene.materials." + name + ".backmaterial")(backMat->GetName()));
-	props.Set(Material::ToProperties(imgMapCache, useRealFileName));
+	props->Set(Property("scene.materials." + name + ".type")("twosided"));
+	props->Set(Property("scene.materials." + name + ".frontmaterial")(frontMat->GetName()));
+	props->Set(Property("scene.materials." + name + ".backmaterial")(backMat->GetName()));
+	props->Set(Material::ToProperties(imgMapCache, useRealFileName));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

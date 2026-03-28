@@ -308,3 +308,4 @@ BOOST_CLASS_VERSION(luxrays::Transform, 1)
 BOOST_CLASS_EXPORT_KEY(luxrays::Transform)
 
 #endif // _LUXRAYS_TRANSFORM_H
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

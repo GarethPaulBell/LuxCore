@@ -52,3 +52,4 @@ inline std::ostream &operator<<(std::ostream &os, const PathDepthInfo &pdi) {
 }
 
 #endif	/* _SLG_PATHDEPTHINFO_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

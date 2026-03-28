@@ -26,9 +26,9 @@ using namespace slg;
 // MatteTranslucent material
 //------------------------------------------------------------------------------
 
-MatteTranslucentMaterial::MatteTranslucentMaterial(const Texture *frontTransp, const Texture *backTransp,
-		const Texture *emitted, const Texture *bump,
-		const Texture *refl, const Texture *trans) :
+MatteTranslucentMaterial::MatteTranslucentMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
+		TextureConstPtr emitted, TextureConstPtr bump,
+		TextureConstPtr refl, TextureConstPtr trans) :
 			Material(frontTransp, backTransp, emitted, bump),
 			Kr(refl), Kt(trans) {
 }
@@ -184,24 +184,25 @@ void MatteTranslucentMaterial::Pdf(const HitPoint &hitPoint,
 		*reversePdfW = fabsf((hitPoint.fromLight ? localLightDir.z : localEyeDir.z) * (weight * INV_PI));
 }
 
-void MatteTranslucentMaterial::AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+void MatteTranslucentMaterial::AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 	Material::AddReferencedTextures(referencedTexs);
 
 	Kr->AddReferencedTextures(referencedTexs);
 	Kt->AddReferencedTextures(referencedTexs);
 }
 
-void MatteTranslucentMaterial::UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
+void MatteTranslucentMaterial::UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
 	Material::UpdateTextureReferences(oldTex, newTex);
 
-	if (Kr == oldTex)
-		Kr = newTex;
-	if (Kt == oldTex)
-		Kt = newTex;
+	if (Kr == &oldTex)
+		Kr = &newTex;
+	if (Kt == &oldTex)
+		Kt = &newTex;
 }
 
-Properties MatteTranslucentMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
-	Properties props;
+PropertiesUPtr MatteTranslucentMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
+	auto propsPtr = std::make_unique<Properties>();
+	auto& props = *propsPtr;
 
 	const string name = GetName();
 	props.Set(Property("scene.materials." + name + ".type")("mattetranslucent"));
@@ -209,5 +210,6 @@ Properties MatteTranslucentMaterial::ToProperties(const ImageMapCache &imgMapCac
 	props.Set(Property("scene.materials." + name + ".kt")(Kt->GetSDLValue()));
 	props.Set(Material::ToProperties(imgMapCache, useRealFileName));
 
-	return props;
+	return propsPtr;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

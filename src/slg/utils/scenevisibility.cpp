@@ -16,15 +16,17 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 #include <memory>
+#include <mutex>
 
 #include <boost/format.hpp>
-#include <boost/thread.hpp>
-#include <boost/thread/mutex.hpp>
 
+#include "luxrays/core/randomgen.h"
+#include "luxrays/usings.h"
 #include "luxrays/utils/thread.h"
 
 #include "slg/core/indexoctree.h"
 #include "slg/scene/scene.h"
+#include "slg/cameras/camera.h"
 #include "slg/engines/renderengine.h"
 #include "slg/utils/scenevisibility.h"
 #include "slg/utils/pathdepthinfo.h"
@@ -46,9 +48,9 @@ using namespace slg;
 
 template <class T>
 SceneVisibility<T>::TraceVisibilityThread::TraceVisibilityThread(SceneVisibility<T> &svis, const u_int index,
-		SobolSamplerSharedData &sobolSharedData,
-		IndexOctree<T> *octree, boost::mutex &octreeMutex,
-		boost::atomic<u_int> &gParticlesCount,
+		std::shared_ptr<SobolSamplerSharedData> sobolSharedData,
+		IndexOctree<T> *octree, std::mutex &octreeMutex,
+		std::atomic<u_int> &gParticlesCount,
 		u_int &cacheLookUp, u_int &cacheHits,
 		bool &warmUp) :
 		sv(svis), threadIndex(index),
@@ -67,39 +69,39 @@ SceneVisibility<T>::TraceVisibilityThread::~TraceVisibilityThread() {
 
 template <class T>
 void SceneVisibility<T>::TraceVisibilityThread::Start() {
-	renderThread = new boost::thread(&TraceVisibilityThread::RenderFunc, this);
+	renderThread = std::make_unique<luxrays::JThread>(
+		std::bind_front(&TraceVisibilityThread::RenderFunc, this)
+	);
+	SetThreadName(renderThread, "LxTrcVisibility");
 }
 
 template <class T>
 void SceneVisibility<T>::TraceVisibilityThread::Join() {
-	if (renderThread) {
+	if (renderThread && renderThread->joinable()) {
 		renderThread->join();
-
-		delete renderThread;
-		renderThread = nullptr;
 	}
 }
 
 template <class T>
-void SceneVisibility<T>::TraceVisibilityThread::GenerateEyeRay(const Camera *camera, Ray &eyeRay,
+void SceneVisibility<T>::TraceVisibilityThread::GenerateEyeRay(CameraConstRef camera, Ray &eyeRay,
 		PathVolumeInfo &volInfo, Sampler *sampler, SampleResult &sampleResult) const {
-	const u_int *subRegion = camera->filmSubRegion;
+	const u_int *subRegion = camera.filmSubRegion;
 	sampleResult.filmX = subRegion[0] + sampler->GetSample(0) * (subRegion[1] - subRegion[0] + 1);
 	sampleResult.filmY = subRegion[2] + sampler->GetSample(1) * (subRegion[3] - subRegion[2] + 1);
 
 	const float timeSample = sampler->GetSample(4);
 	const float time = (sv.timeStart <= sv.timeEnd) ?
 		Lerp(timeSample, sv.timeStart, sv.timeEnd) :
-		camera->GenerateRayTime(timeSample);
+		camera.GenerateRayTime(timeSample);
 
-	camera->GenerateRay(time, sampleResult.filmX, sampleResult.filmY, &eyeRay, &volInfo,
+	camera.GenerateRay(time, sampleResult.filmX, sampleResult.filmY, &eyeRay, &volInfo,
 		sampler->GetSample(2), sampler->GetSample(3));
 }
 
 template <class T>
-void SceneVisibility<T>::TraceVisibilityThread::RenderFunc() {
+void SceneVisibility<T>::TraceVisibilityThread::RenderFunc(std::stop_token stop_token) {
 	const u_int workSize = 4096;
-	
+
 	// Hard coded RR parameters
 	const u_int rrDepth = 3;
 	const float rrImportanceCap = .5f;
@@ -111,24 +113,24 @@ void SceneVisibility<T>::TraceVisibilityThread::RenderFunc() {
 	// This is really used only by Windows for 64+ threads support
 	SetThreadGroupAffinity(threadIndex);
 
-	const Scene *scene = sv.scene;
-	const Camera *camera = scene->camera;
+	auto& scene = sv.scene;
+	auto& camera = scene.GetCamera();
 
 	// Initialize the sampler
-	RandomGenerator rnd(1 + threadIndex);
-	SobolSampler sampler(&rnd, NULL, NULL, true, 0.f, 0.f,
+	auto rnd = std::make_unique<RandomGenerator>(1 + threadIndex);
+	SobolSampler sampler(rnd, nullptr, NULL, true, 0.f, 0.f,
 			16, 16, 1, 1,
-			&visibilitySobolSharedData);
-	
+			visibilitySobolSharedData);
+
 	// Request the samples
 	const u_int sampleBootSize = 5;
 	const u_int sampleStepSize = 4;
-	const u_int sampleSize = 
+	const u_int sampleSize =
 		sampleBootSize + // To generate eye ray
 		sv.maxPathDepth * sampleStepSize; // For each path vertex
 	sampler.RequestSamples(PIXEL_NORMALIZED_ONLY, sampleSize);
-	
-	// Initialize SampleResult 
+
+	// Initialize SampleResult
 	vector<SampleResult> sampleResults(1);
 	SampleResult &sampleResult = sampleResults[0];
 	const Film::FilmChannels sampleResultsChannels({
@@ -152,7 +154,7 @@ void SceneVisibility<T>::TraceVisibilityThread::RenderFunc() {
 	const double startTime = WallClockTime();
 	double lastPrintTime = startTime;	
 	double cacheHitRate = 0.0;
-	while(!boost::this_thread::interruption_requested()) {
+	while(!stop_token.stop_requested()) {
 		// Get some work to do
 		u_int workCounter;
 		do {
@@ -172,7 +174,7 @@ void SceneVisibility<T>::TraceVisibilityThread::RenderFunc() {
 
 		visibilityParticles.clear();
 		u_int workToDoIndex = workToDo;
-		while (workToDoIndex-- && !boost::this_thread::interruption_requested()) {
+		while (workToDoIndex-- && !stop_token.stop_requested()) {
 			sampleResult.radiance[0] = Spectrum();
 
 			Ray eyeRay;
@@ -189,7 +191,7 @@ void SceneVisibility<T>::TraceVisibilityThread::RenderFunc() {
 
 				RayHit eyeRayHit;
 				Spectrum connectionThroughput;
-				const bool hit = scene->Intersect(NULL,
+				const bool hit = scene.Intersect(NULL,
 						EYE_RAY | (sampleResult.firstPathVertex ? CAMERA_RAY : GENERIC_RAY),
 						&volInfo, sampler.GetSample(sampleOffset),
 						&eyeRay, &eyeRayHit, &bsdf, &connectionThroughput,
@@ -260,7 +262,7 @@ void SceneVisibility<T>::TraceVisibilityThread::RenderFunc() {
 
 #ifdef WIN32
 			// Work around Windows bad scheduling
-			boost::this_thread::yield();
+			std::this_thread::yield();
 #endif
 		}
 
@@ -269,7 +271,7 @@ void SceneVisibility<T>::TraceVisibilityThread::RenderFunc() {
 		//----------------------------------------------------------------------
 		
 		if (visibilityParticles.size() > 0) {
-			boost::unique_lock<boost::mutex> lock(particlesOctreeMutex);
+			std::unique_lock<std::mutex> lock(particlesOctreeMutex);
 
 			u_int cacheLookUp = 0;
 			u_int cacheHits = 0;
@@ -330,7 +332,7 @@ void SceneVisibility<T>::TraceVisibilityThread::RenderFunc() {
 //------------------------------------------------------------------------------
 
 template <class T>
-SceneVisibility<T>::SceneVisibility(const Scene *scn, vector<T> &parts,
+SceneVisibility<T>::SceneVisibility(SceneConstRef scn, vector<T> &parts,
 		const u_int maxDepth,  const u_int sampleCount,
 		const float hitRate, const float r, const float ang,
 		const float t0, const float t1) :
@@ -354,11 +356,12 @@ void SceneVisibility<T>::Build() {
 	//
 	// Note: I use an Octree because it can be built at runtime.
 	unique_ptr<IndexOctree<T> > particlesOctree(AllocOctree());
-	boost::mutex particlesOctreeMutex;
+	std::mutex particlesOctreeMutex;
 
-	SobolSamplerSharedData visibilitySobolSharedData(131, nullptr);
+	auto visibilitySobolSharedData =
+		std::make_shared<SobolSamplerSharedData>(131, FilmPtr());
 
-	boost::atomic<u_int> globalVisibilityParticlesCount(0);
+	std::atomic<u_int> globalVisibilityParticlesCount(0);
 	u_int visibilityCacheLookUp = 0;
 	u_int visibilityCacheHits = 0;
 	bool visibilityWarmUp = true;
@@ -399,3 +402,4 @@ template class SceneVisibility<DLSCVisibilityParticle>;
 template class SceneVisibility<PGICVisibilityParticle>;
 template class SceneVisibility<ELVCVisibilityParticle>;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -1,4 +1,5 @@
 /***************************************************************************
+ *
  * Copyright 1998-2020 by authors (see AUTHORS.txt)                        *
  *                                                                         *
  *   This file is part of LuxCoreRender.                                   *
@@ -21,6 +22,7 @@
 
 #include <string>
 
+#include "luxrays/usings.h"
 #include "luxrays/core/geometry/quaternion.h"
 #include "luxrays/core/geometry/bbox.h"
 #include "luxrays/core/geometry/transform.h"
@@ -167,7 +169,7 @@ public:
 
 	void ApplyTransform(const Transform &trans);
 
-	luxrays::Properties ToProperties(const std::string &prefix, const bool storingGlobal2Local) const;
+	PropertiesUPtr ToProperties(const std::string &prefix, const bool storingGlobal2Local) const;
 
 	friend class boost::serialization::access;
 
@@ -237,3 +239,4 @@ BOOST_CLASS_EXPORT_KEY(luxrays::InterpolatedTransform::DecomposedTransform)
 BOOST_CLASS_EXPORT_KEY(luxrays::MotionSystem)
 
 #endif // _LUXRAYS_MOTIONSYSTEM_H
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

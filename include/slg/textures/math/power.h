@@ -29,45 +29,43 @@ namespace slg {
 
 class PowerTexture : public Texture {
 public:
-	PowerTexture(const Texture *base, const Texture *exponent) : base(base), exponent(exponent) { }
+	PowerTexture(TextureRef base, TextureRef exponent) : base(base), exponent(exponent) { }
 	virtual ~PowerTexture() { }
 
 	virtual TextureType GetType() const { return POWER_TEX; }
 	virtual float GetFloatValue(const HitPoint &hitPoint) const;
 	virtual luxrays::Spectrum GetSpectrumValue(const HitPoint &hitPoint) const;
-	virtual float Y() const { 
-		return SafePow(base->Y(), exponent->Y()); 
+	virtual float Y() const {
+		return SafePow(GetBase().Y(), GetExponent().Y());
 	}
-	virtual float Filter() const { 
-		return SafePow(base->Filter(), exponent->Filter()); 
+	virtual float Filter() const {
+		return SafePow(GetBase().Filter(), GetExponent().Filter());
 	}
 
-	virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 		Texture::AddReferencedTextures(referencedTexs);
 
-		base->AddReferencedTextures(referencedTexs);
-		exponent->AddReferencedTextures(referencedTexs);
+		GetBase().AddReferencedTextures(referencedTexs);
+		GetExponent().AddReferencedTextures(referencedTexs);
 	}
-	virtual void AddReferencedImageMaps(boost::unordered_set<const ImageMap *> &referencedImgMaps) const {
-		base->AddReferencedImageMaps(referencedImgMaps);
-		exponent->AddReferencedImageMaps(referencedImgMaps);
-	}
-
-	virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
-		if (base == oldTex)
-			base = newTex;
-		if (exponent == oldTex)
-			exponent = newTex;
+	virtual void AddReferencedImageMaps(std::unordered_set<const ImageMap * > &referencedImgMaps) const {
+		GetBase().AddReferencedImageMaps(referencedImgMaps);
+		GetExponent().AddReferencedImageMaps(referencedImgMaps);
 	}
 
-	const Texture *GetBase() const { return base; }
-	const Texture *GetExponent() const { return exponent; }
+	virtual void UpdateTextureReferences(TextureRef oldTex, TextureRef newTex) {
+		updtex(base, oldTex, newTex);
+		updtex(exponent, oldTex, newTex);
+	}
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	TextureConstRef GetBase() const { return base; }
+	TextureConstRef GetExponent() const { return exponent; }
+
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
-	const Texture *base;
-	const Texture *exponent;
+	std::reference_wrapper<Texture> base;
+	std::reference_wrapper<Texture> exponent;
 
 	inline float SafePow(const float base, const float exponent) const {
 		if (base < 0.f && exponent != static_cast<int>(exponent))
@@ -79,3 +77,4 @@ private:
 }
 
 #endif	/* _SLG_POWERTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -59,3 +59,4 @@ private:
 }
 
 #endif	/* _SLG_LIGHTSTRATEGY_DLSCBVH_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -134,3 +134,4 @@ void load(Archive &ar, luxrays::ocl::IndexBVHArrayNode &node, const unsigned int
 BOOST_CLASS_VERSION(luxrays::ocl::IndexBVHArrayNode, 1)
 		
 #endif	/* __SLG_INDEXBVH_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

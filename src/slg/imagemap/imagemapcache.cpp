@@ -16,13 +16,13 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
-#include <boost/foreach.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/format.hpp>
 
 #include "slg/core/sdl.h"
 #include "slg/imagemap/imagemapcache.h"
 #include "slg/textures/imagemaptex.h"
+#include "slg/usings.h"
 
 using namespace std;
 using namespace luxrays;
@@ -37,11 +37,11 @@ ImageMapCache::ImageMapCache() {
 }
 
 ImageMapCache::~ImageMapCache() {
-	BOOST_FOREACH(ImageMap *m, maps) {
-		// I avoid to free the static global ImageMapTexture::randomImageMap
-		if (m != ImageMapTexture::randomImageMap.get())
-			delete m;
-	}
+	//for(ImageMapPtr m: maps) {
+		//// I avoid to free the static global ImageMapTexture::randomImageMap
+		//if (m != ImageMapTexture::randomImageMap)
+			//delete m;
+	//}
 
 	delete resizePolicy;
 }
@@ -71,9 +71,9 @@ string ImageMapCache::GetCacheKey(const string &fileName, const ImageMapConfig &
 					ToString(imgCfg.colorSpaceCfg.colorSpaceType));
 	}
 	
-	key += ToString(imgCfg.storageType) + "_#_" +
-			ToString(imgCfg.wrapType) + "_#_" +
-			ToString(imgCfg.selectionType);
+	key += ToString(imgCfg.GetStorageType()) + "_#_" +
+			ToString(imgCfg.GetWrapType()) + "_#_" +
+			ToString(imgCfg.GetSelectionType());
 
 	return key;
 }
@@ -82,18 +82,19 @@ string ImageMapCache::GetCacheKey(const string &fileName) const {
 	return fileName;
 }
 
-ImageMap *ImageMapCache::GetImageMap(const string &fileName, const ImageMapConfig &imgCfg,
-		const bool applyResizePolicy) {
+ImageMapRef ImageMapCache::GetImageMap(
+	const string &fileName, const ImageMapConfig &imgCfg, const bool applyResizePolicy
+) {
 	// Compose the cache key
 	string key = GetCacheKey(fileName);
 
 	// Check if the image map has been already defined
-	boost::unordered_map<std::string, ImageMap *>::const_iterator it = mapByKey.find(key);
+	auto it = mapByKey.find(key);
 
 	if (it != mapByKey.end()) {
 		//SDL_LOG("Cached defined image map: " << fileName);
-		ImageMap *im = (it->second);
-		return im;
+		auto im = (it->second);
+		return im.get();
 	}
 
 	// Check if it is a reference to a file
@@ -102,71 +103,74 @@ ImageMap *ImageMapCache::GetImageMap(const string &fileName, const ImageMapConfi
 
 	if (it != mapByKey.end()) {
 		//SDL_LOG("Cached file image map: " << fileName);
-		ImageMap *im = (it->second);
-		return im;
+		auto im = (it->second);
+		return im.get();
 	}
 
 	// I haven't yet loaded the file
 
-	ImageMap *im;
+	ImageMapUPtr im;
 	if (applyResizePolicy) {
 		// Scale the image if required
 		bool toApply;
 		im = resizePolicy->ApplyResizePolicy(fileName, imgCfg, toApply);
-		
+
 		resizePolicyToApply.push_back(toApply);
 	} else {
-		im = new ImageMap(fileName, imgCfg);
+		im = std::make_unique<ImageMap>(fileName, imgCfg);
 
 		resizePolicyToApply.push_back(false);
 	}
-	
-	mapByKey.insert(make_pair(key, im));
-	mapNames.push_back(fileName);
-	maps.push_back(im);
 
-	return im;
+	auto& imRef = AppendImageMap(ImageMapSPtr(std::move(im)), fileName, key);
+
+	return std::ref(imRef);
 }
 
-void ImageMapCache::DefineImageMap(ImageMap *im) {
-	const string &name = im->GetName();
+ImageMapRef ImageMapCache::DefineImageMap(ImageMapUPtr&& im) {
+	// Move im into a shared_ptr
+	auto ims = ImageMapSPtr(std::move(im));
+
+	return DefineImageMap(ims);
+}
+
+ImageMapRef ImageMapCache::DefineImageMap(ImageMapSPtr im) {
+	const string name = im->GetName();
 
 	SDL_LOG("Define ImageMap: " << name);
 
 	// Compose the cache key
 	const string key = GetCacheKey(name);
 
-	boost::unordered_map<std::string, ImageMap *>::const_iterator it = mapByKey.find(key);
+	auto it = mapByKey.find(key);
+
 	if (it == mapByKey.end()) {
-		// Add the new image definition
-		mapByKey.insert(make_pair(key, im));
-		mapNames.push_back(name);
-		maps.push_back(im);
-		
-		resizePolicyToApply.push_back(false);
-	} else {
-		// Overwrite the existing image definition
-		const u_int index = GetImageMapIndex(it->second);
-		delete maps[index];
-		maps[index] = im;
-
-		resizePolicyToApply[index] = false;
-
-		// I have to modify mapByName for last or it iterator would be modified
-		// otherwise (it->second would point to the new ImageMap and not to the old one)
-		mapByKey.erase(key);
-		mapByKey.insert(make_pair(key, im));
+		// New value: append to container
+		auto& imRef = AppendImageMap(im, name, key);
+		return std::ref(imRef);
 	}
+
+	// Existing value: overwrite the existing image definition
+	const u_int index = GetImageMapIndex(it->second.get());
+	std::swap(maps[index], im);
+
+	resizePolicyToApply[index] = false;
+
+	// I have to modify mapByName for last or it iterator would be modified
+	// otherwise (it->second would point to the new ImageMap and not to the old one)
+	mapByKey.erase(key);
+	mapByKey.insert(make_pair(key, std::ref(*maps[index])));
+
+	return std::ref(*maps[index]);
 }
 
-void ImageMapCache::DeleteImageMap(const ImageMap *im) {
-	for (boost::unordered_map<std::string, ImageMap *>::iterator it = mapByKey.begin(); it != mapByKey.end(); ++it) {
-		if (it->second == im) {
-			delete it->second;
+void ImageMapCache::DeleteImageMap(ImageMapConstRef im) {
+	for (auto it = mapByKey.begin(); it != mapByKey.end(); ++it) {
+		if (&it->second.get() == &im) {
 			mapByKey.erase(it);
 
 			for (u_int i = 0; i < maps.size(); ++i) {
-				if (maps[i] == im) {
+				if (&*maps[i] == &im) {
 					mapNames.erase(mapNames.begin() + i);
 					maps.erase(maps.begin() + i);
 					resizePolicyToApply.erase(resizePolicyToApply.begin() + i);
@@ -179,27 +183,31 @@ void ImageMapCache::DeleteImageMap(const ImageMap *im) {
 	}
 }
 
-string ImageMapCache::GetSequenceFileName(const ImageMap *im) const {
+string ImageMapCache::GetSequenceFileName(ImageMapConstRef im) const {
 	return ("imagemap-" + ((boost::format("%05d") % GetImageMapIndex(im)).str()) +
-			"." + im->GetFileExtension());
+			"." + im.GetFileExtension());
 }
 
-u_int ImageMapCache::GetImageMapIndex(const ImageMap *im) const {
+u_int ImageMapCache::GetImageMapIndex(ImageMapConstRef im) const {
 	for (u_int i = 0; i < maps.size(); ++i) {
-		if (maps[i] == im)
+		if (&*maps[i] == &im)
 			return i;
 	}
 
-	throw runtime_error("Unknown image map: " + ToString(im));
+	throw runtime_error("Unknown image map: " + ToString(&im));
+}
+u_int ImageMapCache::GetImageMapIndex(ImageMapConstPtr p) const {
+	return GetImageMapIndex(*p);
 }
 
-void ImageMapCache::GetImageMaps(vector<const ImageMap *> &ims) {
+void ImageMapCache::GetImageMaps(std::vector<std::reference_wrapper<const ImageMap>> &ims) const {
 	ims.reserve(maps.size());
 
-	BOOST_FOREACH(ImageMap *im, maps)
-		ims.push_back(im);
+	for(auto& im: maps)
+		ims.push_back(std::ref(*im));
 }
 
-void ImageMapCache::Preprocess(const Scene *scene, const bool useRTMode) {
+void ImageMapCache::Preprocess(SceneConstRef scene, const bool useRTMode) {
 	resizePolicy->Preprocess(*this, scene, useRTMode);
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

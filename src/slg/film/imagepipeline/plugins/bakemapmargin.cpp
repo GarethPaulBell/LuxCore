@@ -17,8 +17,6 @@
  ***************************************************************************/
 
 #include <stdexcept>
-#include <boost/foreach.hpp>
-#include <boost/regex.hpp>
 
 #include "slg/film/film.h"
 #include "slg/film/imagepipeline/plugins/bakemapmargin.h"
@@ -150,3 +148,4 @@ void BakeMapMarginPlugin::Apply(Film &film, const u_int index,
 		copy(dstPixelsMask.begin(), dstPixelsMask.end(), srcPixelsMask.begin());
 	}
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

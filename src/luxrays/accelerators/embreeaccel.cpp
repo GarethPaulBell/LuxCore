@@ -23,17 +23,18 @@
 #include <intrin.h>
 #endif
 
-#include <boost/foreach.hpp>
-
 #include "luxrays/core/context.h"
 #include "luxrays/accelerators/embreeaccel.h"
 #include "luxrays/utils/strutils.h"
 
 namespace luxrays {
 
-EmbreeAccel::EmbreeAccel(const Context *context) : ctx(context),
-		uniqueRTCSceneByMesh(MeshPtrCompare), uniqueGeomByMesh(MeshPtrCompare),
-		uniqueInstMatrixByMesh(MeshPtrCompare) {
+EmbreeAccel::EmbreeAccel(const Context & context) :
+	ctx(context),
+	uniqueRTCSceneByMesh(MeshPtrCompare),
+	uniqueGeomByMesh(MeshPtrCompare),
+	uniqueInstMatrixByMesh(MeshPtrCompare)
+{
 	embreeDevice = rtcNewDevice(NULL);
 	embreeScene = NULL;
 }
@@ -43,38 +44,38 @@ EmbreeAccel::~EmbreeAccel() {
 		rtcReleaseScene(embreeScene);
 
 		// I have to free all Embree scenes used for instances
-		std::pair<const Mesh *, RTCScene> elem;
-		BOOST_FOREACH(elem, uniqueRTCSceneByMesh)
+		std::pair<const Mesh * , RTCScene> elem;
+		for(auto& elem: uniqueRTCSceneByMesh)
 			rtcReleaseScene(elem.second);
 	}
 
 	rtcReleaseDevice(embreeDevice);
 }
 
-void EmbreeAccel::ExportTriangleMesh(const RTCScene embreeScene, const Mesh *mesh) const {
+void EmbreeAccel::ExportTriangleMesh(const RTCScene embreeScene, MeshConstRef mesh) const {
 	const RTCGeometry geom = rtcNewGeometry(embreeDevice, RTC_GEOMETRY_TYPE_TRIANGLE);
-	
+
 	// Share with Embree the mesh vertices
-	Point *meshVerts = mesh->GetVertices();
+	Point *meshVerts = mesh.GetVertices();
 	rtcSetSharedGeometryBuffer(geom, RTC_BUFFER_TYPE_VERTEX, 0, RTC_FORMAT_FLOAT3, meshVerts,
-			0, sizeof(Point), mesh->GetTotalVertexCount());
+			0, sizeof(Point), mesh.GetTotalVertexCount());
 
 
 	// Share with Embree the mesh triangles
-	Triangle *meshTris = mesh->GetTriangles();
+	Triangle *meshTris = mesh.GetTriangles();
 	rtcSetSharedGeometryBuffer(geom, RTC_BUFFER_TYPE_INDEX, 0, RTC_FORMAT_UINT3, meshTris,
-			0, sizeof(Triangle), mesh->GetTotalTriangleCount());
-	
+			0, sizeof(Triangle), mesh.GetTotalTriangleCount());
+
 	rtcCommitGeometry(geom);
-	
+
 	rtcAttachGeometry(embreeScene, geom);
-	
+
 	rtcReleaseGeometry(geom);
 
 }
 
-void EmbreeAccel::ExportMotionTriangleMesh(const RTCScene embreeScene, const MotionTriangleMesh *mtm) const {
-	const MotionSystem &ms = mtm->GetMotionSystem();
+void EmbreeAccel::ExportMotionTriangleMesh(const RTCScene embreeScene, const MotionTriangleMesh & mtm) const {
+	auto &ms = mtm.GetMotionSystem();
 
 	// Check if I would need more than the max. number of steps (i.e. 129) supported by Embree
 	if (ms.times.size() > RTC_MAX_TIME_STEP_COUNT)
@@ -87,30 +88,32 @@ void EmbreeAccel::ExportMotionTriangleMesh(const RTCScene embreeScene, const Mot
 	for (u_int step = 0; step < ms.times.size(); ++step) {
 		// Copy the mesh start position vertices
 		Point *vertices = (Point *)rtcSetNewGeometryBuffer(geom, RTC_BUFFER_TYPE_VERTEX, step, RTC_FORMAT_FLOAT3,
-				sizeof(Point), mtm->GetTotalVertexCount());
+				sizeof(Point), mtm.GetTotalVertexCount());
 
 		Transform local2World;
-		mtm->GetLocal2World(ms.times[step], local2World);
-		for (u_int i = 0; i < mtm->GetTotalVertexCount(); ++i)
-			vertices[i] = mtm->GetVertex(local2World, i);
+		mtm.GetLocal2World(ms.times[step], local2World);
+		for (u_int i = 0; i < mtm.GetTotalVertexCount(); ++i)
+			vertices[i] = mtm.GetVertex(local2World, i);
 	}
 
 	// Share the mesh triangles
-	Triangle *meshTris = mtm->GetTriangles();
+	Triangle *meshTris = mtm.GetTriangles();
 	rtcSetSharedGeometryBuffer(geom, RTC_BUFFER_TYPE_INDEX, 0, RTC_FORMAT_UINT3, (RTCBuffer)meshTris,
-			0, sizeof(Triangle), mtm->GetTotalTriangleCount());
+			0, sizeof(Triangle), mtm.GetTotalTriangleCount());
 
 	rtcCommitGeometry(geom);
-	
+
 	rtcAttachGeometry(embreeScene, geom);
 
 	rtcReleaseGeometry(geom);
-	
+
 }
 
-void EmbreeAccel::Init(const std::deque<const Mesh *> &meshes,
-		const u_longlong totalVertexCount,
-		const u_longlong totalTriangleCount) {
+void EmbreeAccel::Init(
+	const std::deque<const Mesh *> &meshes,
+	const u_longlong totalVertexCount,
+	const u_longlong totalTriangleCount
+) {
 	const double t0 = WallClockTime();
 
 	//--------------------------------------------------------------------------
@@ -119,9 +122,9 @@ void EmbreeAccel::Init(const std::deque<const Mesh *> &meshes,
 
 	minTime = std::numeric_limits<float>::max();
 	maxTime = std::numeric_limits<float>::min();
-	BOOST_FOREACH(const Mesh *mesh, meshes) {
-		const MotionTriangleMesh *mtm = dynamic_cast<const MotionTriangleMesh *>(mesh);
-		
+	for(auto* mesh: meshes) {
+		auto* mtm = dynamic_cast<const MotionTriangleMesh *>(mesh);
+
 		if (mtm) {
 			minTime = Min(minTime, mtm->GetMotionSystem().StartTime());
 			maxTime = Max(maxTime, mtm->GetMotionSystem().EndTime());
@@ -144,36 +147,36 @@ void EmbreeAccel::Init(const std::deque<const Mesh *> &meshes,
 	rtcSetSceneBuildQuality(embreeScene, RTC_BUILD_QUALITY_HIGH);
 	rtcSetSceneFlags(embreeScene, RTC_SCENE_FLAG_DYNAMIC);
 
-	BOOST_FOREACH(const Mesh *mesh, meshes) {
-		switch (mesh->GetType()) {
+	for(auto* ptr: meshes) {
+		auto& mesh = *ptr;
+		switch (mesh.GetType()) {
 			case TYPE_TRIANGLE:
 			case TYPE_EXT_TRIANGLE:
 				ExportTriangleMesh(embreeScene, mesh);
 				break;
 			case TYPE_TRIANGLE_INSTANCE:
 			case TYPE_EXT_TRIANGLE_INSTANCE: {
-				const InstanceTriangleMesh *itm = dynamic_cast<const InstanceTriangleMesh *>(mesh);
+				auto& itm = dynamic_cast<const InstanceTriangleMesh&>(mesh);
 
 				// Check if a RTCScene has already been created
-				std::map<const Mesh *, RTCScene, bool (*)(const Mesh *, const Mesh *)>::iterator it =
-						uniqueRTCSceneByMesh.find(itm->GetTriangleMesh());
+				auto it = uniqueRTCSceneByMesh.find(&itm.GetTriangleMesh());
 
 				RTCScene instScene;
 				if (it == uniqueRTCSceneByMesh.end()) {
-					TriangleMesh *instancedMesh = itm->GetTriangleMesh();
+					auto& instancedMesh = itm.GetTriangleMesh();
 
 					// Create a new RTCScene
 					instScene = rtcNewScene(embreeDevice);
 					ExportTriangleMesh(instScene, instancedMesh);
 					rtcCommitScene(instScene);
 
-					uniqueRTCSceneByMesh[instancedMesh] = instScene;
+					uniqueRTCSceneByMesh[&instancedMesh] = instScene;
 				} else
 					instScene = it->second;
 
 				RTCGeometry geom = rtcNewGeometry(embreeDevice, RTC_GEOMETRY_TYPE_INSTANCE);
 				rtcSetGeometryInstancedScene(geom, instScene);
-				rtcSetGeometryTransform(geom, 0, RTC_FORMAT_FLOAT3X4_ROW_MAJOR, &(itm->GetTransformation().m.m[0][0]));
+				rtcSetGeometryTransform(geom, 0, RTC_FORMAT_FLOAT3X4_ROW_MAJOR, &(itm.GetTransformation().m.m[0][0]));
 				rtcCommitGeometry(geom);
 
 				rtcAttachGeometry(embreeScene, geom);
@@ -181,19 +184,19 @@ void EmbreeAccel::Init(const std::deque<const Mesh *> &meshes,
 				rtcReleaseGeometry(geom);
 
 				// Save the instance ID
-				uniqueGeomByMesh[mesh] = geom;
+				uniqueGeomByMesh[&mesh] = geom;
 				// Save the matrix
-				uniqueInstMatrixByMesh[mesh] = itm->GetTransformation().m;				
+				uniqueInstMatrixByMesh[&mesh] = itm.GetTransformation().m;
 				break;
 			}
 			case TYPE_TRIANGLE_MOTION:
 			case TYPE_EXT_TRIANGLE_MOTION: {
-				const MotionTriangleMesh *mtm = dynamic_cast<const MotionTriangleMesh *>(mesh);
+				auto& mtm = dynamic_cast<const MotionTriangleMesh &>(mesh);
 				ExportMotionTriangleMesh(embreeScene, mtm);
 				break;
 			}
 			default:
-				throw std::runtime_error("Unknown Mesh type in EmbreeAccel::Init(): " + ToString(mesh->GetType()));
+				throw std::runtime_error("Unknown Mesh type in EmbreeAccel::Init(): " + ToString(mesh.GetType()));
 		}
 	}
 
@@ -206,12 +209,12 @@ void EmbreeAccel::Update() {
 	// Update all Embree scenes used for instances
 	bool updated = false;
 	std::pair<const Mesh *, RTCGeometry> elem;
-	BOOST_FOREACH(elem, uniqueGeomByMesh) {
-		const InstanceTriangleMesh *itm = dynamic_cast<const InstanceTriangleMesh *>(elem.first);
+	for(auto& elem: uniqueGeomByMesh) {
+		auto& itm = dynamic_cast<const InstanceTriangleMesh &>(*elem.first);
 
 		// Check if the transformation has changed
-		if (uniqueInstMatrixByMesh[elem.first] != itm->GetTransformation().m) {
-			rtcSetGeometryTransform(elem.second, 0, RTC_FORMAT_FLOAT3X4_ROW_MAJOR, &(itm->GetTransformation().m.m[0][0]));
+		if (uniqueInstMatrixByMesh[elem.first] != itm.GetTransformation().m) {
+			rtcSetGeometryTransform(elem.second, 0, RTC_FORMAT_FLOAT3X4_ROW_MAJOR, &(itm.GetTransformation().m.m[0][0]));
 			rtcCommitGeometry(elem.second);
 			updated = true;
 		}
@@ -221,18 +224,17 @@ void EmbreeAccel::Update() {
 		rtcCommitScene(embreeScene);
 }
 
-bool EmbreeAccel::MeshPtrCompare(const Mesh *p0, const Mesh *p1) {
+bool EmbreeAccel::MeshPtrCompare(const Mesh * p0, const Mesh * p1) {
 	return p0 < p1;
 }
 
 bool EmbreeAccel::Intersect(const Ray *ray, RayHit *hit) const {
-	RTCIntersectContext context;
-	rtcInitIntersectContext(&context);
 
 	RTCRayHit embreeRayHit;
 
-	if (isnan(ray->o.x) || isnan(ray->o.y) || isnan(ray->o.z) || isnan(ray->d.x) || isnan(ray->d.y) || isnan(ray->d.z))
+	if (isnan(ray->o.x) || isnan(ray->o.y) || isnan(ray->o.z) || isnan(ray->d.x) || isnan(ray->d.y) || isnan(ray->d.z)) {
 		return false;
+	}
 
 	embreeRayHit.ray.org_x = ray->o.x;
 	embreeRayHit.ray.org_y = ray->o.y;
@@ -252,7 +254,7 @@ bool EmbreeAccel::Intersect(const Ray *ray, RayHit *hit) const {
 	embreeRayHit.hit.primID = RTC_INVALID_GEOMETRY_ID;
 	embreeRayHit.hit.instID[0] = RTC_INVALID_GEOMETRY_ID;
 	
-	rtcIntersect1(embreeScene, &context, &embreeRayHit);
+	rtcIntersect1(embreeScene, &embreeRayHit);
 
 	if ((embreeRayHit.hit.geomID != RTC_INVALID_GEOMETRY_ID) &&
 			// A safety check in case of not enough numerical precision. Embree
@@ -268,8 +270,10 @@ bool EmbreeAccel::Intersect(const Ray *ray, RayHit *hit) const {
 		hit->b2 = embreeRayHit.hit.v;
 
 		return true;
-	} else
+	} else {
 		return false;
+	}
 }
 
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

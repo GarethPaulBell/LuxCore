@@ -27,17 +27,17 @@ namespace slg {
 
 class IslandAOVShape : public Shape {
 public:
-	IslandAOVShape(luxrays::ExtTriangleMesh *srcMesh, const u_int dataIndex);
+	IslandAOVShape(luxrays::ExtTriangleMeshRef srcMesh, const u_int dataIndex);
 	virtual ~IslandAOVShape();
 
-	virtual ShapeType GetType() const { return ISLANDAOV; }
+	virtual ShapeType GetType() const override { return ISLANDAOV; }
 
 protected:
-	virtual luxrays::ExtTriangleMesh *RefineImpl(const Scene *scene);
+	virtual luxrays::ExtTriangleMeshUPtr RefineImpl(SceneConstRef scene) override;
 
-	luxrays::ExtTriangleMesh *mesh;
 };
 
 }
 
 #endif	/* _SLG_ISLANDAOVSHAPE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

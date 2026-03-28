@@ -34,7 +34,7 @@ class HardwareIntersectionDevice;
 class MBVHAccel : public Accelerator {
 public:
 	// MBVHAccel Public Methods
-	MBVHAccel(const Context *context);
+	MBVHAccel(const Context & context);
 	virtual ~MBVHAccel();
 
 	virtual AcceleratorType GetType() const { return ACCEL_MBVH; }
@@ -73,8 +73,8 @@ private:
 	std::vector<const Transform *> uniqueLeafsTransform;
 	std::vector<const MotionSystem *> uniqueLeafsMotionSystem;
 	
-	const Context *ctx;
-	std::deque<const Mesh *> meshes;
+	const Context & ctx;
+	std::deque<const Mesh * > meshes;
 
 	bool initialized;
 };
@@ -82,3 +82,4 @@ private:
 }
 
 #endif	/* _LUXRAYS_MBVHACCEL_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -24,41 +24,47 @@ using namespace slg;
 
 BOOST_CLASS_EXPORT_IMPLEMENT(slg::MitchellFilter)
 
-Properties MitchellFilter::ToProperties() const {
-	return Filter::ToProperties() <<
+PropertiesUPtr MitchellFilter::ToProperties() const {
+	auto props = std::make_unique<Properties>();
+	*props << Filter::ToProperties() <<
 			Property("film.filter.filter.mitchell.b")(B) <<
 			Property("film.filter.filter.mitchell.c")(C);
+	return props;
 }
 
 //------------------------------------------------------------------------------
 // Static methods used by FilterRegistry
 //------------------------------------------------------------------------------
 
-Properties MitchellFilter::ToProperties(const Properties &cfg) {
-	return Properties() <<
-			cfg.Get(GetDefaultProps().Get("film.filter.type")) <<
-			cfg.Get(GetDefaultProps().Get("film.filter.mitchell.b")) <<
-			cfg.Get(GetDefaultProps().Get("film.filter.mitchell.c"));
+PropertiesUPtr MitchellFilter::ToProperties(const Properties &cfg) {
+	PropertiesUPtr props = std::make_unique<Properties>();
+	
+	*props <<
+				cfg.Get(GetDefaultProps()->Get("film.filter.type")) <<
+			cfg.Get(GetDefaultProps()->Get("film.filter.mitchell.b")) <<
+			cfg.Get(GetDefaultProps()->Get("film.filter.mitchell.c"));
+	
+	return props;
 }
 
-Filter *MitchellFilter::FromProperties(const Properties &cfg) {
-	const float defaultFilterWidth = cfg.Get(GetDefaultProps().Get("film.filter.width")).Get<float>();
-	const float filterXWidth = cfg.Get(Property("film.filter.xwidth")(defaultFilterWidth)).Get<float>();
-	const float filterYWidth = cfg.Get(Property("film.filter.ywidth")(defaultFilterWidth)).Get<float>();
+FilterUPtr MitchellFilter::FromProperties(const Properties &cfg) {
+	const float defaultFilterWidth = cfg.Get(GetDefaultProps()->Get("film.filter.width")).Get<double>();
+	const float filterXWidth = cfg.Get(Property("film.filter.xwidth")(defaultFilterWidth)).Get<double>();
+	const float filterYWidth = cfg.Get(Property("film.filter.ywidth")(defaultFilterWidth)).Get<double>();
 
-	const float b = cfg.Get(GetDefaultProps().Get("film.filter.mitchell.b")).Get<float>();
-	const float c = cfg.Get(GetDefaultProps().Get("film.filter.mitchell.c")).Get<float>();
+	const float b = cfg.Get(GetDefaultProps()->Get("film.filter.mitchell.b")).Get<double>();
+	const float c = cfg.Get(GetDefaultProps()->Get("film.filter.mitchell.c")).Get<double>();
 
-	return new MitchellFilter(filterXWidth, filterYWidth, b, c);
+	return std::make_unique<MitchellFilter>(filterXWidth, filterYWidth, b, c);
 }
 
 slg::ocl::Filter *MitchellFilter::FromPropertiesOCL(const Properties &cfg) {
-	const float defaultFilterWidth = cfg.Get(GetDefaultProps().Get("film.filter.width")).Get<float>();
-	const float filterXWidth = cfg.Get(Property("film.filter.xwidth")(defaultFilterWidth)).Get<float>();
-	const float filterYWidth = cfg.Get(Property("film.filter.ywidth")(defaultFilterWidth)).Get<float>();
+	const float defaultFilterWidth = cfg.Get(GetDefaultProps()->Get("film.filter.width")).Get<double>();
+	const float filterXWidth = cfg.Get(Property("film.filter.xwidth")(defaultFilterWidth)).Get<double>();
+	const float filterYWidth = cfg.Get(Property("film.filter.ywidth")(defaultFilterWidth)).Get<double>();
 
-//	const float b = cfg.Get(GetDefaultProps().Get("film.filter.mitchell.b")).Get<float>();
-//	const float c = cfg.Get(GetDefaultProps().Get("film.filter.mitchell.c")).Get<float>();
+//	const float b = cfg.Get(GetDefaultProps()->Get("film.filter.mitchell.b")).Get<double>();
+//	const float c = cfg.Get(GetDefaultProps()->Get("film.filter.mitchell.c")).Get<double>();
 
 	slg::ocl::Filter *oclFilter = new slg::ocl::Filter();
 
@@ -74,8 +80,9 @@ slg::ocl::Filter *MitchellFilter::FromPropertiesOCL(const Properties &cfg) {
 	return oclFilter;
 }
 
-const Properties &MitchellFilter::GetDefaultProps() {
-	static Properties props = Properties() <<
+PropertiesUPtr MitchellFilter::GetDefaultProps() {
+	auto props = std::make_unique<Properties>();
+	*props <<
 			Filter::GetDefaultProps() <<
 			Property("film.filter.type")(GetObjectTag()) <<
 			Property("film.filter.mitchell.b")(1.f / 3.f) <<
@@ -83,3 +90,4 @@ const Properties &MitchellFilter::GetDefaultProps() {
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

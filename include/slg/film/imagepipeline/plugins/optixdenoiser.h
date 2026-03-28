@@ -87,4 +87,4 @@ BOOST_CLASS_EXPORT_KEY(slg::OptixDenoiserPlugin)
 
 #endif
 	
-#endif /* _SLG_OPTIX_DENOISER_H */
+#endif /* _SLG_OPTIX_DENOISER_H */// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

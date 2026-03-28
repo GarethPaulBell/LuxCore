@@ -204,3 +204,4 @@ BOOST_CLASS_IMPLEMENTATION(luxrays::Triangle, boost::serialization::object_seria
 BOOST_CLASS_EXPORT_KEY(luxrays::Triangle)
 
 #endif	/* _LUXRAYS_TRIANGLE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

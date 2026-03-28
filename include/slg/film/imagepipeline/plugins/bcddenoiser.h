@@ -109,3 +109,4 @@ BOOST_CLASS_VERSION(slg::BCDDenoiserPlugin, 5)
 BOOST_CLASS_EXPORT_KEY(slg::BCDDenoiserPlugin)
 
 #endif	/*  _SLG_BCD_DENOISER_PLUGIN_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

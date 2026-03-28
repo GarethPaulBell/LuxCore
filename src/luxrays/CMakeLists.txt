@@ -168,6 +168,7 @@ set(LUXRAYS_SRCS
   ${PROJECT_SOURCE_DIR}/src/luxrays/utils/thread.cpp
   ${PROJECT_SOURCE_DIR}/src/luxrays/utils/ply/rply.cpp
   ${PROJECT_SOURCE_DIR}/src/luxrays/utils/properties.cpp
+  ${PROJECT_SOURCE_DIR}/src/luxrays/utils/utils.cpp
   ${PROJECT_SOURCE_DIR}/deps/cuew/src/cuew.cpp
   ${PROJECT_SOURCE_DIR}/deps/clew/src/clew.cpp
 )
@@ -237,14 +238,12 @@ set(LUXRAYS_LIB_SRCS
 
 add_library(luxrays STATIC ${LUXRAYS_LIB_SRCS})
 add_definitions(-DCPP_API_EXPORTS ${VISIBILITY_FLAGS}) # for controlling visibility
-if(APPLE)
-  target_link_libraries(luxrays PRIVATE OpenMP::OpenMP)
-else()
-  target_link_libraries(luxrays PRIVATE OpenMP::OpenMP_CXX)
-endif(APPLE)
-
-
-target_link_libraries(luxrays PRIVATE embree openimageio::openimageio boost::boost)
+target_link_libraries(luxrays PRIVATE
+  embree::embree
+  openimageio::openimageio
+  boost::boost
+  OpenMP::OpenMP_CXX
+)
 
 ################################################################################
 #

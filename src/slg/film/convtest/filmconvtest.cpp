@@ -18,6 +18,8 @@
 
 #include <limits>
 
+#include <boost/serialization/shared_ptr.hpp>
+
 #include "slg/film/film.h"
 #include "slg/film/convtest/filmconvtest.h"
 #include "slg/film/imagepipeline/plugins/gaussianblur3x3.h"
@@ -32,68 +34,80 @@ using namespace slg;
 
 BOOST_CLASS_EXPORT_IMPLEMENT(slg::FilmConvTest)
 
-FilmConvTest::FilmConvTest(const Film *flm, const float thresholdVal,
-		const u_int warmupVal, const u_int testStepVal, const bool useFilt, const u_int idx) :
-		threshold(thresholdVal), warmup(warmupVal),	testStep(testStepVal),
-		useFilter(useFilt), imagePipelineIndex(idx), film(flm), referenceImage(NULL) {
+FilmConvTest::FilmConvTest(
+	FilmConstPtr flm,
+	const float thresholdVal,
+	const u_int warmupVal,
+	const u_int testStepVal,
+	const bool useFilt,
+	const u_int idx
+) :
+	film(flm),
+	threshold(thresholdVal),
+	warmup(warmupVal),
+	testStep(testStepVal),
+	useFilter(useFilt),
+	imagePipelineIndex(idx),
+	referenceImage(nullptr)
+{
 	Reset();
 }
 
-FilmConvTest::FilmConvTest() {
-	referenceImage = NULL;
-}
+//FilmConvTest::FilmConvTest() {
+	//referenceImage = NULL;
+//}
 
 FilmConvTest::~FilmConvTest() {
 	delete referenceImage;
 }
 
 void FilmConvTest::Reset() {
-	todoPixelsCount = film->GetWidth() * film->GetHeight();
+	todoPixelsCount = GetFilm().GetWidth() * GetFilm().GetHeight();
 	maxError = numeric_limits<float>::infinity();
 
 	delete referenceImage;
-	referenceImage = new GenericFrameBuffer<3, 0, float>(film->GetWidth(), film->GetHeight());
+	referenceImage = new GenericFrameBuffer<3, 0, float>(GetFilm().GetWidth(), GetFilm().GetHeight());
 
 	lastSamplesCount = 0.0;
 	firstTest = true;
 }
 
 bool FilmConvTest::IsTestUpdateRequired() const {
-	const u_int pixelsCount = film->GetWidth() * film->GetHeight();
+	const u_int pixelsCount = GetFilm().GetWidth() * GetFilm().GetHeight();
 
 	// Run the test only after a initial warmup
-	if (film->GetTotalSampleCount() / pixelsCount <= warmup)
+	if (GetFilm().GetTotalSampleCount() / pixelsCount <= warmup)
 		return false;
 
 	// Do not run the test if we don't have at least testStep new samples per pixel
-	if (film->GetTotalSampleCount() - lastSamplesCount <= pixelsCount * static_cast<double>(testStep))
+	if (GetFilm().GetTotalSampleCount() - lastSamplesCount <= pixelsCount * static_cast<double>(testStep))
 		return false;
 
 	return true;
 }
 
 u_int FilmConvTest::Test() {
-	const u_int pixelsCount = film->GetWidth() * film->GetHeight();
+	const u_int pixelsCount = GetFilm().GetWidth() * GetFilm().GetHeight();
 
 	if (IsTestUpdateRequired()) {
-		lastSamplesCount = film->GetTotalSampleCount();
+		lastSamplesCount = GetFilm().GetTotalSampleCount();
 
-		const u_int index = (imagePipelineIndex <= (film->GetImagePipelineCount() - 1)) ? imagePipelineIndex : 0;
+		const u_int index = (imagePipelineIndex <= (GetFilm().GetImagePipelineCount() - 1)) ? imagePipelineIndex : 0;
 
 		if (firstTest) {
 			SLG_LOG("Convergence test first pass");
 
 			// Copy the current image
-			referenceImage->Copy(film->channel_IMAGEPIPELINEs[index]);
+			referenceImage->Copy(GetFilm().channel_IMAGEPIPELINEs[index]);
 			firstTest = false;
 		} else {
 			// Check the number of pixels over the threshold
 			const float *ref = referenceImage->GetPixels();
-			const float *img = film->channel_IMAGEPIPELINEs[index]->GetPixels();
+			const float *img = GetFilm().channel_IMAGEPIPELINEs[index]->GetPixels();
 
 			todoPixelsCount = 0;
 			maxError = 0.f;
-			const bool hasConvChannel = film->HasChannel(Film::CONVERGENCE);
+			const bool hasConvChannel = GetFilm().HasChannel(Film::CONVERGENCE);
 
 			for (u_int i = 0; i < pixelsCount; ++i) {
 				const float dr = fabsf((*img++) - (*ref++));
@@ -107,18 +121,18 @@ u_int FilmConvTest::Test() {
 
 				// Update the CONVERGENCE channel
 				if (hasConvChannel)
-					*(film->channel_CONVERGENCE->GetPixel(i)) = Max(diff - threshold, 0.f);
+					*(GetFilm().channel_CONVERGENCE->GetPixel(i)) = Max(diff - threshold, 0.f);
 			}
 
 			if (hasConvChannel && useFilter) {
-				GaussianBlur3x3FilterPlugin::ApplyBlurFilter(film->GetWidth(), film->GetHeight(),
-						film->channel_CONVERGENCE->GetPixels(), referenceImage->GetPixels(),
+				GaussianBlur3x3FilterPlugin::ApplyBlurFilter(GetFilm().GetWidth(), GetFilm().GetHeight(),
+						GetFilm().channel_CONVERGENCE->GetPixels(), referenceImage->GetPixels(),
 						1.f, 1.f, 1.f);
 			}
 
 
 			// Copy the current image
-			referenceImage->Copy(film->channel_IMAGEPIPELINEs[index]);
+			referenceImage->Copy(GetFilm().channel_IMAGEPIPELINEs[index]);
 
 			SLG_LOG("Convergence test: ToDo Pixels = " << todoPixelsCount << ", Max. Error = " << maxError << " [" << (256.f * maxError) << "/256]");
 
@@ -147,4 +161,7 @@ namespace slg {
 // Explicit instantiations for portable archives
 template void FilmConvTest::serialize(LuxOutputArchive &ar, const u_int version);
 template void FilmConvTest::serialize(LuxInputArchive &ar, const u_int version);
+template void FilmConvTest::serialize(LuxOutputArchiveText &ar, const u_int version);
+template void FilmConvTest::serialize(LuxInputArchiveText &ar, const u_int version);
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -19,7 +19,9 @@
 #include <cstddef>
 
 #include "slg/volumes/homogenous.h"
+#include "luxrays/usings.h"
 #include "slg/bsdf/bsdf.h"
+#include "slg/textures/texture.h"
 
 using namespace std;
 using namespace luxrays;
@@ -29,12 +31,18 @@ using namespace slg;
 // HomogeneousVolume
 //------------------------------------------------------------------------------
 
-HomogeneousVolume::HomogeneousVolume(const Texture *iorTex, const Texture *emiTex,
-		const Texture *a, const Texture *s, const Texture *g, const bool multiScat) :
-		Volume(iorTex, emiTex), schlickScatter(this, g), multiScattering(multiScat) {
-	sigmaA = a;
-	sigmaS = s;
-}
+HomogeneousVolume::HomogeneousVolume(
+	TextureConstRef iorTex,
+	TextureConstPtr emiTex,
+	TextureConstRef a, TextureConstRef s, TextureConstRef g,
+	const bool multiScat
+) :
+	Volume(iorTex, emiTex),
+	schlickScatter(*this, g),
+	multiScattering(multiScat),
+	sigmaA(a),
+	sigmaS(s)
+{}
 
 float HomogeneousVolume::Scatter(const float u,
 		const bool scatterAllowed, const float segmentLength,
@@ -91,11 +99,11 @@ float HomogeneousVolume::Scatter(const float u,
 }
 
 Spectrum HomogeneousVolume::SigmaA(const HitPoint &hitPoint) const {
-	return sigmaA->GetSpectrumValue(hitPoint).Clamp();
+	return GetSigmaA().GetSpectrumValue(hitPoint).Clamp();
 }
 
 Spectrum HomogeneousVolume::SigmaS(const HitPoint &hitPoint) const {
-	return sigmaS->GetSpectrumValue(hitPoint).Clamp();
+	return GetSigmaS().GetSpectrumValue(hitPoint).Clamp();
 }
 
 float HomogeneousVolume::Scatter(const Ray &ray, const float u,
@@ -154,35 +162,36 @@ void HomogeneousVolume::Pdf(const HitPoint &hitPoint,
 	schlickScatter.Pdf(hitPoint, localLightDir, localEyeDir, directPdfW, reversePdfW);
 }
 
-void HomogeneousVolume::AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+void HomogeneousVolume::AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 	Volume::AddReferencedTextures(referencedTexs);
 
-	sigmaA->AddReferencedTextures(referencedTexs);
-	sigmaS->AddReferencedTextures(referencedTexs);
-	schlickScatter.g->AddReferencedTextures(referencedTexs);
+	GetSigmaA().AddReferencedTextures(referencedTexs);
+	GetSigmaS().AddReferencedTextures(referencedTexs);
+	schlickScatter.GetG().AddReferencedTextures(referencedTexs);
 }
 
-void HomogeneousVolume::UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
+void HomogeneousVolume::UpdateTextureReferences(
+	TextureConstRef oldTex, TextureRef newTex
+) {
 	Volume::UpdateTextureReferences(oldTex, newTex);
 
-	if (sigmaA == oldTex)
-		sigmaA = newTex;
-	if (sigmaS == oldTex)
-		sigmaS = newTex;
-	if (schlickScatter.g == oldTex)
-		schlickScatter.g = newTex;
+	updtex(sigmaA, oldTex, newTex);
+	updtex(sigmaS, oldTex, newTex);
+	if (&schlickScatter.GetG() == &oldTex)
+		schlickScatter.SetG(newTex);
 }
 
-Properties HomogeneousVolume::ToProperties() const {
-	Properties props;
+PropertiesUPtr HomogeneousVolume::ToProperties() const {
+	PropertiesUPtr props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.volumes." + name + ".type")("homogeneous"));
-	props.Set(Property("scene.volumes." + name + ".absorption")(sigmaA->GetSDLValue()));
-	props.Set(Property("scene.volumes." + name + ".scattering")(sigmaS->GetSDLValue()));
-	props.Set(Property("scene.volumes." + name + ".asymmetry")(schlickScatter.g->GetSDLValue()));
-	props.Set(Property("scene.volumes." + name + ".multiscattering")(multiScattering));
-	props.Set(Volume::ToProperties());
+	props->Set(Property("scene.volumes." + name + ".type")("homogeneous"));
+	props->Set(Property("scene.volumes." + name + ".absorption")(GetSigmaA().GetSDLValue()));
+	props->Set(Property("scene.volumes." + name + ".scattering")(GetSigmaS().GetSDLValue()));
+	props->Set(Property("scene.volumes." + name + ".asymmetry")(schlickScatter.GetG().GetSDLValue()));
+	props->Set(Property("scene.volumes." + name + ".multiscattering")(multiScattering));
+	props->Set(Volume::ToProperties());
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

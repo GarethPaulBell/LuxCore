@@ -10,11 +10,11 @@ ifndef PYTHON
 	PYTHON:=python3
 endif
 
-LUX-CMAKE = $(PYTHON) build-helpers/make/cmake.py
+LUX-CMAKE = $(PYTHON) -m build-system.luxmake
 
 build-targets = pyluxcore luxcoreui luxcoreconsole luxcore doc
 
-.PHONY: deps list-presets config luxcore pyluxcore luxcoreui luxcoreconsole install clean clear doc
+.PHONY: deps list-presets config luxcore pyluxcore luxcoreui luxcoreconsole install clean clear doc wheel-test
 
 all: luxcore pyluxcore luxcoreui luxcoreconsole
 
@@ -35,6 +35,12 @@ install:
 
 package:
 	$(LUX-CMAKE) build-and-install package
+
+wheel-test: pyluxcore
+	$(LUX-CMAKE) wheel-test
+
+win-recompose:
+	$(LUX-CMAKE) win-recompose $(filter-out $@,$(MAKECMDGOALS))
 
 clean:
 	$(LUX-CMAKE) clean

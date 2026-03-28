@@ -88,7 +88,7 @@ public:
 	}
 
 	// Preprocess/update methods
-	virtual void UpdateAuto(const Scene *scene);
+	virtual void UpdateAuto(SceneConstRef scene);
 	virtual void Update(const u_int filmWidth, const u_int filmHeight,
 		const u_int *filmSubRegion);
 
@@ -101,7 +101,7 @@ public:
 		luxrays::Ray *ray, PathVolumeInfo *volInfo,
 		const float u0, const float u1) const;
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 	// User defined values
 	luxrays::Point orig, target;
@@ -142,3 +142,4 @@ protected:
 }
 
 #endif	/* _SLG_PROJECTIVE_CAMERA_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

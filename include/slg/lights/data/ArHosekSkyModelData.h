@@ -9370,3 +9370,4 @@ const float datasetsRGB[3][2][10][10][6] = {
 }
 
 #endif	/* _SLG_ARHOSEKSKYMODELDATA_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -19,8 +19,8 @@
 #include <memory>
 
 #include <boost/lexical_cast.hpp>
-#include <boost/foreach.hpp>
 #include <boost/serialization/unordered_set.hpp>
+#include <boost/serialization/shared_ptr.hpp>
 
 #include "slg/film/film.h"
 #include "slg/film/imagepipeline/imagepipeline.h"
@@ -35,19 +35,7 @@ using namespace slg;
 
 BOOST_CLASS_EXPORT_IMPLEMENT(slg::Film)
 
-Film *Film::LoadSerialized(const string &fileName) {
-	SerializationInputFile sif(fileName);
-
-	Film *film;
-	sif.GetArchive() >> film;
-
-	if (!sif.IsGood())
-		throw runtime_error("Error while loading serialized film: " + fileName);
-
-	return film;
-}
-
-void Film::SaveSerialized(const string &fileName, const Film *film) {
+void Film::SaveSerialized(const string &fileName, FilmRef  film) {
 	SerializationOutputFile sof(fileName);
 
 	sof.GetArchive() << film;
@@ -57,6 +45,18 @@ void Film::SaveSerialized(const string &fileName, const Film *film) {
 
 	sof.Flush();
 	SLG_LOG("Film saved: " << (sof.GetPosition() / 1024) << " Kbytes");
+}
+
+FilmUPtr Film::LoadSerialized(const string &fileName) {
+	SerializationInputFile sif(fileName);
+
+	FilmUPtr film;
+	sif.GetArchive() >> film;
+
+	if (!sif.IsGood())
+		throw runtime_error("Error while loading serialized film: " + fileName);
+
+	return film;
 }
 
 template<class Archive> void Film::load(Archive &ar, const u_int version) {
@@ -237,4 +237,7 @@ namespace slg {
 // Explicit instantiations for portable archives
 template void Film::save(LuxOutputArchive &ar, const u_int version) const;
 template void Film::load(LuxInputArchive &ar, const u_int version);
+template void Film::save(LuxOutputArchiveText &ar, const u_int version) const;
+template void Film::load(LuxInputArchiveText &ar, const u_int version);
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

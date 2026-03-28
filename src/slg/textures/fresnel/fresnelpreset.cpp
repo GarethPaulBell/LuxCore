@@ -133,7 +133,7 @@ static const float AluminiumK[] = {
 	8.31, 8.21, 8.21
 };
 
-FresnelTexture *slg::AllocFresnelPresetTex(const Properties &props, const string &propName) {
+FresnelTextureUPtr slg::AllocFresnelPresetTex(const Properties &props, const string &propName) {
 	const string presetName = props.Get(Property(propName + ".preset")(
 			props.Get(Property(propName + ".name")("aluminium")).Get<string>())).Get<string>();
 
@@ -175,5 +175,6 @@ FresnelTexture *slg::AllocFresnelPresetTex(const Properties &props, const string
 	const RGBColor Nrgb = colorSpace.ToRGBConstrained(N.ToNormalizedXYZ());
 	const RGBColor Krgb = colorSpace.ToRGBConstrained(K.ToNormalizedXYZ());
 
-	return new FresnelConstTexture(Nrgb, Krgb);
+	return std::make_unique<FresnelConstTexture>(Nrgb, Krgb);
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

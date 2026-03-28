@@ -16,6 +16,7 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include <cassert>
 #include "luxrays/utils/thread.h"
 
 using namespace std;
@@ -31,7 +32,7 @@ size_t luxrays::GetHardwareThreadCount() {
 #if defined(_WIN32) || defined(WIN32) || defined(_WIN64) || defined(WIN64)
 	return (size_t)GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
 #else 
-	return (size_t)boost::thread::hardware_concurrency();
+	return (size_t)std::jthread::hardware_concurrency();
 #endif
 }
 
@@ -54,7 +55,7 @@ void luxrays::SetThreadGroupAffinity(const size_t threadIndex) {
 #endif
 }
 
-bool luxrays::SetThreadRRPriority(boost::thread *thread, int pri) {
+bool luxrays::SetThreadRRPriority(const luxrays::JThreadUPtr& thread, int pri) {
 #if defined (__linux__) || defined (__APPLE__) || defined(__CYGWIN__) || defined(__OpenBSD__) || defined(__FreeBSD__)
 	{
 		const pthread_t tid = (pthread_t)thread->native_handle();
@@ -81,3 +82,29 @@ bool luxrays::SetThreadRRPriority(boost::thread *thread, int pri) {
 	}
 #endif
 }
+
+
+void luxrays::SetThreadName(const luxrays::JThreadUPtr& thread, const std::string name) {
+#if defined (__linux__)
+	{
+		auto handle = thread->native_handle();
+		assert(name.size() < 16);
+		int rc = pthread_setname_np(handle, name.c_str());
+		assert(!rc);
+	}
+#elif defined (WIN32)
+	{
+		auto handle = thread->native_handle();
+		std::wstring stemp = std::wstring(name.begin(), name.end());
+		LPCWSTR sw = stemp.c_str();
+		HRESULT hr = SetThreadDescription(handle, sw);
+	}
+#elif defined (__APPLE__) || defined(__OpenBSD__) || defined(__FreeBSD__)
+	{
+		assert(name.size() < 16);
+		int rc = pthread_setname_np(name.c_str());
+		assert(!rc);
+	}
+#endif
+}
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

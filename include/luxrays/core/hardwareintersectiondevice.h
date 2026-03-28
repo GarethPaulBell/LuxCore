@@ -63,7 +63,7 @@ public:
 	virtual ~HardwareIntersectionKernel() {
 	}
 
-	virtual void Update(const DataSet *newDataSet) = 0;
+	virtual void Update(DataSetConstSPtr newDataSet) = 0;
 	virtual void EnqueueTraceRayBuffer(HardwareDeviceBuffer *rayBuff,
 			HardwareDeviceBuffer *rayHitBuff, const unsigned int rayCount) = 0;
 
@@ -74,3 +74,4 @@ protected:
 }
 
 #endif	/* _LUXRAYS_HARDWAREINTERSECTIONDEVICE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

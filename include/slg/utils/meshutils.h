@@ -53,3 +53,4 @@ extern luxrays::ExtTriangleMesh *ScreenProjection(const Camera &camera,
 }
 
 #endif	/* _SLG_MESHUTILS_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

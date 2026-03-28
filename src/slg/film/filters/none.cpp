@@ -28,13 +28,17 @@ BOOST_CLASS_EXPORT_IMPLEMENT(slg::NoneFilter)
 // Static methods used by FilterRegistry
 //------------------------------------------------------------------------------
 
-Properties NoneFilter::ToProperties(const Properties &cfg) {
-	return Properties() <<
-			cfg.Get(GetDefaultProps().Get("film.filter.type"));
+PropertiesUPtr NoneFilter::ToProperties(const Properties &cfg) {
+	PropertiesUPtr props = std::make_unique<Properties>();
+	
+	*props <<
+				cfg.Get(GetDefaultProps()->Get("film.filter.type"));
+	
+	return props;
 }
 
-Filter *NoneFilter::FromProperties(const Properties &cfg) {
-	return new NoneFilter();
+FilterUPtr NoneFilter::FromProperties(const Properties &cfg) {
+	return std::make_unique<NoneFilter>();
 }
 
 slg::ocl::Filter *NoneFilter::FromPropertiesOCL(const Properties &cfg) {
@@ -48,10 +52,12 @@ slg::ocl::Filter *NoneFilter::FromPropertiesOCL(const Properties &cfg) {
 	return oclFilter;
 }
 
-const Properties &NoneFilter::GetDefaultProps() {
-	static Properties props = Properties() <<
+PropertiesUPtr NoneFilter::GetDefaultProps() {
+	auto props = std::make_unique<Properties>();
+	*props <<
 			Filter::GetDefaultProps() <<
 			Property("film.filter.type")(GetObjectTag());
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

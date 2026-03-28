@@ -28,14 +28,14 @@ using namespace slg;
 // Bevel texture
 //------------------------------------------------------------------------------
 
-BevelTexture::BevelTexture(const Texture *t, const float r) : tex(t), radius(r) {
+BevelTexture::BevelTexture(TextureConstRef t, const float r) : tex(&t), radius(r) {
 }
 
 BevelTexture::~BevelTexture() {
 }
 
 Normal BevelTexture::Bump(const HitPoint &hitPoint, const float sampleDistance) const {
-	const ExtMesh *mesh = hitPoint.mesh;
+	auto mesh = hitPoint.mesh;
 	if (!mesh)
 		return hitPoint.shadeN;
 
@@ -126,14 +126,15 @@ Normal BevelTexture::Bump(const HitPoint &hitPoint, const float sampleDistance) 
 		return hitPoint.shadeN;
 }
 
-Properties BevelTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
-	Properties props;
+PropertiesUPtr BevelTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+	auto props = std::make_unique<Properties>();
 	
 	const string name = GetName();
-	props.Set(Property("scene.textures." + name + ".type")("bevel"));
+	props->Set(Property("scene.textures." + name + ".type")("bevel"));
 	if (tex)
-		props.Set(Property("scene.textures." + name + ".texture")(tex->GetSDLValue()));
-	props.Set(Property("scene.textures." + name + ".radius")(radius));
+		props->Set(Property("scene.textures." + name + ".texture")(tex->GetSDLValue()));
+	props->Set(Property("scene.textures." + name + ".radius")(radius));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

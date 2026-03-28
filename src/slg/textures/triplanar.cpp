@@ -48,15 +48,16 @@ Spectrum TriplanarTexture::GetSpectrumValue(const HitPoint &hitPoint) const {
 	HitPoint hitPointTmp = hitPoint;
 	hitPointTmp.defaultUV.u = localPoint.y;
 	hitPointTmp.defaultUV.v = localPoint.z;
-	Spectrum result = texX->GetSpectrumValue(hitPointTmp) * weights[0];
+	Spectrum result = GetTexture1().GetSpectrumValue(hitPointTmp) * weights[0];
 
 	hitPointTmp.defaultUV.u = localPoint.x;
 	hitPointTmp.defaultUV.v = localPoint.z;
-	result += texY->GetSpectrumValue(hitPointTmp) * weights[1];
+	result += GetTexture2().GetSpectrumValue(hitPointTmp) * weights[1];
 
 	hitPointTmp.defaultUV.u = localPoint.x;
+
 	hitPointTmp.defaultUV.v = localPoint.y;
-	result += texZ->GetSpectrumValue(hitPointTmp) * weights[2];
+	result += GetTexture3().GetSpectrumValue(hitPointTmp) * weights[2];
 
 	return result;
 }
@@ -101,16 +102,17 @@ Normal TriplanarTexture::Bump(const HitPoint &hitPoint, const float sampleDistan
 		return Texture::Bump(hitPoint, sampleDistance);
 }
 
-Properties TriplanarTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
-	Properties props;
+PropertiesUPtr TriplanarTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.textures." + name + ".type")("triplanar"));
-	props.Set(Property("scene.textures." + name + ".texture1")(texX->GetSDLValue()));
-	props.Set(Property("scene.textures." + name + ".texture2")(texY->GetSDLValue()));
-    props.Set(Property("scene.textures." + name + ".texture3")(texZ->GetSDLValue()));
-	props.Set(Property("scene.textures." + name + ".uvlessbumpmap.enable")(enableUVlessBumpMap));
-    props.Set(mapping->ToProperties("scene.textures." + name + ".mapping"));
+	props->Set(Property("scene.textures." + name + ".type")("triplanar"));
+	props->Set(Property("scene.textures." + name + ".texture1")(GetTexture1().GetSDLValue()));
+	props->Set(Property("scene.textures." + name + ".texture2")(GetTexture2().GetSDLValue()));
+    props->Set(Property("scene.textures." + name + ".texture3")(GetTexture3().GetSDLValue()));
+	props->Set(Property("scene.textures." + name + ".uvlessbumpmap.enable")(enableUVlessBumpMap));
+    props->Set(mapping->ToProperties("scene.textures." + name + ".mapping"));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

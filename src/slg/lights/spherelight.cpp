@@ -68,7 +68,7 @@ bool SphereLight::SphereIntersect(const Ray &ray, float &hitT) const {
 	return true;
 }
 
-Spectrum SphereLight::Emit(const Scene &scene,
+Spectrum SphereLight::Emit(SceneConstRef scene,
 		const float time, const float u0, const float u1,
 		const float u2, const float u3, const float passThroughEvent,
 		Ray &ray, float &emissionPdfW,
@@ -100,7 +100,7 @@ Spectrum SphereLight::Emit(const Scene &scene,
 	return emittedFactor * invArea * CosTheta(localDirOut) * INV_PI;
 }
 
-Spectrum SphereLight::Illuminate(const Scene &scene, const BSDF &bsdf,
+Spectrum SphereLight::Illuminate(SceneConstRef scene, const BSDF &bsdf,
 		const float time, const float u0, const float u1, const float passThroughEvent,
         Ray &shadowRay, float &directPdfW,
 		float *emissionPdfW, float *cosThetaAtLight) const {
@@ -168,12 +168,13 @@ Spectrum SphereLight::Illuminate(const Scene &scene, const BSDF &bsdf,
 	}
 }
 
-Properties SphereLight::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+PropertiesUPtr SphereLight::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
 	const string prefix = "scene.lights." + GetName();
-	Properties props = PointLight::ToProperties(imgMapCache, useRealFileName);
+	PropertiesUPtr props = PointLight::ToProperties(imgMapCache, useRealFileName);
 
-	props.Set(Property(prefix + ".type")("sphere"));
-	props.Set(Property(prefix + ".radius")(radius));
+	props->Set(Property(prefix + ".type")("sphere"));
+	props->Set(Property(prefix + ".radius")(radius));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

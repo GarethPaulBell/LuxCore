@@ -251,3 +251,4 @@ BOOST_CLASS_IMPLEMENTATION(luxrays::SpectrumGroup, boost::serialization::object_
 BOOST_CLASS_EXPORT_KEY(luxrays::SpectrumGroup)
 
 #endif // _LUXRAYS_SPECTRUMGROUP_H
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -29,7 +29,7 @@ namespace slg {
 
 class WindyTexture : public Texture {
 public:
-	WindyTexture(const TextureMapping3D *mp) : mapping(mp) { }
+	WindyTexture(TextureMapping3DUPtr&& mp) : mapping(std::move(mp)) { }
 	virtual ~WindyTexture() { }
 
 	virtual TextureType GetType() const { return WINDY; }
@@ -38,14 +38,15 @@ public:
 	virtual float Y() const { return .5f; }
 	virtual float Filter() const { return .5f; }
 
-	const TextureMapping3D *GetTextureMapping() const { return mapping; }
+	TextureMapping3DConstRef GetTextureMapping() const { return *mapping; }
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
-	const TextureMapping3D *mapping;
+	TextureMapping3DUPtr mapping;
 };
 
 }
 
 #endif	/* _SLG_WINDYTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

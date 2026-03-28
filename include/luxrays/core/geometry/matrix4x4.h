@@ -94,6 +94,8 @@ private:
 	}
 };
 
+inline const Matrix4x4 Matrix4x4::MAT_IDENTITY = Matrix4x4();
+
 inline bool operator==(const Matrix4x4 &matA, const Matrix4x4 &matB) {
 	for (int i = 0; i < 4; ++i)
 		for (int j = 0; j < 4; ++j)
@@ -134,3 +136,4 @@ BOOST_CLASS_IMPLEMENTATION(luxrays::Matrix4x4, boost::serialization::object_seri
 BOOST_CLASS_EXPORT_KEY(luxrays::Matrix4x4)
 
 #endif	/* _LUXRAYS_MATRIX4X4_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

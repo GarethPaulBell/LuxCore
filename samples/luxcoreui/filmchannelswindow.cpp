@@ -19,7 +19,6 @@
 #include <iostream>
 #include <limits>
 #include <boost/format.hpp>
-#include <boost/foreach.hpp>
 
 #include "luxcoreapp.h"
 
@@ -69,7 +68,7 @@ void FilmChannelWindow::RefreshTexture() {
 		case Film::CHANNEL_BY_MATERIAL_ID:
 		case Film::CHANNEL_IRRADIANCE:
 		case Film::CHANNEL_BY_OBJECT_ID: {
-			const float *filmPixels = app->session->GetFilm().GetChannel<float>(type, index);
+			auto filmPixels = app->session->GetFilm().GetChannel<float>(type, index);
 
 			Normalize3(filmPixels, pixels.get(), filmWidth, filmHeight);
 			UpdateStats(pixels.get(), filmWidth, filmHeight);
@@ -77,7 +76,7 @@ void FilmChannelWindow::RefreshTexture() {
 			break;
 		}
 		case Film::CHANNEL_RADIANCE_PER_SCREEN_NORMALIZED: {
-			const float *filmPixels = app->session->GetFilm().GetChannel<float>(type, index);
+			auto filmPixels = app->session->GetFilm().GetChannel<float>(type, index);
 
 			UpdateStats(pixels.get(), filmWidth, filmHeight);
 			AutoLinearToneMap(filmPixels, pixels.get(), filmWidth, filmHeight);
@@ -88,7 +87,7 @@ void FilmChannelWindow::RefreshTexture() {
 		case Film::CHANNEL_DIRECT_SHADOW_MASK:
 		case Film::CHANNEL_INDIRECT_SHADOW_MASK:
 		case Film::CHANNEL_OBJECT_ID_MASK:{
-			const float *filmPixels = app->session->GetFilm().GetChannel<float>(type, index);
+			auto filmPixels = app->session->GetFilm().GetChannel<float>(type, index);
 
 			Normalize1(filmPixels, pixels.get(), filmWidth, filmHeight);
 			UpdateStats(pixels.get(), filmWidth, filmHeight);
@@ -96,7 +95,7 @@ void FilmChannelWindow::RefreshTexture() {
 			break;
 		}
 		case Film::CHANNEL_IMAGEPIPELINE: {
-			const float *filmPixels = app->session->GetFilm().GetChannel<float>(type, index);
+			auto filmPixels = app->session->GetFilm().GetChannel<float>(type, index);
 			Copy3(filmPixels, pixels.get(), filmWidth, filmHeight);
 			UpdateStats(pixels.get(), filmWidth, filmHeight);
 			break;
@@ -105,7 +104,7 @@ void FilmChannelWindow::RefreshTexture() {
 		case Film::CHANNEL_RAYCOUNT:
 		case Film::CHANNEL_CONVERGENCE:
 		case Film::CHANNEL_NOISE: {
-			const float *filmPixels = app->session->GetFilm().GetChannel<float>(type, index);
+			auto filmPixels = app->session->GetFilm().GetChannel<float>(type, index);
 
 			Copy1(filmPixels, pixels.get(), filmWidth, filmHeight);
 			UpdateStats(pixels.get(), filmWidth, filmHeight);
@@ -115,7 +114,7 @@ void FilmChannelWindow::RefreshTexture() {
 		case Film::CHANNEL_POSITION:
 		case Film::CHANNEL_GEOMETRY_NORMAL:
 		case Film::CHANNEL_SHADING_NORMAL: {
-			const float *filmPixels = app->session->GetFilm().GetChannel<float>(type, index);
+			auto filmPixels = app->session->GetFilm().GetChannel<float>(type, index);
 
 			UpdateStats(filmPixels, filmWidth, filmHeight);
 			AutoLinearToneMap(filmPixels, pixels.get(), filmWidth, filmHeight);
@@ -123,7 +122,7 @@ void FilmChannelWindow::RefreshTexture() {
 		}
 		case Film::CHANNEL_MATERIAL_ID:
 		case Film::CHANNEL_OBJECT_ID: {
-			const unsigned int *filmPixels = app->session->GetFilm().GetChannel<unsigned int>(type, index);
+			auto filmPixels = app->session->GetFilm().GetChannel<unsigned int>(type, index);
 
 			Copy1UINT(filmPixels, pixels.get(), filmWidth, filmHeight);
 			UpdateStats(pixels.get(), filmWidth, filmHeight);
@@ -131,7 +130,7 @@ void FilmChannelWindow::RefreshTexture() {
 			break;
 		}
 		case Film::CHANNEL_UV: {
-			const float *filmPixels = app->session->GetFilm().GetChannel<float>(type, index);
+			auto filmPixels = app->session->GetFilm().GetChannel<float>(type, index);
 
 			Copy2(filmPixels, pixels.get(), filmWidth, filmHeight);
 			UpdateStats(pixels.get(), filmWidth, filmHeight);
@@ -139,7 +138,7 @@ void FilmChannelWindow::RefreshTexture() {
 			break;
 		}
 		case Film::CHANNEL_SAMPLECOUNT: {
-			const unsigned int *filmPixels = app->session->GetFilm().GetChannel<unsigned int>(type, index);
+			auto filmPixels = app->session->GetFilm().GetChannel<unsigned int>(type, index);
 
 			Copy1UINT2FLOAT(filmPixels, pixels.get(), filmWidth, filmHeight);
 			UpdateStats(pixels.get(), filmWidth, filmHeight);
@@ -149,7 +148,7 @@ void FilmChannelWindow::RefreshTexture() {
 		case Film::CHANNEL_MATERIAL_ID_COLOR:
 		case Film::CHANNEL_ALBEDO:
 		case Film::CHANNEL_AVG_SHADING_NORMAL: {
-			const float *filmPixels = app->session->GetFilm().GetChannel<float>(type, index);
+			auto filmPixels = app->session->GetFilm().GetChannel<float>(type, index);
 
 			Normalize3(filmPixels, pixels.get(), filmWidth, filmHeight);
 			UpdateStats(pixels.get(), filmWidth, filmHeight);
@@ -193,7 +192,7 @@ void FilmChannelsWindow::Close() {
 
 void FilmChannelsWindow::DeleteAllWindow() {
 	// First close all windows
-	BOOST_FOREACH(FilmChannelWindowMap::value_type e, filmChannelWindows)
+	for(FilmChannelWindowMap::value_type e: filmChannelWindows)
 		delete filmChannelWindows[e.first];
 	// Than I can clear the map
 	filmChannelWindows.clear();
@@ -230,25 +229,25 @@ void FilmChannelsWindow::DrawShowCheckBox(const string &label,
 }
 
 bool FilmChannelsWindow::HasDenoiser(const u_int index, string &denoiserPrefix) const {
-	const Properties &cfgProps = app->config->ToProperties();
+	auto &cfgProps = app->config->ToProperties();
 
-	vector<string> typeProps = cfgProps.GetAllNamesRE("film\\.imagepipelines\\." + ToString(index) + ".[0-9]+\\.type");
+	vector<string> typeProps = cfgProps->GetAllNamesRE("film\\.imagepipelines\\." + ToString(index) + ".[0-9]+\\.type");
 
-	BOOST_FOREACH(string &typeProp, typeProps) {
-		if (cfgProps.Get(typeProp).Get<string>() == "BCD_DENOISER") {
+	for(string &typeProp: typeProps) {
+		if (cfgProps->Get(typeProp).Get<string>() == "BCD_DENOISER") {
 			// 5 = ".type".length()
 			denoiserPrefix = typeProp.substr(0, typeProp.length() - 5);
 			return true;
 		}
 	}
-	
+
 	return false;
 }
 
 void FilmChannelsWindow::DrawChannelInfo(const string &label, const Film::FilmChannelType type) {
-	const Film &film = app->session->GetFilm();
+	auto& film = app->session->GetFilm();
 	unsigned int count = film.GetChannelCount(type);
-	
+
 	if ((type == Film::CHANNEL_IMAGEPIPELINE) && (denoiserProps.size() != count))
 		denoiserProps.resize(count);
 
@@ -257,7 +256,7 @@ void FilmChannelsWindow::DrawChannelInfo(const string &label, const Film::FilmCh
 		if (ImGui::CollapsingHeader((label + ": " + ToString(count) + " channel(s)").c_str(), ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
 			for (unsigned int i = 0; i < count; ++i) {
 				DrawShowCheckBox(label, type, i);
-				
+
 				// Some special option for image pipeline channel
 				string denoiserPrefix;
 				if ((type == Film::CHANNEL_IMAGEPIPELINE) && HasDenoiser(i, denoiserPrefix)) {
@@ -265,74 +264,77 @@ void FilmChannelsWindow::DrawChannelInfo(const string &label, const Film::FilmCh
 						ImGui::PushID("Denoiser options properties");
 						ImGui::PushItemWidth(ImGui::GetWindowSize().x / 3);
 
-						Properties &props = denoiserProps[i];
-						if (props.GetSize() == 0) {
-							const Properties &cfgProps = app->config->ToProperties();
-							props = cfgProps.GetAllProperties(denoiserPrefix);
+						auto &props = denoiserProps[i];
+						if (props->GetSize() == 0) {
+							auto &cfgProps = app->config->ToProperties();
+							props = cfgProps->GetAllProperties(denoiserPrefix);
 						}
 
-						bool bval = props.Get(Property(denoiserPrefix + ".applydenoise")(true)).Get<bool>();
+						bool bval = props->Get(Property(denoiserPrefix + ".applydenoise")(true)).Get<bool>();
 						if (ImGui::Checkbox("Apply denoise", &bval))
-						props << Property(denoiserPrefix + ".applydenoise")(bval);
+						*props << Property(denoiserPrefix + ".applydenoise")(bval);
 						LuxCoreApp::HelpMarker((denoiserPrefix + ".applydenoise").c_str());
 
-						bval = props.Get(Property(denoiserPrefix + ".filterspikes")(false)).Get<bool>();
+						bval = props->Get(Property(denoiserPrefix + ".filterspikes")(false)).Get<bool>();
 						if (ImGui::Checkbox("Filter spikes", &bval))
-						props << Property(denoiserPrefix + ".filterspikes")(bval);
+						*props << Property(denoiserPrefix + ".filterspikes")(bval);
 						LuxCoreApp::HelpMarker((denoiserPrefix + ".filterspikes").c_str());
 						
 						if (bval) {
-							float fval = Max(props.Get(Property(denoiserPrefix + ".spikestddev")(2.f)).Get<float>(), 0.f);
+							float fval = Max(props->Get(Property(denoiserPrefix + ".spikestddev")(2.f)).Get<float>(), 0.f);
 							if (ImGui::InputFloat("Spike threshold", &fval))
-								props << Property(denoiserPrefix + ".spikestddev")(fval);
+								*props << Property(denoiserPrefix + ".spikestddev")(fval);
 							LuxCoreApp::HelpMarker((denoiserPrefix + ".spikestddev").c_str());
 						}
 
-						float fval = Max(props.Get(Property(denoiserPrefix + ".histdistthresh")(1.f)).Get<float>(), 0.f);
+						float fval = Max(props->Get(Property(denoiserPrefix + ".histdistthresh")(1.f)).Get<float>(), 0.f);
 						if (ImGui::InputFloat("Histogram distance threshold", &fval))
-							props << Property(denoiserPrefix + ".histdistthresh")(fval);
+							*props << Property(denoiserPrefix + ".histdistthresh")(fval);
 						LuxCoreApp::HelpMarker((denoiserPrefix + ".histdistthresh").c_str());
 
-						int ival = Max(props.Get(Property(denoiserPrefix + ".patchradius")(1)).Get<int>(), 1);
+						int ival = Max(props->Get(Property(denoiserPrefix + ".patchradius")(1)).Get<int>(), 1);
 						if (ImGui::InputInt("Patch search radius", &ival))
-							props << Property(denoiserPrefix + ".patchradius")(ival);
+							*props << Property(denoiserPrefix + ".patchradius")(ival);
 						LuxCoreApp::HelpMarker((denoiserPrefix + ".patchradius").c_str());
 						
-						ival = Max(props.Get(Property(denoiserPrefix + ".searchwindowradius")(6)).Get<int>(), 1);
+						ival = Max(props->Get(Property(denoiserPrefix + ".searchwindowradius")(6)).Get<int>(), 1);
 						if (ImGui::InputInt("Search window radius", &ival))
-							props << Property(denoiserPrefix + ".searchwindowradius")(ival);
+							*props << Property(denoiserPrefix + ".searchwindowradius")(ival);
 						LuxCoreApp::HelpMarker((denoiserPrefix + ".searchwindowradius").c_str());
 
-						fval = Max(props.Get(Property(denoiserPrefix + ".mineigenvalue")(1.e-8f)).Get<float>(), 0.f);
+						fval = Max(props->Get(Property(denoiserPrefix + ".mineigenvalue")(1.e-8f)).Get<float>(), 0.f);
 						if (ImGui::InputFloat("Min. eigen value", &fval))
-							props << Property(denoiserPrefix + ".mineigenvalue")(fval);
+							*props << Property(denoiserPrefix + ".mineigenvalue")(fval);
 						LuxCoreApp::HelpMarker((denoiserPrefix + ".mineigenvalue").c_str());
 						
-						bval = props.Get(Property(denoiserPrefix + ".userandompixelorder")(true)).Get<bool>();
+						bval = props->Get(Property(denoiserPrefix + ".userandompixelorder")(true)).Get<bool>();
 						if (ImGui::Checkbox("Use random pixel order", &bval))
-							props << Property(denoiserPrefix + ".userandompixelorder")(bval);
+							*props << Property(denoiserPrefix + ".userandompixelorder")(bval);
 						LuxCoreApp::HelpMarker((denoiserPrefix + ".userandompixelorder").c_str());
 
-						fval = Clamp(props.Get(Property(denoiserPrefix + ".markedpixelsskippingprobability")(1.f)).Get<float>(), 0.f, 1.f);
+						fval = Clamp(props->Get(Property(denoiserPrefix + ".markedpixelsskippingprobability")(1.f)).Get<float>(), 0.f, 1.f);
 						if (ImGui::InputFloat("Marked pixel skipping probability", &fval))
-							props << Property(denoiserPrefix + ".markedpixelsskippingprobability")(fval);
+							*props << Property(denoiserPrefix + ".markedpixelsskippingprobability")(fval);
 						LuxCoreApp::HelpMarker((denoiserPrefix + ".markedpixelsskippingprobability").c_str());
 						
-						ival = Max(props.Get(Property(denoiserPrefix + ".threadcount")(0)).Get<int>(), 0);
+						ival = Max(props->Get(Property(denoiserPrefix + ".threadcount")(0)).Get<int>(), 0);
 						if (ImGui::InputInt("Thread count", &ival))
-							props << Property(denoiserPrefix + ".threadcount")(ival);
+							*props << Property(denoiserPrefix + ".threadcount")(ival);
 						LuxCoreApp::HelpMarker((denoiserPrefix + ".threadcount").c_str());
 
-						ival = Max(props.Get(Property(denoiserPrefix + ".scales")(3)).Get<int>(), 1);
+						ival = Max(props->Get(Property(denoiserPrefix + ".scales")(3)).Get<int>(), 1);
 						if (ImGui::InputInt("Scales", &ival))
-							props << Property(denoiserPrefix + ".scales")(ival);
+							*props << Property(denoiserPrefix + ".scales")(ival);
 						LuxCoreApp::HelpMarker((denoiserPrefix + ".scales").c_str());
-						
+
 						if (ImGui::Button("Apply")) {
-							const Properties &cfgProps = app->config->ToProperties();
-							const Properties newImagePipelineProps =
-								cfgProps.GetAllProperties(Property::PopPrefix(denoiserPrefix)) <<
-								props;
+							const auto &cfgProps = app->config->ToProperties();
+							auto newImagePipelineProps = std::make_unique<Properties>();
+							*newImagePipelineProps
+								<< cfgProps->GetAllProperties(
+									Property::PopPrefix(denoiserPrefix)
+								)
+								<< props;
 							app->session->Parse(newImagePipelineProps);
 
 							// Check if I have to refresh the channel window
@@ -405,8 +407,9 @@ void FilmChannelsWindow::Draw() {
 
 	if (opened) {
 		// Draw all channel windows
-		BOOST_FOREACH(FilmChannelWindowMap::value_type e, filmChannelWindows)
+		for(FilmChannelWindowMap::value_type e: filmChannelWindows)
 			e.second->Draw();
 	} else
 		DeleteAllWindow();
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

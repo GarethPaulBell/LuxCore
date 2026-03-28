@@ -22,6 +22,7 @@
 #include "luxrays/utils/properties.h"
 
 #include "slg/slg.h"
+#include "slg/usings.h"
 #include "slg/renderconfig.h"
 #include "slg/renderstate.h"
 #include "slg/engines/renderengine.h"
@@ -31,7 +32,11 @@ namespace slg {
 
 class RenderSession {
 public:
-	RenderSession(RenderConfig *cfg, RenderState *startState = NULL, Film *startFilm = NULL);
+	RenderSession(
+		RenderConfigRef cfg,
+		RenderStateSPtr startState = nullptr,
+		FilmPtr startFilm = nullptr
+	);
 	~RenderSession();
 
 	bool IsStarted() const { return renderEngine->IsStarted(); }
@@ -49,18 +54,18 @@ public:
 	void SaveFilmOutputs();
 	void SaveFilm(const std::string &fileName);
 	void SaveResumeFile(const std::string &fileName);
-	
+
 	void CheckPeriodicSave(const bool force = false);
-	
-	RenderState *GetRenderState();
 
-	void Parse(const luxrays::Properties &props);
+	RenderStateSPtr GetRenderState();
 
-	RenderConfig *renderConfig;
-	RenderEngine *renderEngine;
+	void Parse(luxrays::PropertiesRPtr props);
 
-	boost::mutex filmMutex;
-	Film *film;
+	RenderConfigRef renderConfig;
+	RenderEngineUPtr renderEngine;
+
+	mutable std::mutex filmMutex;
+	FilmUPtr film;  // Render session owns the film
 
 protected:
 	bool HasPeriodicFilmOutputsSave();
@@ -77,3 +82,4 @@ protected:
 }
 
 #endif	/* _SLG_RENDERSESSION_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

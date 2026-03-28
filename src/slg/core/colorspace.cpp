@@ -81,8 +81,8 @@ void ColorSpaceConfig::FromProperties(const Properties &props, const string &pre
 		case ColorSpaceConfig::LUXCORE_COLORSPACE: {
 			colorSpaceCfg.colorSpaceType = LUXCORE_COLORSPACE;
 			// For compatibility with the past
-			const float oldGamma = props.Get(Property(prefix + ".gamma")(defaultCfg.luxcore.gamma)).Get<float>();
-			colorSpaceCfg.luxcore.gamma = props.Get(Property(prefix + ".colorspace.gamma")(oldGamma)).Get<float>();
+			const float oldGamma = props.Get(Property(prefix + ".gamma")(defaultCfg.luxcore.gamma)).Get<double>();
+			colorSpaceCfg.luxcore.gamma = props.Get(Property(prefix + ".colorspace.gamma")(oldGamma)).Get<double>();
 			break;
 		}
 		case ColorSpaceConfig::OPENCOLORIO_COLORSPACE: {
@@ -119,3 +119,4 @@ string ColorSpaceConfig::ColorSpaceType2String(const ColorSpaceConfig::ColorSpac
 			throw runtime_error("Unsupported wrap type in ColorSpaceConfig::ColorSpaceType2String(): " + ToString(type));
 	}
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

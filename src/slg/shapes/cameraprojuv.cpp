@@ -25,27 +25,25 @@ using namespace std;
 using namespace luxrays;
 using namespace slg;
 
-CameraProjUVShape::CameraProjUVShape(ExtTriangleMesh *m, const u_int index) :
+CameraProjUVShape::CameraProjUVShape(ExtTriangleMeshConstRef m, const u_int index) :
 		uvIndex(index) {
-	mesh = m->Copy();
+	mesh = m.Copy();
 }
 
 CameraProjUVShape::~CameraProjUVShape() {
-	if (!refined)
-		delete mesh;
 }
 
-ExtTriangleMesh *CameraProjUVShape::RefineImpl(const Scene *scene) {
+ExtTriangleMeshUPtr CameraProjUVShape::RefineImpl(SceneConstRef scene) {
 	SDL_LOG("CameraProjUV shape " << mesh->GetName());
 
 	const u_int vertCount = mesh->GetTotalVertexCount();
 	SDL_LOG("CameraProjUV shape has " << vertCount << " vertices");
 
-	const Camera *camera = scene->camera;
+	auto& camera = scene.GetCamera();
 
 	UV *uvs = new UV[vertCount];
-	const float invFilmWidth = 1.f / camera->filmWidth;
-	const float invFilmHeight = 1.f / camera->filmHeight;
+	const float invFilmWidth = 1.f / camera.filmWidth;
+	const float invFilmHeight = 1.f / camera.filmHeight;
 
 #pragma omp parallel for
 	for (
@@ -58,7 +56,7 @@ ExtTriangleMesh *CameraProjUVShape::RefineImpl(const Scene *scene) {
 
 		float filmX = 0.f;
 		float filmY = 0.f;
-		camera->GetSamplePosition(p, &filmX, &filmY);
+		camera.GetSamplePosition(p, &filmX, &filmY);
 		uvs[i].u = filmX * invFilmWidth;
 		uvs[i].v = filmY * invFilmHeight;
 	}
@@ -67,5 +65,6 @@ ExtTriangleMesh *CameraProjUVShape::RefineImpl(const Scene *scene) {
 		mesh->DeleteUVs(uvIndex);
 	mesh->SetUVs(uvIndex, uvs);
 	
-	return mesh;
+	return std::move(mesh);
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

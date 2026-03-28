@@ -19,6 +19,7 @@
 #ifndef _SLG_FRESNELTEXTURE_H
 #define	_SLG_FRESNELTEXTURE_H
 
+#include "slg/usings.h"
 #include "slg/textures/texture.h"
 
 namespace slg {
@@ -52,6 +53,8 @@ private:
 			const float eta);
 };
 
+
 }
 
 #endif	/* _SLG_FRESNELTEXTURE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

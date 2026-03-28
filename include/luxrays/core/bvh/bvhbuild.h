@@ -22,8 +22,8 @@
 #include <vector>
 #include <ostream>
 
-#include <embree3/rtcore.h>
-#include <embree3/rtcore_builder.h>
+#include <embree4/rtcore.h>
+#include <embree4/rtcore_builder.h>
 
 #include "luxrays/luxrays.h"
 #include "luxrays/core/geometry/bbox.h"
@@ -74,11 +74,19 @@ extern luxrays::ocl::BVHArrayNode *BuildBVH(const BVHParams &params,
 		std::vector<BVHTreeNode *> &leafList);
 
 // Embree BVH build
-extern luxrays::ocl::BVHArrayNode *BuildEmbreeBVHBinnedSAH(const BVHParams &params,
-		u_int *nNodes, const std::deque<const Mesh *> *meshes,
-		std::vector<BVHTreeNode *> &leafList);
+extern luxrays::ocl::BVHArrayNode *BuildEmbreeBVHBinnedSAH(
+	const BVHParams &params,
+	u_int *nNodes,
+	const std::deque<const Mesh * > *meshes,
+	std::vector<BVHTreeNode *> &leafList);
+extern luxrays::ocl::BVHArrayNode *BuildEmbreeBVHMorton(
+	const BVHParams &params,
+	u_int *nNodes,
+	const std::deque<const Mesh * > meshes,
+	std::vector<BVHTreeNode *> &leafList
+);
 extern luxrays::ocl::BVHArrayNode *BuildEmbreeBVHMorton(const BVHParams &params,
-		u_int *nNodes, const std::deque<const Mesh *> *meshes,
+		u_int *nNodes, const std::deque<const Mesh * > *meshes,
 		std::vector<BVHTreeNode *> &leafList);
 
 // Common functions
@@ -302,3 +310,4 @@ template<u_int CHILDREN_COUNT> inline luxrays::ocl::IndexBVHArrayNode *BuildEmbr
 }
 
 #endif	/* _LUXRAYS_BVHACCEL_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

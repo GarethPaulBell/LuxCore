@@ -29,7 +29,7 @@ namespace slg {
 
 class SplitFloat3Texture : public Texture {
 public:
-	SplitFloat3Texture(const Texture *t, const u_int ch) : tex(t), channel(ch) { }
+	SplitFloat3Texture(TextureRef t, const u_int ch) : tex(t), channel(ch) { }
 	virtual ~SplitFloat3Texture() { }
 
 	virtual TextureType GetType() const { return SPLIT_FLOAT3; }
@@ -40,30 +40,30 @@ public:
 	virtual float Y() const { return 1.f; }
 	virtual float Filter() const { return 1.f; }
 
-	virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 		Texture::AddReferencedTextures(referencedTexs);
 
-		tex->AddReferencedTextures(referencedTexs);
+		GetTexture().AddReferencedTextures(referencedTexs);
 	}
-	virtual void AddReferencedImageMaps(boost::unordered_set<const ImageMap *> &referencedImgMaps) const {
-		tex->AddReferencedImageMaps(referencedImgMaps);
-	}
-
-	virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
-		if (tex == oldTex)
-			tex = newTex;
+	virtual void AddReferencedImageMaps(std::unordered_set<const ImageMap * > &referencedImgMaps) const {
+		GetTexture().AddReferencedImageMaps(referencedImgMaps);
 	}
 
-	const Texture *GetTexture() const { return tex; }
+	virtual void UpdateTextureReferences(TextureRef oldTex, TextureRef newTex) {
+		updtex(tex, oldTex, newTex);
+	}
+
+	TextureConstRef GetTexture() const { return tex; }
 	u_int GetChannel() const { return channel; }
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
-	const Texture *tex;
+	std::reference_wrapper<Texture> tex;
 	u_int channel;
 };
 
 }
 
 #endif	/* _SLG_SPLITFLOAT3TEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -89,3 +89,4 @@ float newPerlin(float x, float y, float z);
 } // namespace slg
 
 #endif	/* _SLG_BLENDER_NOISELIB_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

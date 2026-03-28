@@ -273,12 +273,12 @@ void SamplesAccumulator::ComputeSampleStatistics(bcd::SamplesStatisticsImages &i
 bcd::SamplesStatisticsImages SamplesAccumulator::GetSamplesStatistics() const {
 	bcd::SamplesStatisticsImages stats(m_samplesStatisticsImages);
 	ComputeSampleStatistics(stats);
-	return move(stats);
+	return std::move(stats);
 }
 
 bcd::SamplesStatisticsImages SamplesAccumulator::ExtractSamplesStatistics() {
 	ComputeSampleStatistics(m_samplesStatisticsImages);
-	return move(m_samplesStatisticsImages);
+	return std::move(m_samplesStatisticsImages);
 }
 
 //------------------------------------------------------------------------------
@@ -343,4 +343,7 @@ namespace slg {
 // Explicit instantiations for portable archives
 template void SamplesAccumulator::save(LuxOutputArchive &ar, const u_int version) const;
 template void SamplesAccumulator::load(LuxInputArchive &ar, const u_int version);
+template void SamplesAccumulator::save(LuxOutputArchiveText &ar, const u_int version) const;
+template void SamplesAccumulator::load(LuxInputArchiveText &ar, const u_int version);
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -69,3 +69,4 @@ BOOST_CLASS_VERSION(slg::ObjectIDMaskFilterPlugin, 1)
 BOOST_CLASS_EXPORT_KEY(slg::ObjectIDMaskFilterPlugin)
 
 #endif	/*  _SLG_OBJECTIDMASK_PLUGIN_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

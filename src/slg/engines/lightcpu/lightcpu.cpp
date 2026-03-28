@@ -18,6 +18,7 @@
 
 #include "slg/engines/lightcpu/lightcpu.h"
 #include "slg/engines/lightcpu/lightcpurenderstate.h"
+#include "slg/cameras/camera.h"
 
 using namespace luxrays;
 using namespace slg;
@@ -26,29 +27,27 @@ using namespace slg;
 // LightCPURenderEngine
 //------------------------------------------------------------------------------
 
-LightCPURenderEngine::LightCPURenderEngine(const RenderConfig *rcfg) :
-		CPUNoTileRenderEngine(rcfg), sampleSplatter(nullptr) {
-	if (rcfg->scene->camera->GetType() == Camera::STEREO)
+LightCPURenderEngine::LightCPURenderEngine(RenderConfigRef rcfg) :
+		CPUNoTileRenderEngine(rcfg)  {
+	if (rcfg.GetScene().GetCamera().GetType() == Camera::STEREO)
 		throw std::runtime_error("Light render engine doesn't support stereo camera");
 }
 
-LightCPURenderEngine::~LightCPURenderEngine() {
-	delete sampleSplatter;
-}
+LightCPURenderEngine::~LightCPURenderEngine() {}
 
 void LightCPURenderEngine::InitFilm() {
-	film->AddChannel(Film::RADIANCE_PER_SCREEN_NORMALIZED);
-	film->SetRadianceGroupCount(renderConfig->scene->lightDefs.GetLightGroupCount());
-	film->SetThreadCount(renderThreads.size());
-	film->Init();
+	GetFilm().AddChannel(Film::RADIANCE_PER_SCREEN_NORMALIZED);
+	GetFilm().SetRadianceGroupCount(renderConfig.GetScene().GetLightSources().GetLightGroupCount());
+	GetFilm().SetThreadCount(renderThreads.size());
+	GetFilm().Init();
 }
 
-RenderState *LightCPURenderEngine::GetRenderState() {
-	return new LightCPURenderState(bootStrapSeed);
+RenderStateSPtr LightCPURenderEngine::GetRenderState() {
+	return std::make_shared<LightCPURenderState>(bootStrapSeed);
 }
 
 void LightCPURenderEngine::StartLockLess() {
-	const Properties &cfg = renderConfig->cfg;
+	const auto& cfg = renderConfig.GetConfig();
 
 	//--------------------------------------------------------------------------
 	// Check to have the right sampler settings
@@ -64,29 +63,28 @@ void LightCPURenderEngine::StartLockLess() {
 		// Check if the render state is of the right type
 		startRenderState->CheckEngineTag(GetObjectTag());
 
-		LightCPURenderEngine *rs = (LightCPURenderEngine *)startRenderState;
+		//auto rs = static_pointer_cast<LightCPURenderEngine>(startRenderState);
+		auto rs = static_pointer_cast<LightCPURenderState>(startRenderState);
 
 		// Use a new seed to continue the rendering
 		const u_int newSeed = rs->bootStrapSeed + 1;
 		SLG_LOG("Continuing the rendering with new LIGHTCPU seed: " + ToString(newSeed));
 		SetSeed(newSeed);
-		
-		delete startRenderState;
-		startRenderState = NULL;
+
+		startRenderState = nullptr;
 	}
 
 	//--------------------------------------------------------------------------
 	// Initialize the PathTracer class with rendering parameters
 	//--------------------------------------------------------------------------
 
-	pathTracer.ParseOptions(cfg, GetDefaultProps());
+	pathTracer.ParseOptions(cfg, *GetDefaultProps());
 	// To avoid to trace only caustic light paths
 	pathTracer.hybridBackForwardEnable = false;
 
-	pathTracer.InitPixelFilterDistribution(pixelFilter);
+	pathTracer.InitPixelFilterDistribution(GetPixelFilter());
 
-	delete sampleSplatter;
-	sampleSplatter = new FilmSampleSplatter(pixelFilter);
+	SetSampleSplatter(GetPixelFilter());
 
 	//--------------------------------------------------------------------------
 
@@ -98,30 +96,35 @@ void LightCPURenderEngine::StopLockLess() {
 	
 	pathTracer.DeletePixelFilterDistribution();
 
-	delete sampleSplatter;
-	sampleSplatter = NULL;
+	ResetSampleSplatter();
 }
 
 //------------------------------------------------------------------------------
 // Static methods used by RenderEngineRegistry
 //------------------------------------------------------------------------------
 
-Properties LightCPURenderEngine::ToProperties(const Properties &cfg) {
-	return CPUNoTileRenderEngine::ToProperties(cfg) <<
-			cfg.Get(GetDefaultProps().Get("renderengine.type")) <<
-			PathTracer::ToProperties(cfg) <<
-			Sampler::ToProperties(cfg);
+PropertiesUPtr LightCPURenderEngine::ToProperties(const Properties &cfg) {
+	PropertiesUPtr props = CPUNoTileRenderEngine::ToProperties(cfg);
+	
+	*props <<
+				cfg.Get(GetDefaultProps()->Get("renderengine.type")) <<
+			*PathTracer::ToProperties(cfg) <<
+			*Sampler::ToProperties(cfg);
+	
+	return props;
 }
 
-RenderEngine *LightCPURenderEngine::FromProperties(const RenderConfig *rcfg) {
+RenderEngine *LightCPURenderEngine::FromProperties(RenderConfigRef rcfg) {
 	return new LightCPURenderEngine(rcfg);
 }
 
-const Properties &LightCPURenderEngine::GetDefaultProps() {
-	static Properties props = Properties() <<
+PropertiesUPtr LightCPURenderEngine::GetDefaultProps() {
+	auto props = std::make_unique<Properties>();
+	*props <<
 			CPUNoTileRenderEngine::GetDefaultProps() <<
 			Property("renderengine.type")(GetObjectTag()) <<
 			PathTracer::GetDefaultProps();
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -26,9 +26,9 @@ using namespace slg;
 // Rough matte material
 //------------------------------------------------------------------------------
 
-RoughMatteMaterial::RoughMatteMaterial(const Texture *frontTransp, const Texture *backTransp,
-		const Texture *emitted, const Texture *bump,
-		const Texture *col, const Texture *s) :
+RoughMatteMaterial::RoughMatteMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
+		TextureConstPtr emitted, TextureConstPtr bump,
+		TextureConstPtr col, TextureConstPtr s) :
 			Material(frontTransp, backTransp, emitted, bump), Kd(col), sigma(s) {
 }
 
@@ -103,30 +103,31 @@ void RoughMatteMaterial::Pdf(const HitPoint &hitPoint,
 		*reversePdfW = fabsf((hitPoint.fromLight ? localLightDir.z : localEyeDir.z) * INV_PI);
 }
 
-void RoughMatteMaterial::AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+void RoughMatteMaterial::AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 	Material::AddReferencedTextures(referencedTexs);
 
 	Kd->AddReferencedTextures(referencedTexs);
 	sigma->AddReferencedTextures(referencedTexs);
 }
 
-void RoughMatteMaterial::UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
+void RoughMatteMaterial::UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
 	Material::UpdateTextureReferences(oldTex, newTex);
 
-	if (Kd == oldTex)
-		Kd = newTex;
-	if (sigma == oldTex)
-		sigma = newTex;
+	if (Kd == &oldTex)
+		Kd = &newTex;
+	if (sigma == &oldTex)
+		sigma = &newTex;
 }
 
-Properties RoughMatteMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
-	Properties props;
+PropertiesUPtr RoughMatteMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.materials." + name + ".type")("roughmatte"));
-	props.Set(Property("scene.materials." + name + ".kd")(Kd->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".sigma")(sigma->GetSDLValue()));
-	props.Set(Material::ToProperties(imgMapCache, useRealFileName));
+	props->Set(Property("scene.materials." + name + ".type")("roughmatte"));
+	props->Set(Property("scene.materials." + name + ".kd")(Kd->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".sigma")(sigma->GetSDLValue()));
+	props->Set(Material::ToProperties(imgMapCache, useRealFileName));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

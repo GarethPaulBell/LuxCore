@@ -26,12 +26,12 @@ using namespace slg;
 // Cloud texture
 //------------------------------------------------------------------------------
 
-CloudTexture::CloudTexture(const TextureMapping3D *mp, const float r, const float noiseScale, const float t,
+CloudTexture::CloudTexture(TextureMapping3DUPtr&& mp, const float r, const float noiseScale, const float t,
 	const float sharp, const float v, const float baseflatness, const u_int octaves, const float o, const float offset,
 	const u_int numspheres, const float spheresize) : radius(r), numSpheres(numspheres), sphereSize(spheresize),
 													  sharpness(sharp), baseFlatness(baseflatness), variability(v),
 													  omega(o), firstNoiseScale(noiseScale), noiseOffset(offset),
-													  turbulenceAmount(t), numOctaves(octaves), mapping(mp) {
+													  turbulenceAmount(t), numOctaves(octaves), mapping(std::move(mp)) {
 	
 	cumulus = numSpheres > 0;
 	baseFadeDistance = 1.f - baseFlatness;
@@ -149,22 +149,23 @@ bool CloudTexture::SphereFunction(const Point &p) const {
 	return false;
 }
 
-Properties CloudTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
-	Properties props;
+PropertiesUPtr CloudTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.textures." + name + ".type")("cloud"));
-	props.Set(Property("scene.textures." + name + ".radius")(radius));
-	props.Set(Property("scene.textures." + name + ".noisescale")(firstNoiseScale));
-	props.Set(Property("scene.textures." + name + ".turbulence")(turbulenceAmount));
-	props.Set(Property("scene.textures." + name + ".sharpness")(sharpness));
-	props.Set(Property("scene.textures." + name + ".noiseoffset")(noiseOffset));
-	props.Set(Property("scene.textures." + name + ".spheres")(numSpheres));
-	props.Set(Property("scene.textures." + name + ".octaves")(numOctaves));
-	props.Set(Property("scene.textures." + name + ".variability")(variability));
-	props.Set(Property("scene.textures." + name + ".baseflatness")(baseFlatness));
-	props.Set(Property("scene.textures." + name + ".spheresize")(sphereSize));
-	props.Set(mapping->ToProperties("scene.textures." + name + ".mapping"));
+	props->Set(Property("scene.textures." + name + ".type")("cloud"));
+	props->Set(Property("scene.textures." + name + ".radius")(radius));
+	props->Set(Property("scene.textures." + name + ".noisescale")(firstNoiseScale));
+	props->Set(Property("scene.textures." + name + ".turbulence")(turbulenceAmount));
+	props->Set(Property("scene.textures." + name + ".sharpness")(sharpness));
+	props->Set(Property("scene.textures." + name + ".noiseoffset")(noiseOffset));
+	props->Set(Property("scene.textures." + name + ".spheres")(numSpheres));
+	props->Set(Property("scene.textures." + name + ".octaves")(numOctaves));
+	props->Set(Property("scene.textures." + name + ".variability")(variability));
+	props->Set(Property("scene.textures." + name + ".baseflatness")(baseFlatness));
+	props->Set(Property("scene.textures." + name + ".spheresize")(sphereSize));
+	props->Set(mapping->ToProperties("scene.textures." + name + ".mapping"));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

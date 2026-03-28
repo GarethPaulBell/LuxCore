@@ -29,13 +29,14 @@ using namespace slg;
 // ClearVolume
 //------------------------------------------------------------------------------
 
-ClearVolume::ClearVolume(const Texture *iorTex, const Texture *emiTex,
-		const Texture *a) : Volume(iorTex, emiTex) {
-	sigmaA = a;
-}
+ClearVolume::ClearVolume(
+	TextureConstRef iorTex,
+	TextureConstPtr emiTex,
+	TextureConstRef a
+) : Volume(iorTex, emiTex), sigmaA(a) {}
 
 Spectrum ClearVolume::SigmaA(const HitPoint &hitPoint) const {
-	return sigmaA->GetSpectrumValue(hitPoint).Clamp();
+	return GetSigmaA().GetSpectrumValue(hitPoint).Clamp();
 }
 
 Spectrum ClearVolume::SigmaS(const HitPoint &hitPoint) const {
@@ -95,26 +96,26 @@ void ClearVolume::Pdf(const HitPoint &hitPoint,
 	throw runtime_error("Internal error: called ClearVolume::Pdf()");
 }
 
-void ClearVolume::AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+void ClearVolume::AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 	Volume::AddReferencedTextures(referencedTexs);
 
-	sigmaA->AddReferencedTextures(referencedTexs);
+	GetSigmaA().AddReferencedTextures(referencedTexs);
 }
 
-void ClearVolume::UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
+void ClearVolume::UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
 	Volume::UpdateTextureReferences(oldTex, newTex);
 
-	if (sigmaA == oldTex)
-		sigmaA = newTex;
+	updtex(sigmaA, oldTex, newTex);
 }
 
-Properties ClearVolume::ToProperties() const {
-	Properties props;
+PropertiesUPtr ClearVolume::ToProperties() const {
+	PropertiesUPtr props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.volumes." + name + ".type")("clear"));
-	props.Set(Property("scene.volumes." + name + ".absorption")(sigmaA->GetSDLValue()));
-	props.Set(Volume::ToProperties());
+	props->Set(Property("scene.volumes." + name + ".type")("clear"));
+	props->Set(Property("scene.volumes." + name + ".absorption")(GetSigmaA().GetSDLValue()));
+	props->Set(Volume::ToProperties());
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

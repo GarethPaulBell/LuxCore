@@ -16,6 +16,8 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include <span>
+#include <optional>
 #include "luxrays/core/exttrianglemesh.h"
 #include "slg/shapes/groupshape.h"
 #include "slg/scene/scene.h"
@@ -24,13 +26,17 @@ using namespace std;
 using namespace luxrays;
 using namespace slg;
 
-GroupShape::GroupShape(const vector<const ExtTriangleMesh *> &ms, const vector<Transform> &ts) :
-			meshes(ms), trans(ts) {
+GroupShape::GroupShape(
+	std::vector<GroupShape::MeshRefWrapper> ms,
+	std::optional<std::vector<Transform>> ts
+) :	meshes(ms), trans(ts) {
 }
 
 GroupShape::~GroupShape() {
 }
 
-ExtTriangleMesh *GroupShape::RefineImpl(const Scene *scene) {
-	return ExtTriangleMesh::Merge(meshes, &trans);
+ExtTriangleMeshUPtr GroupShape::RefineImpl(SceneConstRef scene) {
+	mesh = ExtTriangleMesh::Merge(meshes, trans);
+	return std::move(mesh);
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

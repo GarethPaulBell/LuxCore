@@ -69,3 +69,4 @@ BOOST_CLASS_VERSION(slg::VignettingPlugin, 1)
 BOOST_CLASS_EXPORT_KEY(slg::VignettingPlugin)
 
 #endif	/*  _SLG_VIGNETTING_PLUGIN_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

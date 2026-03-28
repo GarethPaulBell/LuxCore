@@ -18,7 +18,6 @@
 
 #include <iostream>
 #include <boost/format.hpp>
-#include <boost/foreach.hpp>
 
 #include "luxcoreapp.h"
 
@@ -64,7 +63,7 @@ void UserImportancePaintWindow::Draw() {
 
 void UserImportancePaintWindow::Init() {
 	if (app->session) {
-		const Film &film = app->session->GetFilm();
+		auto& film = app->session->GetFilm();
 		const unsigned int pixelsCount = film.GetWidth() * film.GetHeight();
 
 		importanceMap.resize(pixelsCount);
@@ -84,7 +83,7 @@ void UserImportancePaintWindow::BlendImportanceMap(const float *srcPixels, float
 	int frameBufferWidth, frameBufferHeight;
 	glfwGetFramebufferSize(app->window, &frameBufferWidth, &frameBufferHeight);
 
-	const Film &film = app->session->GetFilm();
+	auto& film = app->session->GetFilm();
 	const int filmWidth = film.GetWidth();
 	const int filmHeight = film.GetHeight();
 	const unsigned int pixelsCount = filmWidth * filmHeight;
@@ -137,7 +136,7 @@ void UserImportancePaintWindow::Paint(const bool addValues) {
 	int frameBufferWidth, frameBufferHeight;
 	glfwGetFramebufferSize(app->window, &frameBufferWidth, &frameBufferHeight);
 
-	const Film &film = app->session->GetFilm();
+	auto& film = app->session->GetFilm();
 	const int filmWidth = film.GetWidth();
 	const int filmHeight = film.GetHeight();
 

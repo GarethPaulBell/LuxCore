@@ -52,3 +52,4 @@ protected:
 
 #endif // _LUXRAYS_FREQUENCYSPD_H
 
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

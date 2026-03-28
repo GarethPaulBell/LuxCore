@@ -23,7 +23,7 @@ using namespace luxrays;
 using namespace slg;
 
 bool PhotonGICache::Update(const u_int threadIndex, const u_int filmSPP,
-		const boost::function<void()> &threadZeroCallback) {
+		const std::function<void()> &threadZeroCallback) {
 	if (!params.caustic.enabled || (params.caustic.updateSpp == 0) || finishUpdateFlag)
 		return false;
 
@@ -32,13 +32,10 @@ bool PhotonGICache::Update(const u_int threadIndex, const u_int filmSPP,
 	if (deltaSpp > params.caustic.updateSpp) {
 		// Time to update the caustic cache
 
-		threadsSyncBarrier->wait();
+		threadsSyncBarrier->arrive_and_wait();
 
 		bool result = false;
 		if ((threadIndex == 0) && !finishUpdateFlag) {
-			// To avoid the interruption of the following code
-			boost::this_thread::disable_interruption di;
-
 			const double startTime = WallClockTime();
 
 			SLG_LOG("Updating PhotonGI caustic cache after " << filmSPP << " samples/pixel (Pass " << causticPhotonPass << ")");
@@ -84,7 +81,7 @@ bool PhotonGICache::Update(const u_int threadIndex, const u_int filmSPP,
 			SLG_LOG("Updating PhotonGI caustic cache done in: " << std::setprecision(3) << dt << " secs");
 		}
 
-		threadsSyncBarrier->wait();
+		threadsSyncBarrier->arrive_and_wait();
 
 		return result;
 	} else
@@ -96,8 +93,9 @@ void PhotonGICache::FinishUpdate(const u_int threadIndex) {
 		if (finishUpdateFlag)
 			return;
 
-		threadsSyncBarrier->wait();
+		threadsSyncBarrier->arrive_and_wait();
 		finishUpdateFlag = true;
-		threadsSyncBarrier->wait();
+		threadsSyncBarrier->arrive_and_wait();
 	}
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

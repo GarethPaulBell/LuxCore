@@ -19,7 +19,7 @@
 #include <math.h>
 
 #include <boost/format.hpp>
-#include <boost/filesystem.hpp>
+#include <filesystem>
 
 #include "luxrays/utils/thread.h"
 #include "luxrays/utils/strutils.h"
@@ -29,6 +29,7 @@
 #include "slg/engines/caches/photongi/photongicache.h"
 #include "slg/engines/caches/photongi/tracephotonsthread.h"
 #include "slg/utils/pathinfo.h"
+#include "slg/scene/scene.h"
 
 using namespace std;
 using namespace luxrays;
@@ -39,13 +40,13 @@ using namespace slg;
 //------------------------------------------------------------------------------
 
 PhotonGICache::PhotonGICache() :
-		scene(nullptr),
+		scene(slg::NullScene),
 		visibilityParticlesKdTree(nullptr),
 		radiancePhotonsBVH(nullptr) ,
 		causticPhotonsBVH(nullptr) {
 }
 
-PhotonGICache::PhotonGICache(const Scene *scn, const PhotonGICacheParams &p) :
+PhotonGICache::PhotonGICache(SceneConstRef scn, const PhotonGICacheParams &p) :
 		scene(scn), params(p),
 		visibilityParticlesKdTree(nullptr),
 		radiancePhotonsBVH(nullptr) ,
@@ -64,7 +65,7 @@ PhotonGICache::~PhotonGICache() {
 
 bool PhotonGICache::IsPhotonGIEnabled(const BSDF &bsdf) const {
 	const BSDFEvent eventTypes = bsdf.GetEventTypes();
-	
+
 	if ((eventTypes & TRANSMIT) || (eventTypes & SPECULAR) ||
 			((eventTypes & GLOSSY) && (bsdf.GetGlossiness() < params.glossinessUsageThreshold)))
 		return false;
@@ -105,27 +106,32 @@ bool PhotonGICache::IsDirectLightHitVisible(const EyePathInfo &pathInfo,
 
 void PhotonGICache::TracePhotons(const u_int seedBase, const u_int photonTracedCount,
 		const bool indirectCacheDone, const bool causticCacheDone,
-		boost::atomic<u_int> &globalIndirectPhotonsTraced, boost::atomic<u_int> &globalCausticPhotonsTraced,
-		boost::atomic<u_int> &globalIndirectSize, boost::atomic<u_int> &globalCausticSize) {
+		std::atomic<u_int> &globalIndirectPhotonsTraced, std::atomic<u_int> &globalCausticPhotonsTraced,
+		std::atomic<u_int> &globalIndirectSize, std::atomic<u_int> &globalCausticSize) {
 	const size_t renderThreadCount = GetHardwareThreadCount();
-	vector<TracePhotonsThread *> renderThreads(renderThreadCount, nullptr);
+	using TracePhotonsThreadUPtr = std::unique_ptr<TracePhotonsThread>;
+	std::vector<TracePhotonsThreadUPtr> renderThreads;
 
-	boost::atomic<u_int> globalPhotonsCounter(0);
+	std::atomic<u_int> globalPhotonsCounter(0);
 
 	// Create the photon tracing threads
+	renderThreads.reserve(renderThreadCount);
 	for (size_t i = 0; i < renderThreadCount; ++i) {
-		renderThreads[i] = new TracePhotonsThread(*this, i,
-				seedBase, photonTracedCount,
+		renderThreads.emplace_back(
+			std::make_unique<TracePhotonsThread>(
+				*this, i, seedBase, photonTracedCount,
 				indirectCacheDone, causticCacheDone,
 				globalPhotonsCounter, globalIndirectPhotonsTraced,
 				globalCausticPhotonsTraced, globalIndirectSize,
-				globalCausticSize);
+				globalCausticSize
+			)
+		);
 	}
 
 	// Start photon tracing threads
 	for (size_t i = 0; i < renderThreadCount; ++i)
 		renderThreads[i]->Start();
-	
+
 	// Wait for the end of photon tracing threads
 	u_int indirectPhotonStored = 0;
 	u_int causticPhotonStored = 0;
@@ -144,7 +150,7 @@ void PhotonGICache::TracePhotons(const u_int seedBase, const u_int photonTracedC
 				renderThreads[i]->causticPhotons.end());
 		causticPhotonStored += renderThreads[i]->causticPhotons.size();
 
-		delete renderThreads[i];
+		renderThreads[i].reset();
 	}
 
 	// Update the count only if I have traced this kind of photons
@@ -163,10 +169,10 @@ void PhotonGICache::TracePhotons(const u_int seedBase, const u_int photonTracedC
 void PhotonGICache::TracePhotons(const bool indirectEnabled, const bool causticEnabled) {
 	const size_t renderThreadCount = GetHardwareThreadCount();
 
-	boost::atomic<u_int> globalIndirectPhotonsTraced(0);
-	boost::atomic<u_int> globalCausticPhotonsTraced(0);
-	boost::atomic<u_int> globalIndirectSize(0);
-	boost::atomic<u_int> globalCausticSize(0);
+	std::atomic<u_int> globalIndirectPhotonsTraced(0);
+	std::atomic<u_int> globalCausticPhotonsTraced(0);
+	std::atomic<u_int> globalIndirectSize(0);
+	std::atomic<u_int> globalCausticSize(0);
 
 	// Update the count only if I have traced this kind of photons
 	if (indirectEnabled)
@@ -365,14 +371,14 @@ void PhotonGICache::CreateRadiancePhotons() {
 
 void PhotonGICache::Preprocess(const u_int threadCnt) {
 	threadCount = threadCnt;
-	threadsSyncBarrier.reset(new boost::barrier(threadCount));
+	threadsSyncBarrier.reset(new std::barrier(threadCount, completion_t()));
 	lastUpdateSpp = 0;
 	updateSeedBase = 1;
 	finishUpdateFlag = false;
 
 	if (params.persistent.fileName != "") {
 		// Check if the file already exist
-		if (boost::filesystem::exists(params.persistent.fileName)) {
+		if (std::filesystem::exists(params.persistent.fileName)) {
 			// Load the cache from the file
 			LoadPersistentCache(params.persistent.fileName);
 
@@ -599,3 +605,6 @@ string PhotonGICache::DebugType2String(const PhotonGIDebugType type) {
 			throw runtime_error("Unsupported wrap type in PhotonGICache::DebugType2String(): " + ToString(type));
 	}
 }
+
+
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

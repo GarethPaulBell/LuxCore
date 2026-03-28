@@ -25,8 +25,6 @@
 
 namespace luxrays {
 
-const Matrix4x4 Matrix4x4::MAT_IDENTITY = Matrix4x4();
-
 Matrix4x4::Matrix4x4(const float mat[4][4]) {
 	memcpy(m, mat, 16 * sizeof (float));
 }
@@ -175,3 +173,4 @@ Matrix4x4 Matrix4x4::Inverse() const {
 }
 
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

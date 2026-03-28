@@ -21,19 +21,19 @@
 
 #include <vector>
 
-#include <boost/unordered_set.hpp>
-
 #include "luxrays/core/exttrianglemesh.h"
 #include "luxrays/core/color/color.h"
 #include "luxrays/core/geometry/point.h"
 #include "luxrays/core/namedobject.h"
 #include "luxrays/utils/mc.h"
 #include "luxrays/utils/properties.h"
+#include "slg/usings.h"
 #include "slg/bsdf/bsdfevents.h"
 #include "slg/bsdf/hitpoint.h"
 #include "slg/textures/texture.h"
 
 namespace slg {
+
 
 // OpenCL data types
 namespace ocl {
@@ -56,11 +56,17 @@ typedef enum {
 } MaterialEmissionDLSType;
 
 class SampleableSphericalFunction;
+class Volume;
 
-class Material : public luxrays::NamedObject {
+class Material : public luxrays::NamedObject
+{
 public:
-	Material(const Texture *frontTransp, const Texture *backTransp,
-			const Texture *emitted, const Texture *bump);
+	Material(
+		TextureConstPtr frontTransp,
+		TextureConstPtr backTransp,
+		TextureConstPtr emitted,
+		TextureConstPtr bump
+	);
 	virtual ~Material();
 
 	void SetLightID(const u_int id) { lightID = id; }
@@ -89,9 +95,9 @@ public:
 	virtual BSDFEvent GetEventTypes() const = 0;
 
 	virtual bool IsLightSource() const {
-		return (emittedTex != NULL);
+		return static_cast<bool>(emittedTex);
 	}
-	
+
 	void SetPhotonGIEnabled(const bool v) { isPhotonGIEnabled = v; }
 	virtual bool IsPhotonGIEnabled() const { return isPhotonGIEnabled; }
 	virtual float GetGlossiness() const { return glossiness; }
@@ -123,8 +129,18 @@ public:
 		const luxrays::Vector &localFixedDir, const float passThroughEvent,
 		const bool backTracing) const;
 
-	void SetPassThroughShadowTransparency(const luxrays::Spectrum &t) { passThroughShadowTransparency = t; }
-	const luxrays::Spectrum &GetPassThroughShadowTransparency() const { return passThroughShadowTransparency; }
+	void SetPassThroughShadowTransparency(const luxrays::Spectrum &t) {
+		passThroughShadowTransparency = t;
+	}
+	const luxrays::Spectrum &GetPassThroughShadowTransparency() const {
+		return passThroughShadowTransparency;
+	}
+	void SetPassThroughShadowTransparencyOverride(const bool &o) {
+		passThroughShadowTransparencyOverride = o;
+	}
+	const bool &GetPassThroughShadowTransparencyOverride() const {
+		return passThroughShadowTransparencyOverride;
+	}
 
 	virtual luxrays::Spectrum GetEmittedRadiance(const HitPoint &hitPoint,
 		const float oneOverPrimitiveArea) const;
@@ -132,27 +148,33 @@ public:
 
 	const void SetEmittedImportance(const float imp) { emittedImportance = imp; }
 	const float GetEmittedImportance() const { return emittedImportance; }
-	const Texture *GetFrontTransparencyTexture() const { return frontTransparencyTex; }
-	const Texture *GetBackTransparencyTexture() const { return backTransparencyTex; }
-	const Texture *GetEmitTexture() const { return emittedTex; }
-	const Texture *GetBumpTexture() const { return bumpTex; }
+	auto GetFrontTransparencyTexture() const { return frontTransparencyTex; }
+	auto GetBackTransparencyTexture() const { return backTransparencyTex; }
+	auto GetEmitTexture() const { return emittedTex; }
+	auto GetBumpTexture() const { return bumpTex; }
 
-	void SetEmissionMap(const ImageMap *map);
-	const ImageMap *GetEmissionMap() const { return emissionMap; }
+	void SetEmissionMap(ImageMapConstRef map);
+	ImageMapConstRef GetEmissionMap() const { return *emissionMap; }
 	const SampleableSphericalFunction *GetEmissionFunc() const { return emissionFunc; }
-	
+
 	// MixMaterial can have multiple volumes assigned and needs the passThroughEvent
 	// information to be able to return the correct volume
-	void SetInteriorVolume(const Volume *vol) { interiorVolume = vol; }
-	virtual const Volume *GetInteriorVolume(const HitPoint &hitPoint,
-		const float passThroughEvent) const { return interiorVolume; }
-	void SetExteriorVolume(const Volume *vol) { exteriorVolume = vol; }
-	virtual const Volume *GetExteriorVolume(const HitPoint &hitPoint,
-		const float passThroughEvent) const { return exteriorVolume; }	
+	void SetInteriorVolume(VolumeConstRef vol);
+	void SetInteriorVolume(VolumeConstPtr vol);
+	virtual VolumeConstPtr GetInteriorVolume(
+		const HitPoint &hitPoint,
+		const float passThroughEvent
+	) const;
+	void SetExteriorVolume(VolumeConstRef vol);
+	void SetExteriorVolume(VolumeConstPtr vol);
+	virtual VolumeConstPtr GetExteriorVolume(
+		const HitPoint &hitPoint,
+		const float passThroughEvent
+	) const;
 
-	const Volume *GetInteriorVolume() const { return interiorVolume; }
-	const Volume *GetExteriorVolume() const { return exteriorVolume; }	
-	
+	VolumeConstPtr GetInteriorVolume() const;
+	VolumeConstPtr GetExteriorVolume() const;
+
 	virtual void Bump(HitPoint *hitPoint) const;
 
 	// Albedo() returns the material albedo. It is used for Albedo AOV.
@@ -164,25 +186,34 @@ public:
 	//
 	// NOTE: this is called rho() in PBRT sources.
 	virtual luxrays::Spectrum EvaluateTotal(const HitPoint &hitPoint) const;
-	
+
 	// Evaluate() is used to evaluate the material (i.e. get a color plus some
 	// related data) knowing the eye and light vector. It used by the
 	// path tracer to evaluate the material color when doing direct lighting
 	// (i.e. you know where you are coming from and where is the light source).
 	// BiDir uses this method also while connecting eye and light path vertices.
-	virtual luxrays::Spectrum Evaluate(const HitPoint &hitPoint,
-		const luxrays::Vector &localLightDir, const luxrays::Vector &localEyeDir, BSDFEvent *event,
-		float *directPdfW = NULL, float *reversePdfW = NULL) const = 0;
+	virtual luxrays::Spectrum Evaluate(
+		const HitPoint &hitPoint,
+		const luxrays::Vector &localLightDir,
+		const luxrays::Vector &localEyeDir,
+		BSDFEvent *event,
+		float *directPdfW = NULL,
+		float *reversePdfW = NULL
+	) const = 0;
 
 	// Sample() is used to obtain an outgoing direction (i.e. get an outgoing
 	// direction plus some related data) knowing the incoming vector. It is
 	// used to extend a path, you know where you are coming from and want to
 	// know where to go next. It used by the path tracer to extend eye path and
 	// by BiDir to extend both eye and light path.
-	virtual luxrays::Spectrum Sample(const HitPoint &hitPoint,
-		const luxrays::Vector &localFixedDir, luxrays::Vector *localSampledDir,
+	virtual luxrays::Spectrum Sample(
+		const HitPoint &hitPoint,
+		const luxrays::Vector &localFixedDir,
+		luxrays::Vector *localSampledDir,
 		const float u0, const float u1, const float passThroughEvent,
-		float *pdfW, BSDFEvent *event) const = 0;
+		float *pdfW,
+		BSDFEvent *event
+	) const = 0;
 
 	// Pdf() is used to obtain direct and reverse PDFs while knowing the eye
 	// and light vector. It is used only by BiDir.
@@ -193,22 +224,35 @@ public:
 	// Update any reference to oldMat with newMat (mostly used for updating Mix material)
 	// but also to update volume reference (because volumes are just a special kind of
 	// materials)
-	virtual void UpdateMaterialReferences(const Material *oldMat, const Material *newMat);
+	virtual void UpdateMaterialReferences(MaterialConstRef oldMat, MaterialRef newMat);
 	// Return true if the material is referencing the specified material
-	virtual bool IsReferencing(const Material *mat) const { return (this == mat); }
-	virtual void AddReferencedMaterials(boost::unordered_set<const Material *> &referencedMats) const;
-	virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const;
-	virtual void AddReferencedImageMaps(boost::unordered_set<const ImageMap *> &referencedImgMaps) const;
+	virtual bool IsReferencing(MaterialConstRef mat) const {
+		return (this == &mat);
+	}
+	virtual void AddReferencedMaterials(
+		std::unordered_set<const Material *> &referencedMats
+	) const;
+	virtual void AddReferencedTextures(
+		std::unordered_set<const Texture *>  &referencedTexs
+	) const;
+	virtual void AddReferencedImageMaps(
+		std::unordered_set<const ImageMap *> &referencedImgMaps
+	) const;
 	// Update any reference to oldTex with newTex
-	virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex);
-	
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual void UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex);
+
+	virtual luxrays::PropertiesUPtr ToProperties(
+		const ImageMapCache &imgMapCache, const bool useRealFileName
+	) const;
 
 	static std::string MaterialType2String(const MaterialType type);
 
 protected:
-	static float ComputeGlossiness(const Texture *t1 = nullptr, const Texture *t2 = nullptr,
-			const Texture *t3 = nullptr);
+	static float ComputeGlossiness(
+		TextureConstPtr t1 = nullptr,
+		TextureConstPtr t2 = nullptr,
+		TextureConstPtr t3 = nullptr
+	);
 
 	void UpdateEmittedFactor();
 	virtual void UpdateAvgPassThroughTransparency();
@@ -224,17 +268,18 @@ protected:
 	float emittedTemperature;
 	bool emittedNormalizeTemperature;
 
-	const Texture *frontTransparencyTex;
-	const Texture *backTransparencyTex;
+	TextureConstPtr frontTransparencyTex;
+	TextureConstPtr backTransparencyTex;
 	luxrays::Spectrum passThroughShadowTransparency;
-	const Texture *emittedTex;
-	const Texture *bumpTex;
+	bool passThroughShadowTransparencyOverride;
+	TextureConstPtr emittedTex;
+	TextureConstPtr bumpTex;
     float bumpSampleDistance;
 
-	const ImageMap *emissionMap;
+	ImageMapConstPtr emissionMap;
 	SampleableSphericalFunction *emissionFunc;
 
-	const Volume *interiorVolume, *exteriorVolume;
+	VolumeConstPtr interiorVolume, exteriorVolume;
 
 	float glossiness, avgPassThroughTransparency;
 
@@ -247,8 +292,8 @@ protected:
 // IOR utilities
 //------------------------------------------------------------------------------
 
-extern float ExtractExteriorIors(const HitPoint &hitPoint, const Texture *exteriorIor);
-extern float ExtractInteriorIors(const HitPoint &hitPoint, const Texture *interiorIor);
+extern float ExtractExteriorIors(const HitPoint &hitPoint, TextureConstPtr exteriorIor);
+extern float ExtractInteriorIors(const HitPoint &hitPoint, TextureConstPtr interiorIor);
 
 //------------------------------------------------------------------------------
 // Coating absorption
@@ -283,6 +328,8 @@ extern luxrays::Spectrum SchlickBSDF_CoatingSampleF(const bool fromLight, const 
 extern float SchlickBSDF_CoatingPdf(const float roughness, const float anisotropy,
 	const luxrays::Vector &localFixedDir, const luxrays::Vector &localSampledDir);
 
-}
+}  // namespace slg
+
 
 #endif	/* _SLG_MATERIAL_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

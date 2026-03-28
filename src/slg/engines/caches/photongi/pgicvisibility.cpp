@@ -33,19 +33,31 @@ namespace slg {
 class PGICSceneVisibility : public SceneVisibility<PGICVisibilityParticle> {
 public:
 	PGICSceneVisibility(PhotonGICache &cache) :
-		SceneVisibility(cache.scene, cache.visibilityParticles,
-				cache.params.photon.maxPathDepth, cache.params.visibility.maxSampleCount,
-				cache.params.visibility.targetHitRate,
-				cache.params.visibility.lookUpRadius, cache.params.visibility.lookUpNormalAngle,
-				cache.params.photon.timeStart, cache.params.photon.timeEnd),
-		pgic(cache) {
-	}
+		SceneVisibility(
+			cache.scene,
+			cache.visibilityParticles,
+			cache.params.photon.maxPathDepth,
+			cache.params.visibility.maxSampleCount,
+			cache.params.visibility.targetHitRate,
+			cache.params.visibility.lookUpRadius,
+			cache.params.visibility.lookUpNormalAngle,
+			cache.params.photon.timeStart,
+			cache.params.photon.timeEnd
+		),
+		pgic(cache)
+	{}
+
 	virtual ~PGICSceneVisibility() { }
 	
 protected:
 	virtual IndexOctree<PGICVisibilityParticle> *AllocOctree() const {
-		return new PGICOctree(visibilityParticles, scene->dataSet->GetBBox(),
-				lookUpRadius, lookUpNormalAngle);
+		auto bbox = scene.GetDataSet().GetBBox();
+		return new PGICOctree(
+			visibilityParticles,
+			bbox,
+			lookUpRadius,
+			lookUpNormalAngle
+		);
 	}
 
 	virtual bool ProcessHitPoint(const BSDF &bsdf, const PathVolumeInfo &volInfo,
@@ -118,3 +130,4 @@ void PhotonGICache::TraceVisibilityParticles() {
 	SLG_LOG("PhotonGI building visibility particles KdTree");
 	visibilityParticlesKdTree = new PGICKdTree(&visibilityParticles);
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

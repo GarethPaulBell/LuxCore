@@ -131,6 +131,22 @@ public:
 	// Vector Public Data
 	float x, y, z;
 
+	//--------------------------------------------------------------------------
+	// Required by OpenSubdiv interface
+	//--------------------------------------------------------------------------
+
+	void Clear(void * = 0) {
+		x = 0.f;
+		y = 0.f;
+		z = 0.f;
+	}
+
+	template<class T> void AddWithWeight(T const &src, float weight) {
+		x += weight * src.x;
+		y += weight * src.y;
+		z += weight * src.z;
+	}
+
 private:
 	template<class Archive> void serialize(Archive &ar, const unsigned int version) {
 		ar & x;
@@ -221,6 +237,7 @@ inline bool SameHemisphere(const Vector &w, const Vector &wp) {
 	return w.z * wp.z > 0.f;
 }
 
+
 }
 
 #ifdef _LUXRAYS_NORMAL_H
@@ -233,3 +250,4 @@ BOOST_CLASS_IMPLEMENTATION(luxrays::Vector, boost::serialization::object_seriali
 BOOST_CLASS_EXPORT_KEY(luxrays::Vector)
 
 #endif	/* _LUXRAYS_VECTOR_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

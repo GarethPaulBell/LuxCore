@@ -17,7 +17,7 @@
  ***************************************************************************/
 
 #include "luxrays/core/exttrianglemesh.h"
-#include "boost/unordered/unordered_set.hpp"
+#include <boost/serialization/shared_ptr.hpp>
 
 using namespace std;
 using namespace luxrays;
@@ -271,13 +271,14 @@ void ExtTriangleMesh::PreprocessBevel() {
 		// Find duplicate vertices
 		//----------------------------------------------------------------------
 
-		auto compareVerts = [](const TriangleMesh &mesh, const u_int vertIndex1, const u_int vertIndex2) {
-			const ExtTriangleMesh *triMesh = dynamic_cast<const ExtTriangleMesh *>(&mesh);
-			assert (triMesh);
+		auto compareVerts = [](
+			const TriangleMesh& mesh, const u_int vertIndex1, const u_int vertIndex2
+		) {
+			auto& triMesh = dynamic_cast<const ExtTriangleMesh&>(mesh);
 
 			return (DistanceSquared(
-						triMesh->GetVertex(Transform::TRANS_IDENTITY, vertIndex1),
-						triMesh->GetVertex(Transform::TRANS_IDENTITY, vertIndex2)) < DEFAULT_EPSILON_STATIC);
+				triMesh.GetVertex(Transform::TRANS_IDENTITY, vertIndex1),
+				triMesh.GetVertex(Transform::TRANS_IDENTITY, vertIndex2)) < DEFAULT_EPSILON_STATIC);
 		};
 		vector<u_int> uniqueVertices;
 		/*const u_int uniqueVertCount =*/ GetUniqueVerticesMapping(uniqueVertices, compareVerts);
@@ -565,18 +566,19 @@ bool ExtTriangleMesh::IntersectBevel(const Ray &ray, const RayHit &rayHit,
 
 bool ExtInstanceTriangleMesh::IntersectBevel(const Ray &ray, const RayHit &rayHit,
 		bool &continueToTrace, float &rayHitT, Point &newP, Normal &n) const {
-	// Transform the ray in local space	
+	// Transform the ray in local space
 	Ray localRay = Inverse(trans) * ray;
-	
+
 	Point localNewP;
 	Normal localN;
-	const bool result = static_cast<ExtTriangleMesh *>(mesh)->IntersectBevel(localRay, rayHit, continueToTrace, rayHitT, localNewP, localN);
-	if( result) {
+	const bool result = static_cast<const ExtTriangleMesh&>(*mesh).IntersectBevel(localRay, rayHit, continueToTrace, rayHitT, localNewP, localN);
+	if(result) {
 		// Transform newP and N in global space
 		newP = trans * localNewP;
 		n = trans * localN;
-		
+
 		return true;
 	} else
 		return false;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

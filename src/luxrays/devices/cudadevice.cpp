@@ -18,7 +18,6 @@
 
 #if !defined(LUXRAYS_DISABLE_CUDA)
 
-#include <boost/regex.hpp>
 
 #include "luxrays/devices/ocldevice.h"
 #include "luxrays/devices/cudadevice.h"
@@ -140,13 +139,13 @@ void CUDADeviceDescription::AddDeviceDescs(vector<DeviceDescription *> &descript
 //------------------------------------------------------------------------------
 
 static void OptixLogCB(u_int level, const char* tag, const char *message, void *cbdata) {
-	const Context *context = (Context *)cbdata;
+	const Context & context = *static_cast<Context *>(cbdata);
 	
 	LR_LOG(context, "[Optix][" << level << "][" << tag << "] " << message);
 }
 
 CUDADevice::CUDADevice(
-		const Context *context,
+		const Context & context,
 		CUDADeviceDescription *desc,
 		const size_t devIndex) :
 		Device(context, devIndex),
@@ -164,7 +163,7 @@ CUDADevice::CUDADevice(
 	if (isOptixAvilable && desc->useOptix) {
 		OptixDeviceContextOptions optixOptions = {};
 		optixOptions.logCallbackFunction = &OptixLogCB;
-		optixOptions.logCallbackData = (void *)deviceContext;
+		optixOptions.logCallbackData = (void *)&deviceContext;
 		// For normal usage
 		//optixOptions.logCallbackLevel = 1;
 		// For debugging
@@ -247,6 +246,7 @@ void CUDADevice::CompileProgram(HardwareDeviceProgram **program,
 
 	LR_LOG(deviceContext, "[" << programName << "] Compiler options: " << oclKernelPersistentCache::ToOptsString(cudaProgramParameters));
 	LR_LOG(deviceContext, "[" << programName << "] Compiling kernels");
+	LR_LOG(deviceContext, "[" << programName << "] Cache directory: " << kernelCache->GetCacheDir(kernelCache->GetApplicationName()));
 
 	const string cudaProgramSource = GetKernelSource(programSource);
 
@@ -454,7 +454,7 @@ void CUDADevice::AllocBuffer(HardwareDeviceBuffer **hdBuff, const BufferType typ
 	assert (cudaDeviceBuff);
 
 	CUdeviceptr *buff = &cudaDeviceBuff->cudaBuff;
-	
+
 	// Handle the case of an empty buffer
 	if (!size) {
 		if (*buff) {
@@ -540,3 +540,4 @@ void CUDADevice::FreeBuffer(HardwareDeviceBuffer **buff) {
 }
 
 #endif
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

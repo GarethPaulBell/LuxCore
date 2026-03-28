@@ -29,37 +29,37 @@ namespace slg {
 
 class AbsTexture : public Texture {
 public:
-	AbsTexture(const Texture *t) : tex(t) { }
+	AbsTexture(TextureRef t) : tex(t) { }
 	virtual ~AbsTexture() { }
 
 	virtual TextureType GetType() const { return ABS_TEX; }
 	virtual float GetFloatValue(const HitPoint &hitPoint) const;
 	virtual luxrays::Spectrum GetSpectrumValue(const HitPoint &hitPoint) const;
-	virtual float Y() const { return fabsf(tex->Y()); } // This can be not correct
-	virtual float Filter() const { return fabsf(tex->Filter()); } // This can be not correct
+	virtual float Y() const { return fabsf(GetTexture().Y()); } // This can be not correct
+	virtual float Filter() const { return fabsf(GetTexture().Filter()); } // This can be not correct
 
-	virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 		Texture::AddReferencedTextures(referencedTexs);
 
-		tex->AddReferencedTextures(referencedTexs);
+		GetTexture().AddReferencedTextures(referencedTexs);
 	}
-	virtual void AddReferencedImageMaps(boost::unordered_set<const ImageMap *> &referencedImgMaps) const {
-		tex->AddReferencedImageMaps(referencedImgMaps);
-	}
-
-	virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
-		if (tex == oldTex)
-			tex = newTex;
+	virtual void AddReferencedImageMaps(std::unordered_set<const ImageMap * > &referencedImgMaps) const {
+		GetTexture().AddReferencedImageMaps(referencedImgMaps);
 	}
 
-	const Texture *GetTexture() const { return tex; }
+	virtual void UpdateTextureReferences(TextureRef oldTex, TextureRef newTex) {
+		updtex(tex, oldTex, newTex);
+	}
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	TextureConstRef GetTexture() const { return tex; }
+
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
-	const Texture *tex;
+	std::reference_wrapper<Texture> tex;
 };
 
 }
 
 #endif	/* _SLG_ABSTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

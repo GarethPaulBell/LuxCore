@@ -141,18 +141,18 @@ void SunLight::GetPreprocessedData(float *absoluteSunDirData,
 		*sin2ThetaMaxData = sin2ThetaMax;
 }
 
-float SunLight::GetPower(const Scene &scene) const {
+float SunLight::GetPower(SceneConstRef scene) const {
 	const float envRadius = GetEnvRadius(scene);
 
 	return color.Y() * (M_PI * envRadius * envRadius) * 2.f * M_PI * sin2ThetaMax;
 }
 
-Spectrum SunLight::Emit(const Scene &scene,
+Spectrum SunLight::Emit(SceneConstRef scene,
 		const float time, const float u0, const float u1,
 		const float u2, const float u3, const float passThroughEvent,
 		Ray &ray, float &emissionPdfW,
 		float *directPdfA, float *cosThetaAtLight) const {
-	const Point worldCenter = scene.dataSet->GetBSphere().center;
+	const Point worldCenter = scene.GetDataSet().GetBSphere().center;
 	const float envRadius = GetEnvRadius(scene);
 
 	// Set ray origin and direction for infinite light ray
@@ -175,7 +175,7 @@ Spectrum SunLight::Emit(const Scene &scene,
 	return color;
 }
 
-Spectrum SunLight::Illuminate(const Scene &scene, const BSDF &bsdf,
+Spectrum SunLight::Illuminate(SceneConstRef scene, const BSDF &bsdf,
 		const float time, const float u0, const float u1, const float passThroughEvent,
         Ray &shadowRay, float &directPdfW,
 		float *emissionPdfW, float *cosThetaAtLight) const {
@@ -186,7 +186,7 @@ Spectrum SunLight::Illuminate(const Scene &scene, const BSDF &bsdf,
 	if (cosAtLight <= cosThetaMax)
 		return Spectrum();
 
-	const Point worldCenter = scene.dataSet->GetBSphere().center;
+	const Point worldCenter = scene.GetDataSet().GetBSphere().center;
 	const float envRadius = GetEnvRadius(scene);
 
 	const Point shadowRayOrig = bsdf.GetRayOrigin(shadowRayDir);
@@ -210,7 +210,7 @@ Spectrum SunLight::Illuminate(const Scene &scene, const BSDF &bsdf,
 	return color;
 }
 
-Spectrum SunLight::GetRadiance(const Scene &scene,
+Spectrum SunLight::GetRadiance(SceneConstRef scene,
 		const BSDF *bsdf, const Vector &dir,
 		float *directPdfA, float *emissionPdfW) const {
 	const float xD = Dot(-dir, x);
@@ -231,14 +231,15 @@ Spectrum SunLight::GetRadiance(const Scene &scene,
 	return color;
 }
 
-Properties SunLight::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+PropertiesUPtr SunLight::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
 	const string prefix = "scene.lights." + GetName();
-	Properties props = EnvLightSource::ToProperties(imgMapCache, useRealFileName);
+	PropertiesUPtr props = EnvLightSource::ToProperties(imgMapCache, useRealFileName);
 
-	props.Set(Property(prefix + ".type")("sun"));
-	props.Set(Property(prefix + ".dir")(localSunDir));
-	props.Set(Property(prefix + ".turbidity")(turbidity));
-	props.Set(Property(prefix + ".relsize")(relSize));
+	props->Set(Property(prefix + ".type")("sun"));
+	props->Set(Property(prefix + ".dir")(localSunDir));
+	props->Set(Property(prefix + ".turbidity")(turbidity));
+	props->Set(Property(prefix + ".relsize")(relSize));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

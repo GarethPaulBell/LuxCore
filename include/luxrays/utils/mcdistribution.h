@@ -457,3 +457,4 @@ BOOST_CLASS_EXPORT_KEY(luxrays::Distribution1D)
 BOOST_CLASS_EXPORT_KEY(luxrays::Distribution2D)
 
 #endif //_LUXRAYS_MCDISTRIBUTION_H
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

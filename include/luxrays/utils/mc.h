@@ -90,3 +90,4 @@ namespace luxrays {
 }
 
 #endif // _LUXRAYS_MC_H
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

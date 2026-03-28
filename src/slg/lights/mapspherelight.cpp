@@ -29,7 +29,7 @@ using namespace slg;
 // MapSphereLight
 //------------------------------------------------------------------------------
 
-MapSphereLight::MapSphereLight() : imageMap(NULL), func(NULL) {
+MapSphereLight::MapSphereLight() : imageMap(nullptr), func(NULL) {
 }
 
 MapSphereLight::~MapSphereLight() {
@@ -51,11 +51,11 @@ void MapSphereLight::GetPreprocessedData(float *localPosData, float *absolutePos
 		*funcData = func;
 }
 
-float MapSphereLight::GetPower(const Scene &scene) const {
+float MapSphereLight::GetPower(SceneConstRef scene) const {
 	return imageMap->GetSpectrumMeanY() * SphereLight::GetPower(scene);
 }
 
-Spectrum MapSphereLight::Emit(const Scene &scene,
+Spectrum MapSphereLight::Emit(SceneConstRef scene,
 		const float time, const float u0, const float u1,
 		const float u2, const float u3, const float passThroughEvent,
 		Ray &ray, float &emissionPdfW,
@@ -73,7 +73,7 @@ Spectrum MapSphereLight::Emit(const Scene &scene,
 			func->Average();
 }
 
-Spectrum MapSphereLight::Illuminate(const Scene &scene, const BSDF &bsdf,
+Spectrum MapSphereLight::Illuminate(SceneConstRef scene, const BSDF &bsdf,
 		const float time, const float u0, const float u1, const float passThroughEvent,
         Ray &shadowRay, float &directPdfW,
 		float *emissionPdfW, float *cosThetaAtLight) const {
@@ -89,15 +89,16 @@ Spectrum MapSphereLight::Illuminate(const Scene &scene, const BSDF &bsdf,
 	return result * ((SphericalFunction *)func)->Evaluate(localFromLight) / func->Average();
 }
 
-Properties MapSphereLight::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+PropertiesUPtr MapSphereLight::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
 	const string prefix = "scene.lights." + GetName();
-	Properties props = SphereLight::ToProperties(imgMapCache, useRealFileName);
+	PropertiesUPtr props = SphereLight::ToProperties(imgMapCache, useRealFileName);
 
-	props.Set(Property(prefix + ".type")("mapsphere"));
+	props->Set(Property(prefix + ".type")("mapsphere"));
 	const string fileName = useRealFileName ?
-		imageMap->GetName() : imgMapCache.GetSequenceFileName(imageMap);
-	props.Set(Property(prefix + ".mapfile")(fileName));
-	props.Set(imageMap->ToProperties(prefix, false));
+		imageMap->GetName() : imgMapCache.GetSequenceFileName(*imageMap);
+	props->Set(Property(prefix + ".mapfile")(fileName));
+	props->Set(*imageMap->ToProperties(prefix, false));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

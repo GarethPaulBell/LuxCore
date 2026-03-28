@@ -30,7 +30,7 @@ namespace slg {
 class WireFrameTexture : public Texture {
 public:
 	WireFrameTexture(const float w,
-			const Texture *borderTx, const Texture *insideTx) :
+			TextureRef borderTx, TextureRef insideTx) :
 		width(w), borderTex(borderTx), insideTex(insideTx) { }
 	virtual ~WireFrameTexture() { }
 
@@ -38,44 +38,43 @@ public:
 	virtual float GetFloatValue(const HitPoint &hitPoint) const;
 	virtual luxrays::Spectrum GetSpectrumValue(const HitPoint &hitPoint) const;
 	virtual float Y() const {
-		return (borderTex->Y() + insideTex->Y()) * .5f;
+		return (GetBorderTex().Y() + GetInsideTex().Y()) * .5f;
 	}
 	virtual float Filter() const {
-		return (borderTex->Filter() + insideTex->Filter()) * .5f;
+		return (GetBorderTex().Filter() + GetInsideTex().Filter()) * .5f;
 	}
 
-	virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 		Texture::AddReferencedTextures(referencedTexs);
 
-		borderTex->AddReferencedTextures(referencedTexs);
-		insideTex->AddReferencedTextures(referencedTexs);
+		GetBorderTex().AddReferencedTextures(referencedTexs);
+		GetInsideTex().AddReferencedTextures(referencedTexs);
 	}
-	virtual void AddReferencedImageMaps(boost::unordered_set<const ImageMap *> &referencedImgMaps) const {
-		borderTex->AddReferencedImageMaps(referencedImgMaps);
-		insideTex->AddReferencedImageMaps(referencedImgMaps);
+	virtual void AddReferencedImageMaps(std::unordered_set<const ImageMap * > &referencedImgMaps) const {
+		GetBorderTex().AddReferencedImageMaps(referencedImgMaps);
+		GetInsideTex().AddReferencedImageMaps(referencedImgMaps);
 	}
 
-	virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
-		if (borderTex == oldTex)
-			borderTex = newTex;
-		if (insideTex == oldTex)
-			insideTex = newTex;
+	virtual void UpdateTextureReferences(TextureRef oldTex, TextureRef newTex) {
+		updtex(borderTex, oldTex, newTex);
+		updtex(insideTex, oldTex, newTex);
 	}
 
 	float GetWidth() const { return width; }
-	const Texture *GetBorderTex() const { return borderTex; }
-	const Texture *GetInsideTex() const { return insideTex; }
+	TextureConstRef GetBorderTex() const { return borderTex; }
+	TextureConstRef GetInsideTex() const { return insideTex; }
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
 	bool Evaluate(const HitPoint &hitPoint) const;
 
 	const float width;
-	const Texture *borderTex;
-	const Texture *insideTex;
+	std::reference_wrapper<Texture> borderTex;
+	std::reference_wrapper<Texture> insideTex;
 };
 
 }
 
 #endif	/* _SLG_WIREFRAMETEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

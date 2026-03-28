@@ -21,12 +21,12 @@
 
 #if !defined(LUXRAYS_DISABLE_OPENCL)
 
-#include <boost/thread/thread.hpp>
-
 #include "luxrays/devices/nativeintersectiondevice.h"
+#include "luxrays/usings.h"
 #include "slg/slg.h"
 
 namespace slg {
+
 
 class PathOCLBaseRenderEngine;
 
@@ -57,13 +57,13 @@ protected:
 	virtual void StopRenderThread();
 
 	// Implementation specific methods
-	virtual void RenderThreadImpl() = 0;
+	virtual void RenderThreadImpl(std::stop_token stop_token) = 0;
 
 	u_int threadIndex;
 	PathOCLBaseRenderEngine *renderEngine;
 	luxrays::NativeIntersectionDevice *intersectionDevice;
 
-	boost::thread *renderThread;
+	luxrays::JThreadUPtr renderThread;
 
 	bool started, editMode, threadDone;
 };
@@ -73,3 +73,4 @@ protected:
 #endif
 
 #endif	/* _SLG_PATHOCLBASENATIVETHREAD_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

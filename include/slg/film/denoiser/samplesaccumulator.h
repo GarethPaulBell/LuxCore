@@ -93,3 +93,4 @@ BOOST_CLASS_VERSION(slg::SamplesAccumulator, 1)
 BOOST_CLASS_EXPORT_KEY(slg::SamplesAccumulator)
 
 #endif // _SLG_SAMPLESACCUMULATOR_H
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

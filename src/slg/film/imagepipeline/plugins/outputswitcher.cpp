@@ -17,8 +17,6 @@
  ***************************************************************************/
 
 #include <stdexcept>
-#include <boost/foreach.hpp>
-#include <boost/regex.hpp>
 
 #include "slg/film/film.h"
 #include "slg/film/imagepipeline/plugins/outputswitcher.h"
@@ -461,3 +459,4 @@ void OutputSwitcherPlugin::Apply(Film &film, const u_int piepelineIndex) {
 		}
 	}
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

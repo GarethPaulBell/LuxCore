@@ -26,8 +26,8 @@ using namespace slg;
 // Null material
 //------------------------------------------------------------------------------
 
-NullMaterial::NullMaterial(const Texture *frontTransp, const Texture *backTransp) :
-		Material(frontTransp, backTransp, NULL, NULL) {
+NullMaterial::NullMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp) :
+		Material(frontTransp, backTransp, nullptr, nullptr) {
 }
 
 Spectrum NullMaterial::Albedo(const HitPoint &hitPoint) const {
@@ -58,7 +58,7 @@ void NullMaterial::UpdateAvgPassThroughTransparency() {
 Spectrum NullMaterial::GetPassThroughTransparency(const HitPoint &hitPoint,
 		const luxrays::Vector &localFixedDir, const float passThroughEvent,
 		const bool backTracing) const {
-	const Texture *transparencyTex = (hitPoint.intoObject != backTracing) ? frontTransparencyTex : backTransparencyTex;
+	auto transparencyTex = (hitPoint.intoObject != backTracing) ? frontTransparencyTex : backTransparencyTex;
 
 	if (transparencyTex) {
 		const Spectrum blendColor = transparencyTex->GetSpectrumValue(hitPoint).Clamp(0.f, 1.f);
@@ -71,12 +71,13 @@ Spectrum NullMaterial::GetPassThroughTransparency(const HitPoint &hitPoint,
 		return Spectrum(1.f);
 }
 
-Properties NullMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
-	Properties props;
+PropertiesUPtr NullMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.materials." + name + ".type")("null"));
-	props.Set(Material::ToProperties(imgMapCache, useRealFileName));
+	props->Set(Property("scene.materials." + name + ".type")("null"));
+	props->Set(Material::ToProperties(imgMapCache, useRealFileName));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

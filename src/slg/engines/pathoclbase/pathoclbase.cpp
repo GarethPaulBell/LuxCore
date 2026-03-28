@@ -28,7 +28,6 @@
 #include <stdexcept>
 #include <memory>
 
-#include <boost/thread/mutex.hpp>
 #include <boost/lexical_cast.hpp>
 
 #include "luxrays/core/geometry/transform.h"
@@ -52,10 +51,10 @@ using namespace std;
 // PathOCLBaseRenderEngine
 //------------------------------------------------------------------------------
 
-PathOCLBaseRenderEngine::PathOCLBaseRenderEngine(const RenderConfig *rcfg,
+PathOCLBaseRenderEngine::PathOCLBaseRenderEngine(RenderConfigRef rcfg,
 		const bool supportsNativeThreads) :	OCLRenderEngine(rcfg, supportsNativeThreads),
 		compiledScene(nullptr), pixelFilterDistribution(nullptr), oclSampler(nullptr),
-		oclPixelFilter(nullptr), photonGICache(nullptr) {
+		oclPixelFilter(nullptr), photonGICache(nullptr), lightSamplerSharedData(nullptr) {
 	writeKernelsToFile = false;
 
 	//--------------------------------------------------------------------------
@@ -173,7 +172,7 @@ void PathOCLBaseRenderEngine::InitGPUTaskConfiguration() {
 
 	// Film configuration
 	CompiledScene::CompileFilm(*film, taskConfig.film);
-	taskConfig.film.usePixelAtomics = renderConfig->GetProperty("pathocl.pixelatomics.enable").Get<bool>();
+	taskConfig.film.usePixelAtomics = renderConfig.GetProperty("pathocl.pixelatomics.enable").Get<bool>();
 	if ((taskConfig.sampler.type == slg::ocl::SOBOL) && (taskConfig.sampler.sobol.overlapping > 1)) {
 		// I need to use atomics in this case
 		taskConfig.film.usePixelAtomics = true;
@@ -181,11 +180,11 @@ void PathOCLBaseRenderEngine::InitGPUTaskConfiguration() {
 }
 
 void PathOCLBaseRenderEngine::InitPixelFilterDistribution() {
-	unique_ptr<Filter> pixelFilter(renderConfig->AllocPixelFilter());
+	std::unique_ptr<Filter> pixelFilter(renderConfig.AllocPixelFilter());
 
 	// Compile sample distribution
 	delete[] pixelFilterDistribution;
-	const FilterDistribution filterDistribution(pixelFilter.get(), 64);
+	const FilterDistribution filterDistribution(pixelFilter, 64);
 	pixelFilterDistribution = CompiledScene::CompileDistribution2D(
 			filterDistribution.GetDistribution2D(), &pixelFilterDistributionSize);
 }
@@ -194,31 +193,32 @@ void PathOCLBaseRenderEngine::InitFilm() {
 	if (ctx->GetUseOutOfCoreBuffers() || useFilmOutOfCoreMemory) {
 		// If out-of-core rendering is enabled, I disable Film GPU image pipeline
 		// in order to save more GPU memory
-		film->hwEnable = false;
+		GetFilm().hwEnable = false;
 	}
-	
-	film->AddChannel(Film::RADIANCE_PER_PIXEL_NORMALIZED);
+
+	GetFilm().AddChannel(Film::RADIANCE_PER_PIXEL_NORMALIZED);
 
 	// pathTracer has not yet been initialized
-	const bool hybridBackForwardEnable = renderConfig->cfg.Get(PathTracer::GetDefaultProps().
+	const bool hybridBackForwardEnable = renderConfig.GetConfig().Get(PathTracer::GetDefaultProps()->
 			Get("path.hybridbackforward.enable")).Get<bool>();
 	if (hybridBackForwardEnable)
-		film->AddChannel(Film::RADIANCE_PER_SCREEN_NORMALIZED);
+		GetFilm().AddChannel(Film::RADIANCE_PER_SCREEN_NORMALIZED);
+		lightSamplerSharedData = MetropolisSamplerSharedData::FromProperties(Properties(), seedBaseGenerator, GetFilm());
 
-	film->SetRadianceGroupCount(renderConfig->scene->lightDefs.GetLightGroupCount());
-	film->Init();
+	GetFilm().SetRadianceGroupCount(renderConfig.GetScene().GetLightSources().GetLightGroupCount());
+	GetFilm().Init();
 }
 
 string PathOCLBaseRenderEngine::GetCachedKernelsHash(const RenderConfig &renderConfig) {
 	const string renderEngineType = renderConfig.GetProperty("renderengine.type").Get<string>();
 
-	const float epsilonMin = renderConfig.GetProperty("scene.epsilon.min").Get<float>();
-	const float epsilonMax = renderConfig.GetProperty("scene.epsilon.max").Get<float>();
+	const float epsilonMin = renderConfig.GetProperty("scene.epsilon.min").Get<double>();
+	const float epsilonMax = renderConfig.GetProperty("scene.epsilon.max").Get<double>();
 		
-	const Properties &cfg = renderConfig.cfg;
-	const bool useCPUs = cfg.Get(GetDefaultProps().Get("opencl.cpu.use")).Get<bool>();
-	const bool useGPUs = cfg.Get(GetDefaultProps().Get("opencl.gpu.use")).Get<bool>();
-	const string oclDeviceConfig = cfg.Get(GetDefaultProps().Get("opencl.devices.select")).Get<string>();
+	auto& cfg = renderConfig.GetConfig();
+	const bool useCPUs = cfg.Get(GetDefaultProps()->Get("opencl.cpu.use")).Get<bool>();
+	const bool useGPUs = cfg.Get(GetDefaultProps()->Get("opencl.gpu.use")).Get<bool>();
+	const string oclDeviceConfig = cfg.Get(GetDefaultProps()->Get("opencl.devices.select")).Get<string>();
 
 	stringstream ssParams;
 	ssParams.precision(6);
@@ -238,20 +238,20 @@ string PathOCLBaseRenderEngine::GetCachedKernelsHash(const RenderConfig &renderC
 void PathOCLBaseRenderEngine::SetCachedKernels(const RenderConfig &renderConfig) {
 	const string kernelHash = GetCachedKernelsHash(renderConfig);
 
-	const boost::filesystem::path dirPath = oclKernelPersistentCache::GetCacheDir("LUXCORE_" LUXCORE_VERSION);
-	const boost::filesystem::path filePath = dirPath / (kernelHash + ".ck");
+	const std::filesystem::path dirPath = oclKernelPersistentCache::GetCacheDir("LUXCORE_" LUXCORE_VERSION);
+	const std::filesystem::path filePath = dirPath / (kernelHash + ".ck");
 	const string fileName = filePath.generic_string();
 
-	if (!boost::filesystem::exists(filePath)) {
+	if (!std::filesystem::exists(filePath)) {
 		// Create an empty file
-		boost::filesystem::create_directories(dirPath);
+		std::filesystem::create_directories(dirPath);
 
-		// The use of boost::filesystem::path is required for UNICODE support: fileName
+		// The use of std::filesystem::path is required for UNICODE support: fileName
 		// is supposed to be UTF-8 encoded.
-		boost::filesystem::ofstream file(boost::filesystem::path(fileName),
-				boost::filesystem::ofstream::out |
-				boost::filesystem::ofstream::binary |
-				boost::filesystem::ofstream::trunc);
+		std::ofstream file(std::filesystem::path(fileName),
+				std::ofstream::out |
+				std::ofstream::binary |
+				std::ofstream::trunc);
 
 		file.close();
 	}
@@ -260,14 +260,14 @@ void PathOCLBaseRenderEngine::SetCachedKernels(const RenderConfig &renderConfig)
 bool PathOCLBaseRenderEngine::HasCachedKernels(const RenderConfig &renderConfig) {
 	const string kernelHash = GetCachedKernelsHash(renderConfig);
 
-	const boost::filesystem::path dirPath = oclKernelPersistentCache::GetCacheDir("LUXCORE_" LUXCORE_VERSION);
-	const boost::filesystem::path filePath = dirPath / (kernelHash + ".ck");
+	const std::filesystem::path dirPath = oclKernelPersistentCache::GetCacheDir("LUXCORE_" LUXCORE_VERSION);
+	const std::filesystem::path filePath = dirPath / (kernelHash + ".ck");
 
-	return boost::filesystem::exists(filePath);
+	return std::filesystem::exists(filePath);
 }
 
 void PathOCLBaseRenderEngine::StartLockLess() {
-	const Properties &cfg = renderConfig->cfg;
+	auto& cfg = renderConfig.GetConfig();
 
 	//--------------------------------------------------------------------------
 	// Sampler
@@ -298,7 +298,7 @@ void PathOCLBaseRenderEngine::StartLockLess() {
 		}
 	}
 	SLG_LOG("[PathOCLBaseRenderEngine] OpenCL max. page memory size: " << maxMemPageSize / 1024 << "Kbytes");
-	
+
 	writeKernelsToFile = cfg.Get(Property("opencl.kernel.writetofile")(false)).Get<bool>();
 
 	//--------------------------------------------------------------------------
@@ -308,8 +308,8 @@ void PathOCLBaseRenderEngine::StartLockLess() {
 	// note: photonGICache could have been restored from the render state
 	if ((GetType() != RTPATHOCL) && !photonGICache) {
 		delete photonGICache;
-		photonGICache = PhotonGICache::FromProperties(renderConfig->scene, cfg);
-		
+		photonGICache = PhotonGICache::FromProperties(renderConfig.GetScene(), cfg);
+
 		// photonGICache will be nullptr if the cache is disabled
 		if (photonGICache)
 			photonGICache->Preprocess(renderNativeThreads.size() + renderOCLThreads.size());
@@ -321,7 +321,7 @@ void PathOCLBaseRenderEngine::StartLockLess() {
 	// Compile the scene
 	//--------------------------------------------------------------------------
 
-	compiledScene = new CompiledScene(renderConfig->scene, &pathTracer);
+	compiledScene = new CompiledScene(renderConfig.GetScene(), &pathTracer);
 	compiledScene->SetMaxMemPageSize(maxMemPageSize);
 	compiledScene->EnableCode(cfg.Get(Property("opencl.code.alwaysenabled")("")).Get<string>());
 	compiledScene->Compile();
@@ -351,7 +351,7 @@ void PathOCLBaseRenderEngine::StartLockLess() {
 	}
 
 	// I know kernels has been compiled at this point
-	SetCachedKernels(*renderConfig);
+	SetCachedKernels(renderConfig);
 
 	//--------------------------------------------------------------------------
 	// Start native render threads
@@ -415,6 +415,8 @@ void PathOCLBaseRenderEngine::BeginSceneEditLockLess() {
 }
 
 void PathOCLBaseRenderEngine::EndSceneEditLockLess(const EditActionList &editActions) {
+	if (lightSamplerSharedData)
+		lightSamplerSharedData->Reset();
 	compiledScene->Recompile(editActions);
 
 	for (size_t i = 0; i < renderOCLThreads.size(); ++i) {
@@ -447,3 +449,4 @@ void PathOCLBaseRenderEngine::WaitForDone() const {
 }
 
 #endif
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

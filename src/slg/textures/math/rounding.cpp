@@ -27,20 +27,20 @@ using namespace slg;
 //------------------------------------------------------------------------------
 
 float RoundingTexture::GetFloatValue(const HitPoint &hitPoint) const {
-    return round(texture->GetFloatValue(hitPoint), increment->GetFloatValue(hitPoint));
+    return round(GetTexture().GetFloatValue(hitPoint), GetIncrement().GetFloatValue(hitPoint));
 }
 
 Spectrum RoundingTexture::GetSpectrumValue(const HitPoint &hitPoint) const {
     return Spectrum(GetFloatValue(hitPoint));
 }
 
-Properties RoundingTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
-    Properties props;
+PropertiesUPtr RoundingTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+	auto props = std::make_unique<Properties>();
 
     const string name = GetName();
-    props.Set(Property("scene.textures." + name + ".type")("rounding"));
-    props.Set(Property("scene.textures." + name + ".texture")(texture->GetSDLValue()));
-    props.Set(Property("scene.textures." + name + ".increment")(increment->GetSDLValue()));
+    props->Set(Property("scene.textures." + name + ".type")("rounding"));
+    props->Set(Property("scene.textures." + name + ".texture")(GetTexture().GetSDLValue()));
+    props->Set(Property("scene.textures." + name + ".increment")(GetIncrement().GetSDLValue()));
 
     return props;
 }
@@ -56,3 +56,4 @@ float RoundingTexture::round(float value, float increment) const {
                 innerBound : outerBound);
     }
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

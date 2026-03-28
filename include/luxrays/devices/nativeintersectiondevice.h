@@ -22,7 +22,6 @@
 #include <string>
 #include <cstdlib>
 
-#include <boost/thread/thread.hpp>
 
 #include "luxrays/luxrays.h"
 #include "luxrays/core/dataset.h"
@@ -53,14 +52,14 @@ protected:
 
 class NativeIntersectionDevice : public IntersectionDevice {
 public:
-	NativeIntersectionDevice(const Context *context,
+	NativeIntersectionDevice(const Context & context,
 			NativeIntersectionDeviceDescription *deviceDesc,
 			const size_t devIndex);
 	virtual ~NativeIntersectionDevice();
 
 	virtual const DeviceDescription *GetDeviceDesc() const { return deviceDesc; }
 
-	virtual void SetDataSet(DataSet *newDataSet);
+	virtual void SetDataSet(DataSetSPtr newDataSet);
 
 	friend class Context;
 
@@ -70,3 +69,4 @@ public:
 }
 
 #endif	/* _LUXRAYS_NATIVETHREADDEVICE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

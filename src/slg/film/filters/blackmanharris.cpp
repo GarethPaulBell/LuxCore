@@ -17,6 +17,7 @@
  ***************************************************************************/
 
 #include "slg/film/filters/blackmanharris.h"
+#include <memory>
 
 using namespace std;
 using namespace luxrays;
@@ -28,23 +29,27 @@ BOOST_CLASS_EXPORT_IMPLEMENT(slg::BlackmanHarrisFilter)
 // Static methods used by FilterRegistry
 //------------------------------------------------------------------------------
 
-Properties BlackmanHarrisFilter::ToProperties(const Properties &cfg) {
-	return Properties() <<
-			cfg.Get(GetDefaultProps().Get("film.filter.type"));
+PropertiesUPtr BlackmanHarrisFilter::ToProperties(const Properties &cfg) {
+	PropertiesUPtr props = std::make_unique<Properties>();
+	
+	*props <<
+				cfg.Get(GetDefaultProps()->Get("film.filter.type"));
+	
+	return props;
 }
 
-Filter *BlackmanHarrisFilter::FromProperties(const Properties &cfg) {
-	const float defaultFilterWidth = cfg.Get(GetDefaultProps().Get("film.filter.width")).Get<float>();
-	const float filterXWidth = cfg.Get(Property("film.filter.xwidth")(defaultFilterWidth)).Get<float>();
-	const float filterYWidth = cfg.Get(Property("film.filter.ywidth")(defaultFilterWidth)).Get<float>();
+FilterUPtr BlackmanHarrisFilter::FromProperties(const Properties &cfg) {
+	const float defaultFilterWidth = cfg.Get(GetDefaultProps()->Get("film.filter.width")).Get<double>();
+	const float filterXWidth = cfg.Get(Property("film.filter.xwidth")(defaultFilterWidth)).Get<double>();
+	const float filterYWidth = cfg.Get(Property("film.filter.ywidth")(defaultFilterWidth)).Get<double>();
 
-	return new BlackmanHarrisFilter(filterXWidth, filterYWidth);
+	return std::make_unique<BlackmanHarrisFilter>(filterXWidth, filterYWidth);
 }
 
 slg::ocl::Filter *BlackmanHarrisFilter::FromPropertiesOCL(const Properties &cfg) {
-	const float defaultFilterWidth = cfg.Get(GetDefaultProps().Get("film.filter.width")).Get<float>();
-	const float filterXWidth = cfg.Get(Property("film.filter.xwidth")(defaultFilterWidth)).Get<float>();
-	const float filterYWidth = cfg.Get(Property("film.filter.ywidth")(defaultFilterWidth)).Get<float>();
+	const float defaultFilterWidth = cfg.Get(GetDefaultProps()->Get("film.filter.width")).Get<double>();
+	const float filterXWidth = cfg.Get(Property("film.filter.xwidth")(defaultFilterWidth)).Get<double>();
+	const float filterYWidth = cfg.Get(Property("film.filter.ywidth")(defaultFilterWidth)).Get<double>();
 
 	slg::ocl::Filter *oclFilter = new slg::ocl::Filter();
 
@@ -58,10 +63,12 @@ slg::ocl::Filter *BlackmanHarrisFilter::FromPropertiesOCL(const Properties &cfg)
 	return oclFilter;
 }
 
-const Properties &BlackmanHarrisFilter::GetDefaultProps() {
-	static Properties props = Properties() <<
+PropertiesUPtr BlackmanHarrisFilter::GetDefaultProps() {
+	auto props = std::make_unique<Properties>();
+	*props <<
 			Filter::GetDefaultProps() <<
 			Property("film.filter.type")(GetObjectTag());
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

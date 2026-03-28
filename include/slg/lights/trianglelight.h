@@ -19,16 +19,17 @@
 #ifndef _SLG_TRIANGLELIGHT_H
 #define	_SLG_TRIANGLELIGHT_H
 
+#include "slg/usings.h"
 #include "slg/lights/light.h"
+#include "slg/scene/sceneobject.h"
 
 namespace slg {
+
 
 //------------------------------------------------------------------------------
 // TriangleLight implementation
 //------------------------------------------------------------------------------
 
-class SceneObject;
-	
 class TriangleLight : public IntersectableLightSource {
 public:
 	TriangleLight();
@@ -42,29 +43,29 @@ public:
 
 	float GetTriangleArea() const { return triangleArea; }
 	float GetMeshArea() const { return meshArea; }
-	
-	virtual float GetArea() const { return triangleArea; }
-	virtual float GetPower(const Scene &scene) const;
 
-	virtual luxrays::Spectrum Emit(const Scene &scene,
+	virtual float GetArea() const { return triangleArea; }
+	virtual float GetPower(SceneConstRef scene) const;
+
+	virtual luxrays::Spectrum Emit(SceneConstRef scene,
 		const float time, const float u0, const float u1,
 		const float u2, const float u3, const float passThroughEvent,
 		luxrays::Ray &ray, float &emissionPdfW,
 		float *directPdfA = NULL, float *cosThetaAtLight = NULL) const;
 
-    virtual luxrays::Spectrum Illuminate(const Scene &scene, const BSDF &bsdf,
+    virtual luxrays::Spectrum Illuminate(SceneConstRef scene, const BSDF &bsdf,
 		const float time, const float u0, const float u1, const float passThroughEvent,
         luxrays::Ray &shadowRay, float &directPdfW,
 		float *emissionPdfW = NULL, float *cosThetaAtLight = NULL) const;
 
-	virtual bool IsAlwaysInShadow(const Scene &scene,
+	virtual bool IsAlwaysInShadow(SceneConstRef scene,
 			const luxrays::Point &p, const luxrays::Normal &n) const;
 
 	virtual luxrays::Spectrum GetRadiance(const HitPoint &hitPoint,
 			float *directPdfA = NULL,
 			float *emissionPdfW = NULL) const;
 
-	const SceneObject *sceneObject;
+	SceneObjectConstPtr sceneObject;
 	// Note: meshIndex is initialized in LightSourceDefinitions::Preprocess()
 	u_int meshIndex, triangleIndex;
 	
@@ -76,3 +77,4 @@ private:
 }
 
 #endif	/* _SLG_TRIANGLELIGHT_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -37,34 +37,34 @@ public:
 	void GetPreprocessedData(const luxrays::Distribution2D **imageMapDistribution,
 		const EnvLightVisibilityCache **visibilityMapCache) const;
 
-	virtual void UpdateVisibilityMap(const Scene *scene, const bool useRTMode);
+	virtual void UpdateVisibilityMap(SceneConstRef scene, const bool useRTMode);
 
 	virtual LightSourceType GetType() const { return TYPE_IL; }
-	virtual float GetPower(const Scene &scene) const;
+	virtual float GetPower(SceneConstRef scene) const;
 
-	virtual luxrays::Spectrum Emit(const Scene &scene,
+	virtual luxrays::Spectrum Emit(SceneConstRef scene,
 		const float time, const float u0, const float u1,
 		const float u2, const float u3, const float passThroughEvent,
 		luxrays::Ray &ray, float &emissionPdfW,
 		float *directPdfA = NULL, float *cosThetaAtLight = NULL) const;
 
-    virtual luxrays::Spectrum Illuminate(const Scene &scene, const BSDF &bsdf,
+    virtual luxrays::Spectrum Illuminate(SceneConstRef scene, const BSDF &bsdf,
 		const float time, const float u0, const float u1, const float passThroughEvent,
         luxrays::Ray &shadowRay, float &directPdfW,
 		float *emissionPdfW = NULL, float *cosThetaAtLight = NULL) const;
 
-	virtual luxrays::Spectrum GetRadiance(const Scene &scene, const BSDF *bsdf,
+	virtual luxrays::Spectrum GetRadiance(SceneConstRef scene, const BSDF *bsdf,
 		const luxrays::Vector &dir,
 		float *directPdfA = NULL, float *emissionPdfW = NULL) const;
 	virtual luxrays::UV GetEnvUV(const luxrays::Vector &dir) const;
 
-	virtual void AddReferencedImageMaps(boost::unordered_set<const ImageMap *> &referencedImgMaps) const {
-		referencedImgMaps.insert(imageMap);
+	virtual void AddReferencedImageMaps(std::unordered_set<const ImageMap *> &referencedImgMaps) const {
+		referencedImgMaps.insert(imageMap.get());
 	}
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
-	const ImageMap *imageMap;
+	ImageMapConstPtr imageMap;
 	bool sampleUpperHemisphereOnly;
 
 	// Visibility map cache options
@@ -72,11 +72,12 @@ public:
 	bool useVisibilityMapCache;
 
 private:
-	luxrays::Distribution2D *imageMapDistribution;
+	std::unique_ptr<luxrays::Distribution2D> imageMapDistribution;
 
-	EnvLightVisibilityCache *visibilityMapCache;
+	std::unique_ptr<EnvLightVisibilityCache> visibilityMapCache;
 };
 
 }
 
 #endif	/* _SLG_INFINITELIGHT_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

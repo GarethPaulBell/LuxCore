@@ -19,6 +19,7 @@
 #ifndef _SLG_DOTSTEX_H
 #define	_SLG_DOTSTEX_H
 
+#include "slg/imagemap/imagemap.h"
 #include "slg/textures/texture.h"
 
 namespace slg {
@@ -29,52 +30,52 @@ namespace slg {
 
 class DotsTexture : public Texture {
 public:
-	DotsTexture(const TextureMapping2D *mp, const Texture *insideTx, const Texture *outsideTx) :
-		mapping(mp), insideTex(insideTx), outsideTex(outsideTx) { }
-	virtual ~DotsTexture() { delete mapping; }
+	DotsTexture(TextureMapping2DUPtr&& mp, TextureRef insideTx, TextureRef outsideTx) :
+		mapping(std::move(mp)), insideTex(insideTx), outsideTex(outsideTx) { }
 
 	virtual TextureType GetType() const { return DOTS; }
 	virtual float GetFloatValue(const HitPoint &hitPoint) const;
 	virtual luxrays::Spectrum GetSpectrumValue(const HitPoint &hitPoint) const;
 	virtual float Y() const {
-		return (insideTex->Y() + outsideTex->Y()) * .5f;
+		return (GetInsideTex().Y() + GetOutsideTex().Y()) * .5f;
 	}
 	virtual float Filter() const {
-		return (insideTex->Filter() + outsideTex->Filter()) * .5f;
+		return (GetInsideTex().Filter() + GetOutsideTex().Filter()) * .5f;
 	}
 
-	virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 		Texture::AddReferencedTextures(referencedTexs);
 
-		insideTex->AddReferencedTextures(referencedTexs);
-		outsideTex->AddReferencedTextures(referencedTexs);
+		GetInsideTex().AddReferencedTextures(referencedTexs);
+		GetOutsideTex().AddReferencedTextures(referencedTexs);
 	}
-	virtual void AddReferencedImageMaps(boost::unordered_set<const ImageMap *> &referencedImgMaps) const {
-		insideTex->AddReferencedImageMaps(referencedImgMaps);
-		outsideTex->AddReferencedImageMaps(referencedImgMaps);
+	virtual void AddReferencedImageMaps(std::unordered_set<const ImageMap * > &referencedImgMaps) const {
+		GetInsideTex().AddReferencedImageMaps(referencedImgMaps);
+		GetOutsideTex().AddReferencedImageMaps(referencedImgMaps);
 	}
 
-	virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
-		if (insideTex == oldTex)
+	virtual void UpdateTextureReferences(TextureRef oldTex, TextureRef newTex) {
+		if (&GetInsideTex() == &oldTex)
 			insideTex = newTex;
-		if (outsideTex == oldTex)
+		if (&GetOutsideTex() == &oldTex)
 			outsideTex = newTex;
 	}
 
-	const TextureMapping2D *GetTextureMapping() const { return mapping; }
-	const Texture *GetInsideTex() const { return insideTex; }
-	const Texture *GetOutsideTex() const { return outsideTex; }
+	TextureMapping2DConstRef GetTextureMapping() const { return *mapping; }
+	TextureConstRef GetInsideTex() const { return insideTex; }
+	TextureConstRef GetOutsideTex() const { return outsideTex; }
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
 	bool Evaluate(const HitPoint &hitPoint) const;
 
-	const TextureMapping2D *mapping;
-	const Texture *insideTex;
-	const Texture *outsideTex;
+	TextureMapping2DUPtr mapping;
+	std::reference_wrapper<Texture> insideTex;
+	std::reference_wrapper<Texture> outsideTex;
 };
 
 }
 
 #endif	/* _SLG_DOTSTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

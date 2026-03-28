@@ -75,3 +75,4 @@ BOOST_CLASS_VERSION(slg::OutputSwitcherPlugin, 2)
 BOOST_CLASS_EXPORT_KEY(slg::OutputSwitcherPlugin)
 
 #endif	/*  _SLG_OUTPUTSWITCHER_PLUGIN_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -104,3 +104,4 @@ inline BBox operator*(const Matrix4x4 &m, const BBox &b) {
 }
 
 #endif // _LUXRAYS_MATRIX4x4OP_H
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

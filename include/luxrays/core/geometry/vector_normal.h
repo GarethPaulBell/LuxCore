@@ -56,3 +56,4 @@ inline float AbsDot(const Normal &n1, const Vector &v2) {
 }
 
 #endif 	/* _LUXRAYS_VECTOR_NORMAL_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

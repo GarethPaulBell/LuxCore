@@ -29,9 +29,9 @@ namespace slg {
 
 class FBMTexture : public Texture {
 public:
-	FBMTexture(const TextureMapping3D *mp, const int octs, const float omg) :
-		mapping(mp), octaves(octs), omega(omg) { }
-	virtual ~FBMTexture() { delete mapping; }
+	FBMTexture(TextureMapping3DUPtr&& mp, const int octs, const float omg) :
+		mapping(std::move(mp)), octaves(octs), omega(omg) { }
+	virtual ~FBMTexture() {  }
 
 	virtual TextureType GetType() const { return FBM_TEX; }
 	virtual float GetFloatValue(const HitPoint &hitPoint) const;
@@ -39,14 +39,14 @@ public:
 	virtual float Y() const { return .5f; }
 	virtual float Filter() const { return .5f; }
 
-	const TextureMapping3D *GetTextureMapping() const { return mapping; }
+	TextureMapping3DConstRef GetTextureMapping() const { return *mapping; }
 	int GetOctaves() const { return octaves; }
 	float GetOmega() const { return omega; }
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
-	const TextureMapping3D *mapping;
+	TextureMapping3DUPtr mapping;
 	const int octaves;
 	const float omega;
 };
@@ -54,3 +54,4 @@ private:
 }
 
 #endif	/* _SLG_FBMTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

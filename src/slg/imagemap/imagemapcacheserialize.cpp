@@ -16,6 +16,8 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include <boost/serialization/shared_ptr.hpp>
+
 #include "slg/imagemap/imagemapcache.h"
 #include "slg/core/sdl.h"
 
@@ -33,6 +35,8 @@ namespace slg {
 // Explicit instantiations for portable archives
 template void ImageMapResizePolicy::serialize(LuxOutputArchive &ar, const u_int version);
 template void ImageMapResizePolicy::serialize(LuxInputArchive &ar, const u_int version);
+template void ImageMapResizePolicy::serialize(LuxOutputArchiveText &ar, const u_int version);
+template void ImageMapResizePolicy::serialize(LuxInputArchiveText &ar, const u_int version);
 }
 
 BOOST_CLASS_EXPORT_IMPLEMENT(slg::ImageMapResizeNonePolicy)
@@ -59,8 +63,7 @@ template<class Archive> void ImageMapCache::save(Archive &ar, const u_int versio
 		ar & rpta;
 
 		// Save the ImageMap
-		ImageMap *im = maps[i];
-		ar & im;
+		ar & maps[i];
 	}
 
 	ar & resizePolicy;
@@ -71,7 +74,7 @@ template<class Archive> void ImageMapCache::load(Archive &ar, const u_int versio
 	u_int s;
 	ar & s;
 	mapNames.resize(s);
-	maps.resize(s, NULL);
+	maps.resize(s);
 
 	for (u_int i = 0; i < maps.size(); ++i) {
 		// Load the name
@@ -84,15 +87,15 @@ template<class Archive> void ImageMapCache::load(Archive &ar, const u_int versio
 		resizePolicyToApply[i] = rpta;
 
 		// Load the ImageMap
-		ImageMap *im;
+		ImageMapUPtr im;
 		ar & im;
-		maps[i] = im;
+		maps[i] = std::move(im);
 
 		// The image is internally store always with a 1.0 gamma
 		const std::string key = GetCacheKey(name, ImageMapConfig(1.f,
-				im->GetStorage()->GetStorageType(), im->GetStorage()->wrapType,
+				im->GetStorage().GetStorageType(), im->GetStorage().GetWrapType(),
 				ImageMapStorage::ChannelSelectionType::DEFAULT));
-		mapByKey.insert(make_pair(key, im));	
+		mapByKey.insert(make_pair(key, std::ref(*im)));	
 	}
 
 	ar & resizePolicy;
@@ -102,4 +105,7 @@ namespace slg {
 // Explicit instantiations for portable archives
 template void ImageMapCache::save(LuxOutputArchive &ar, const u_int version) const;
 template void ImageMapCache::load(LuxInputArchive &ar, const u_int version);
+template void ImageMapCache::save(LuxOutputArchiveText &ar, const u_int version) const;
+template void ImageMapCache::load(LuxInputArchiveText &ar, const u_int version);
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -29,7 +29,7 @@ namespace luxrays {
 //------------------------------------------------------------------------------
 
 OpenCLIntersectionDevice::OpenCLIntersectionDevice(
-		const Context *context,
+		const Context & context,
 		OpenCLDeviceDescription *desc,
 		const size_t devIndex) :
 		Device(context, devIndex), OpenCLDevice(context, desc, devIndex),
@@ -39,7 +39,7 @@ OpenCLIntersectionDevice::OpenCLIntersectionDevice(
 OpenCLIntersectionDevice::~OpenCLIntersectionDevice() {
 }
 
-void OpenCLIntersectionDevice::SetDataSet(DataSet *newDataSet) {
+void OpenCLIntersectionDevice::SetDataSet(DataSetSPtr newDataSet) {
 	IntersectionDevice::SetDataSet(newDataSet);
 
 	if (dataSet) {
@@ -84,3 +84,4 @@ void OpenCLIntersectionDevice::EnqueueTraceRayBuffer(HardwareDeviceBuffer *rayBu
 }
 
 #endif
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -60,3 +60,4 @@ BOOST_CLASS_VERSION(slg::VarianceClamping, 1)
 
 #endif	/* _SLG_VARIANCECLAMPING_H */
 
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

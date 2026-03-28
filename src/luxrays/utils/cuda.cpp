@@ -1,4 +1,4 @@
-#include <boost/filesystem/fstream.hpp> /***************************************************************************
+/***************************************************************************
  * Copyright 1998-2020 by authors (see AUTHORS.txt)                        *
  *                                                                         *
  *   This file is part of LuxCoreRender.                                   *
@@ -19,12 +19,13 @@
 #if !defined(LUXRAYS_DISABLE_CUDA)
 
 #include <iostream>
+#include <fstream>
 #include <string.h>
 
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/trim.hpp>
-#include <boost/filesystem/fstream.hpp>
 
+#include "luxrays/core/context.h"
 #include "luxrays/luxrays.h"
 #include "luxrays/utils/utils.h"
 #include "luxrays/utils/config.h"
@@ -95,6 +96,13 @@ bool cudaKernelCache::ForcedCompilePTX(const vector<string> &kernelsParameters, 
 	cudaOpts.push_back("-Xcudafe");
 	cudaOpts.push_back("--diag_suppress=68");
 
+	// Accelerate compilation
+	cudaOpts.push_back("--Ofast-compile=min");
+	cudaOpts.push_back("--split-compile=0");
+
+	// Enable pre-compiled headers
+	cudaOpts.push_back("--pch");
+
 	// Enable debug info
 	//cudaOpts.push_back("-G");
 	// Enable only debug line info
@@ -113,7 +121,7 @@ bool cudaKernelCache::ForcedCompilePTX(const vector<string> &kernelsParameters, 
 
 	size_t logSize;
 	CHECK_NVRTC_ERROR(nvrtcGetProgramLogSize(prog, &logSize));
-	unique_ptr<char> log(new char[logSize]);
+	auto log = std::make_unique<char[]>(logSize);
 	CHECK_NVRTC_ERROR(nvrtcGetProgramLog(prog, log.get()));
 
 	*error = string(log.get());
@@ -135,15 +143,15 @@ bool cudaKernelCache::ForcedCompilePTX(const vector<string> &kernelsParameters, 
 // cudaKernelPersistentCache
 //------------------------------------------------------------------------------
 
-boost::filesystem::path cudaKernelPersistentCache::GetCacheDir(const string &applicationName) {
-	return GetConfigDir() / "cuda_kernel_cache" / SanitizeFileName(applicationName);
+std::filesystem::path cudaKernelPersistentCache::GetCacheDir(const string &applicationName) {
+	return luxrays::GetCacheDir() / "cuda_kernel_cache" / SanitizeFileName(applicationName);
 }
 
 cudaKernelPersistentCache::cudaKernelPersistentCache(const string &applicationName) {
 	appName = applicationName;
 
 	// Crate the cache directory
-	boost::filesystem::create_directories(GetCacheDir(appName));
+	std::filesystem::create_directories(GetCacheDir(appName));
 }
 
 cudaKernelPersistentCache::~cudaKernelPersistentCache() {
@@ -162,25 +170,25 @@ bool cudaKernelPersistentCache::CompilePTX(const vector<string> &kernelsParamete
 			+ "-" +
 			oclKernelPersistentCache::HashString(kernelSource) +
                         "_compute_" + GetCuda10Architecture() + ".ptx";
-	const boost::filesystem::path dirPath = GetCacheDir(appName);
-	const boost::filesystem::path filePath = dirPath / kernelName;
+	const std::filesystem::path dirPath = GetCacheDir(appName);
+	const std::filesystem::path filePath = dirPath / kernelName;
 	const string fileName = filePath.generic_string();
-	
+
 	*cached = false;
-	if (!boost::filesystem::exists(filePath)) {
+	if (!std::filesystem::exists(filePath)) {
 		// It isn't available, compile the source
 
 		// Create the file only if the binaries include something
 		if (ForcedCompilePTX(kernelsParameters, kernelSource, programName, ptx, ptxSize, error)) {
 			// Add the kernel to the cache
-			boost::filesystem::create_directories(dirPath);
+			std::filesystem::create_directories(dirPath);
 
-			// The use of boost::filesystem::path is required for UNICODE support: fileName
+			// The use of std::filesystem::path is required for UNICODE support: fileName
 			// is supposed to be UTF-8 encoded.
-			boost::filesystem::ofstream file(boost::filesystem::path(fileName),
-					boost::filesystem::ofstream::out |
-					boost::filesystem::ofstream::binary |
-					boost::filesystem::ofstream::trunc);
+			std::ofstream file(std::filesystem::path(fileName),
+					std::ofstream::out |
+					std::ofstream::binary |
+					std::ofstream::trunc);
 
 			// Write the binary hash
 			const u_int hashBin = oclKernelPersistentCache::HashBin(*ptx, *ptxSize);
@@ -200,17 +208,17 @@ bool cudaKernelPersistentCache::CompilePTX(const vector<string> &kernelsParamete
 		} else
 			return false;
 	} else {
-		const size_t fileSize = boost::filesystem::file_size(filePath);
+		const size_t fileSize = std::filesystem::file_size(filePath);
 
 		if (fileSize > 4) {
 			*ptxSize = fileSize - 4;
 
 			*ptx = new char[*ptxSize];
 
-			// The use of boost::filesystem::path is required for UNICODE support: fileName
+			// The use of std::filesystem::path is required for UNICODE support: fileName
 			// is supposed to be UTF-8 encoded.
-			boost::filesystem::ifstream file(boost::filesystem::path(fileName),
-					boost::filesystem::ifstream::in | boost::filesystem::ifstream::binary);
+			std::ifstream file(std::filesystem::path(fileName),
+					std::ifstream::in | std::ifstream::binary);
 
 			// Read the binary hash
 			u_int hashBin;
@@ -229,7 +237,7 @@ bool cudaKernelPersistentCache::CompilePTX(const vector<string> &kernelsParamete
 			// Check the binary hash
 			if (hashBin != oclKernelPersistentCache::HashBin(*ptx, *ptxSize)) {
 				// Something wrong in the file, remove the file and retry
-				boost::filesystem::remove(filePath);
+				std::filesystem::remove(filePath);
 				return CompilePTX(kernelsParameters, kernelSource, programName, ptx, ptxSize, cached, error);
 			} else {
 				*cached = true;
@@ -238,7 +246,7 @@ bool cudaKernelPersistentCache::CompilePTX(const vector<string> &kernelsParamete
 			}
 		} else {
 			// Something wrong in the file, remove the file and retry
-			boost::filesystem::remove(filePath);
+			std::filesystem::remove(filePath);
 			return CompilePTX(kernelsParameters, kernelSource, programName, ptx, ptxSize, cached, error);
 		}
 	}
@@ -254,10 +262,11 @@ CUmodule cudaKernelPersistentCache::Compile(const vector<string> &kernelsParamet
 		CHECK_CUDA_ERROR(cuModuleLoadDataEx(&module, ptx, 0, 0, 0));
 
 		delete[] ptx;
-		
+
 		return module;
 	} else
 		return nullptr;
 }
 
 #endif
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

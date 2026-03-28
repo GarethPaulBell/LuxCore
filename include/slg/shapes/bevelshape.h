@@ -27,17 +27,16 @@ namespace slg {
 
 class BevelShape : public Shape {
 public:
-	BevelShape(luxrays::ExtTriangleMesh *mesh, const float bevelRadius);
+	BevelShape(luxrays::ExtTriangleMeshRef mesh, const float bevelRadius);
 	virtual ~BevelShape();
 
-	virtual ShapeType GetType() const { return BEVEL; }
-	
-protected:
-	virtual luxrays::ExtTriangleMesh *RefineImpl(const Scene *scene);
+	virtual ShapeType GetType() const override { return BEVEL; }
 
-	luxrays::ExtTriangleMesh *mesh;
+protected:
+	virtual luxrays::ExtTriangleMeshUPtr RefineImpl(SceneConstRef scene) override;
 };
 
 }
 
 #endif	/* _SLG_MESHSHAPE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

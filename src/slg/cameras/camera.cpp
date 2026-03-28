@@ -16,10 +16,12 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include "luxrays/utils/properties.h"
 #include "slg/film/film.h"
 #include "slg/core/sdl.h"
 #include "slg/bsdf/bsdf.h"
 #include "slg/scene/scene.h"
+#include "slg/cameras/camera.h"
 
 using namespace std;
 using namespace luxrays;
@@ -47,10 +49,13 @@ bool Camera::GetSamplePosition(const luxrays::Point &p,
 	eyeDir /= eyeDistance;
 
 	Ray eyeRay(lensPoint, eyeDir, 0.f, eyeDistance);
-	ClampRay(&eyeRay);
-	eyeRay.UpdateMinMaxWithEpsilon();
-
+	// Do not clamp the ray here because of the check inside GetSamplePosition
 	return GetSamplePosition(&eyeRay, filmX, filmY);
+}
+
+bool Camera::ProjectToImage(luxrays::Ray *ray, float *filmX, float *filmY) const{
+	// Intended only for implementation in OrthographicCamera
+	return false;
 }
 
 void Camera::Update(const u_int width, const u_int height, const u_int *subRegion) {
@@ -70,7 +75,7 @@ void Camera::Update(const u_int width, const u_int height, const u_int *subRegio
 	}
 }
 
-void Camera::UpdateAuto(const Scene *scene) {
+void Camera::UpdateAuto(SceneConstRef scene) {
 	if (autoVolume) {
 		// Trace a ray in the middle of the screen
 		Ray ray;
@@ -80,58 +85,62 @@ void Camera::UpdateAuto(const Scene *scene) {
 		// Trace the ray. If there isn't an intersection just use the current
 		// focal distance
 		RayHit rayHit;
-		if (scene->dataSet->GetAccelerator(ACCEL_EMBREE)->Intersect(&ray, &rayHit)) {
+		if (scene.GetDataSet().GetAccelerator(ACCEL_EMBREE)->Intersect(&ray, &rayHit)) {
 			/* I can not use BSDF::Init() here because Camera::UpdateAuto()
 			 * can be called before light preprocessing
 
 			BSDF bsdf;
 			bsdf.Init(false, *scene, ray, rayHit, 0.f, &volInfo);
-			
+
 			volume = bsdf.hitPoint.intoObject ?
 				bsdf.hitPoint.exteriorVolume : bsdf.hitPoint.interiorVolume;*/
 
 			// Get the scene object
-			const SceneObject *sceneObject = scene->objDefs.GetSceneObject(rayHit.meshIndex);
+			auto& sceneObject = scene.GetObjects().GetSceneObject(rayHit.meshIndex);
 
 			// Get the triangle
-			const ExtMesh *mesh = sceneObject->GetExtMesh();
+			auto& mesh = sceneObject.GetExtMesh();
 
 			// Get the material
-			const Material *material = sceneObject->GetMaterial();
+			auto& material = sceneObject.GetMaterial();
 
 			// Interpolate face normal
 			Transform local2world;
-			mesh->GetLocal2World(ray.time, local2world);
-			const Normal geometryN = mesh->GetGeometryNormal(local2world, rayHit.triangleIndex);
+			mesh.GetLocal2World(ray.time, local2world);
+			const Normal geometryN = mesh.GetGeometryNormal(local2world, rayHit.triangleIndex);
 			const bool intoObject = (Dot(ray.d, geometryN) < 0.f);
 
 			volume = intoObject ?
-				material->GetExteriorVolume() :
-				material->GetInteriorVolume();
-			if (!volume)
-				volume = scene->defaultWorldVolume;
+				material.GetExteriorVolume() :
+				material.GetInteriorVolume();
+			if (!volume) {
+				volume = scene.HasDefaultWorldVolume() ?
+					VolumeConstPtr(&scene.GetDefaultWorldVolume()) :
+					VolumeConstPtr(nullptr);
+			}
 		}
 	}
 }
 
-Properties Camera::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
-	Properties props;
+PropertiesUPtr Camera::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+	auto props = std::make_unique<Properties>();
 
-	props.Set(Property("scene.camera.cliphither")(clipHither));
-	props.Set(Property("scene.camera.clipyon")(clipYon));
-	props.Set(Property("scene.camera.shutteropen")(shutterOpen));
-	props.Set(Property("scene.camera.shutterclose")(shutterClose));
-	props.Set(Property("scene.camera.autovolume.enable")(autoVolume));
+	props->Set(Property("scene.camera.cliphither")(clipHither));
+	props->Set(Property("scene.camera.clipyon")(clipYon));
+	props->Set(Property("scene.camera.shutteropen")(shutterOpen));
+	props->Set(Property("scene.camera.shutterclose")(shutterClose));
+	props->Set(Property("scene.camera.autovolume.enable")(autoVolume));
 	if (volume)
-		props.Set(Property("scene.camera.volume")(volume->GetName()));
+		props->Set(Property("scene.camera.volume")(volume->GetName()));
 
 	if (motionSystem)
-		props.Set(motionSystem->ToProperties("scene.camera", false));
-		
+		props->Set(*motionSystem->ToProperties("scene.camera", false));
+
 	return props;
 }
 
-void Camera::UpdateVolumeReferences(const Volume *oldVol, const Volume *newVol) {
-	if (volume == oldVol)
-		volume = (const Volume *)newVol;
+void Camera::UpdateVolumeReferences(VolumeConstRef oldVol, VolumeConstRef newVol) {
+	if (volume && *volume == oldVol)
+		volume = &newVol;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

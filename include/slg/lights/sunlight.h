@@ -39,24 +39,24 @@ public:
 		float *VData, float *cosThetaMaxData, float *sin2ThetaMaxData) const;
 
 	virtual LightSourceType GetType() const { return TYPE_SUN; }
-	virtual float GetPower(const Scene &scene) const;
+	virtual float GetPower(SceneConstRef scene) const;
 
-	virtual luxrays::Spectrum Emit(const Scene &scene,
+	virtual luxrays::Spectrum Emit(SceneConstRef scene,
 		const float time, const float u0, const float u1,
 		const float u2, const float u3, const float passThroughEvent,
 		luxrays::Ray &ray, float &emissionPdfW,
 		float *directPdfA = NULL, float *cosThetaAtLight = NULL) const;
 
-    virtual luxrays::Spectrum Illuminate(const Scene &scene, const BSDF &bsdf,
+    virtual luxrays::Spectrum Illuminate(SceneConstRef scene, const BSDF &bsdf,
 		const float time, const float u0, const float u1, const float passThroughEvent,
         luxrays::Ray &shadowRay, float &directPdfW,
 		float *emissionPdfW = NULL, float *cosThetaAtLight = NULL) const;
 
-	luxrays::Spectrum GetRadiance(const Scene &scene, const BSDF *bsdf,
+	luxrays::Spectrum GetRadiance(SceneConstRef scene, const BSDF *bsdf,
 			const luxrays::Vector &dir,
 			float *directPdfA = NULL, float *emissionPdfW = NULL) const;
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 	luxrays::Spectrum color;
 	luxrays::Vector localSunDir;
@@ -73,3 +73,4 @@ private:
 }
 
 #endif	/* _SLG_SUNLIGHT_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

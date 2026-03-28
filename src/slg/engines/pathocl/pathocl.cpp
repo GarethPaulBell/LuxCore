@@ -16,6 +16,7 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include <memory>
 #if !defined(LUXRAYS_DISABLE_OPENCL)
 
 #include <cstdio>
@@ -26,8 +27,8 @@
 #include <string>
 #include <sstream>
 #include <stdexcept>
+#include <mutex>
 
-#include <boost/thread/mutex.hpp>
 #include <boost/lexical_cast.hpp>
 
 #include "luxrays/core/geometry/transform.h"
@@ -56,19 +57,16 @@ using namespace slg;
 // PathOCLRenderEngine
 //------------------------------------------------------------------------------
 
-PathOCLRenderEngine::PathOCLRenderEngine(const RenderConfig *rcfg) :
+PathOCLRenderEngine::PathOCLRenderEngine(RenderConfigRef rcfg) :
+
 		PathOCLBaseRenderEngine(rcfg, true) {
 	lightSampleSplatter = nullptr; 
 	eyeSamplerSharedData = nullptr;
-	lightSamplerSharedData = nullptr;
 	hasStartFilm = false;
 	allRenderingThreadsStarted = false;
 }
 
 PathOCLRenderEngine::~PathOCLRenderEngine() {
-	delete lightSampleSplatter;
-	delete eyeSamplerSharedData;
-	delete lightSamplerSharedData;
 }
 
 PathOCLBaseOCLRenderThread *PathOCLRenderEngine::CreateOCLThread(const u_int index,
@@ -81,12 +79,12 @@ PathOCLBaseNativeRenderThread *PathOCLRenderEngine::CreateNativeThread(const u_i
 	return new PathOCLNativeRenderThread(index, device, this);
 }
 
-RenderState *PathOCLRenderEngine::GetRenderState() {
-	return new PathOCLRenderState(bootStrapSeed, photonGICache);
+RenderStateSPtr PathOCLRenderEngine::GetRenderState() {
+	return std::make_shared<PathOCLRenderState>(bootStrapSeed, photonGICache);
 }
 
 void PathOCLRenderEngine::StartLockLess() {
-	const Properties &cfg = renderConfig->cfg;
+	auto& cfg = renderConfig.GetConfig();
 
 	//--------------------------------------------------------------------------
 	// Check to have the right sampler settings
@@ -104,8 +102,8 @@ void PathOCLRenderEngine::StartLockLess() {
 	// Initialize rendering parameters
 	//--------------------------------------------------------------------------	
 
-	const Properties &defaultProps = PathOCLRenderEngine::GetDefaultProps();
-	pathTracer.ParseOptions(cfg, defaultProps);
+	auto defaultProps = PathOCLRenderEngine::GetDefaultProps();
+	pathTracer.ParseOptions(cfg, *defaultProps);
 
 	//--------------------------------------------------------------------------
 	// Restore render state if there is one
@@ -115,7 +113,7 @@ void PathOCLRenderEngine::StartLockLess() {
 		// Check if the render state is of the right type
 		startRenderState->CheckEngineTag(GetObjectTag());
 
-		PathOCLRenderState *rs = (PathOCLRenderState *)startRenderState;
+		auto rs = static_pointer_cast<PathOCLRenderState>(startRenderState);
 
 		// Use a new seed to continue the rendering
 		const u_int newSeed = rs->bootStrapSeed + 1;
@@ -125,14 +123,13 @@ void PathOCLRenderEngine::StartLockLess() {
 		// Transfer the ownership of PhotonGI cache pointer
 		photonGICache = rs->photonGICache;
 		rs->photonGICache = nullptr;
-		
+
 		// I have to set the scene pointer in photonGICache because it is not
 		// saved by serialization
 		if (photonGICache)
-			photonGICache->SetScene(renderConfig->scene);
+			photonGICache->SetScene(renderConfig.GetScene());
 
-		delete startRenderState;
-		startRenderState = NULL;
+		startRenderState = nullptr;
 
 		hasStartFilm = true;
 	} else
@@ -143,20 +140,18 @@ void PathOCLRenderEngine::StartLockLess() {
 	//--------------------------------------------------------------------------
 
 	if (nativeRenderThreadCount > 0) {
-		eyeSamplerSharedData = renderConfig->AllocSamplerSharedData(&seedBaseGenerator, film);
-		
-		if (pathTracer.hybridBackForwardEnable)
-			lightSamplerSharedData = MetropolisSamplerSharedData::FromProperties(Properties(), &seedBaseGenerator, film);
+		eyeSamplerSharedData = renderConfig.AllocSamplerSharedData(seedBaseGenerator, GetFilm());
+
 	}
 
 	//--------------------------------------------------------------------------
 
 	// Initialize the PathTracer class
-	pathTracer.InitPixelFilterDistribution(pixelFilter);
+	pathTracer.InitPixelFilterDistribution(GetPixelFilter());
 
-	delete lightSampleSplatter;
+	lightSampleSplatter.reset();
 	if (pathTracer.hybridBackForwardEnable)
-		lightSampleSplatter = new FilmSampleSplatter(pixelFilter);
+		lightSampleSplatter = std::make_unique<FilmSampleSplatter>(GetPixelFilter());
 
 	PathOCLBaseRenderEngine::StartLockLess();
 
@@ -169,13 +164,9 @@ void PathOCLRenderEngine::StopLockLess() {
 	PathOCLBaseRenderEngine::StopLockLess();
 
 	pathTracer.DeletePixelFilterDistribution();
-	delete lightSampleSplatter;
-	lightSampleSplatter = NULL;
+	lightSampleSplatter.reset();
 
-	delete eyeSamplerSharedData;
-	eyeSamplerSharedData = nullptr;
-	delete lightSamplerSharedData;
-	lightSamplerSharedData = nullptr;
+	eyeSamplerSharedData.reset();
 
 	delete photonGICache;
 	photonGICache = nullptr;
@@ -183,25 +174,27 @@ void PathOCLRenderEngine::StopLockLess() {
 
 void PathOCLRenderEngine::MergeThreadFilms() {
 	// Film may have been not initialized because of an error during Start()
-	if (film->IsInitiliazed()) {
-		film->Clear();
-		film->GetDenoiser().Clear();
+	if (GetFilm().IsInitiliazed()) {
+		GetFilm().Clear();
+		GetFilm().GetDenoiser().Clear();
 
 		for (size_t i = 0; i < renderOCLThreads.size(); ++i) {
 			if (renderOCLThreads[i])
-				film->AddFilm(*(((PathOCLOpenCLRenderThread *)(renderOCLThreads[i]))->threadFilms[0]->film));
+				GetFilm().AddFilm((((PathOCLOpenCLRenderThread *)(renderOCLThreads[i]))->threadFilms[0]->GetFilm()));
 		}
 
 		if (renderNativeThreads.size() > 0) {
 			// All threads use the film of the first one
 			if (renderNativeThreads[0])
-				film->AddFilm(*(((PathOCLNativeRenderThread *)(renderNativeThreads[0]))->threadFilm));
+				GetFilm().AddFilm(
+					*static_cast<PathOCLNativeRenderThread *>(renderNativeThreads[0])->threadFilm
+				);
 		}
 	}
 }
 
 void PathOCLRenderEngine::UpdateFilmLockLess() {
-	boost::unique_lock<boost::mutex> lock(*filmMutex);
+	std::unique_lock<std::mutex> lock(*filmMutex);
 
 	MergeThreadFilms();
 }
@@ -215,16 +208,16 @@ void PathOCLRenderEngine::UpdateCounters() {
 }
 
 void PathOCLRenderEngine::UpdateTaskCount() {
-	const Properties &cfg = renderConfig->cfg;
+	auto& cfg = renderConfig.GetConfig();
 	if (!cfg.IsDefined("opencl.task.count") && (GetType() == RTPATHOCL)) {
 		// In this case, I will tune task count for RTPATHOCL
-		taskCount = film->GetWidth() * film->GetHeight() / intersectionDevices.size();
+		taskCount = GetFilm().GetWidth() * GetFilm().GetHeight() / intersectionDevices.size();
 	} else {
 		const u_int defaultTaskCount = 512ull * 1024ull;
 
 		// Compute the cap to the number of tasks
 		u_int taskCap = defaultTaskCount;
-		BOOST_FOREACH(DeviceDescription *devDesc, selectedDeviceDescs) {
+		for(DeviceDescription *devDesc: selectedDeviceDescs) {
 			if (devDesc->GetMaxMemory() <= 8ull* 1024ull * 1024ull * 1024ull) // For 8GB cards
 				taskCap = Min(taskCap, 256u * 1024u);
 			if (devDesc->GetMaxMemory() <= 4ull * 1024ull * 1024ull * 1024ull) // For 4GB cards
@@ -256,8 +249,8 @@ u_int PathOCLRenderEngine::GetTotalEyeSPP() const {
 		for (size_t i = 0; i < renderOCLThreads.size(); ++i) {
 			if (renderOCLThreads[i]) {
 				const PathOCLOpenCLRenderThread *thread = (const PathOCLOpenCLRenderThread *)renderOCLThreads[i];
-				const Film *film = thread->threadFilms[0]->film;
-				spp += film->GetTotalEyeSampleCount() / film->GetPixelCount();
+				FilmConstRef film = thread->threadFilms[0]->GetFilm();
+				spp += GetFilm().GetTotalEyeSampleCount() / GetFilm().GetPixelCount();
 			}
 		}
 
@@ -265,8 +258,8 @@ u_int PathOCLRenderEngine::GetTotalEyeSPP() const {
 			// All threads use the film of the first one
 			if (renderNativeThreads[0]) {
 				const PathOCLNativeRenderThread *thread = (const PathOCLNativeRenderThread *)renderNativeThreads[0];
-				const Film *film = thread->threadFilm;
-				spp += film->GetTotalEyeSampleCount() / film->GetPixelCount();
+				FilmConstRef film = *thread->threadFilm;
+				spp += GetFilm().GetTotalEyeSampleCount() / GetFilm().GetPixelCount();
 			}
 		}
 	}
@@ -278,27 +271,29 @@ u_int PathOCLRenderEngine::GetTotalEyeSPP() const {
 // Static methods used by RenderEngineRegistry
 //------------------------------------------------------------------------------
 
-Properties PathOCLRenderEngine::ToProperties(const Properties &cfg) {
-	Properties props;
+PropertiesUPtr PathOCLRenderEngine::ToProperties(const Properties &cfg) {
+	auto props_ptr = std::make_unique<Properties>();
+	auto& props = *props_ptr;
 
 	props <<
 			OCLRenderEngine::ToProperties(cfg) <<
-			cfg.Get(GetDefaultProps().Get("renderengine.type")) <<
+			cfg.Get(GetDefaultProps()->Get("renderengine.type")) <<
 			PathTracer::ToProperties(cfg) <<
-			cfg.Get(GetDefaultProps().Get("pathocl.pixelatomics.enable")) <<
-			cfg.Get(GetDefaultProps().Get("opencl.task.count")) <<
+			cfg.Get(GetDefaultProps()->Get("pathocl.pixelatomics.enable")) <<
+			cfg.Get(GetDefaultProps()->Get("opencl.task.count")) <<
 			Sampler::ToProperties(cfg) <<
 			PhotonGICache::ToProperties(cfg);
 
-	return props;
+	return props_ptr;
 }
 
-RenderEngine *PathOCLRenderEngine::FromProperties(const RenderConfig *rcfg) {
+RenderEngine *PathOCLRenderEngine::FromProperties(RenderConfigRef rcfg) {
 	return new PathOCLRenderEngine(rcfg);
 }
 
-const Properties &PathOCLRenderEngine::GetDefaultProps() {
-	static Properties props = Properties() <<
+PropertiesUPtr PathOCLRenderEngine::GetDefaultProps() {
+	auto props = std::make_unique<Properties>();
+	*props <<
 			OCLRenderEngine::GetDefaultProps() <<
 			Property("renderengine.type")(GetObjectTag()) <<
 			PathTracer::GetDefaultProps() <<
@@ -310,3 +305,4 @@ const Properties &PathOCLRenderEngine::GetDefaultProps() {
 }
 
 #endif
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -26,11 +26,12 @@ using namespace slg;
 // Brick texture
 //------------------------------------------------------------------------------
 
-BrickTexture::BrickTexture(const TextureMapping3D *mp, const Texture *t1,
-		const Texture *t2, const Texture *t3,
+BrickTexture::BrickTexture(TextureMapping3DUPtr&& mp, TextureConstRef t1,
+		TextureConstRef t2, TextureConstRef t3,
 		float brickw, float brickh, float brickd, float mortar,
 		float r, const string &b, const float modulationBias) :
-		mapping(mp), tex1(t1), tex2(t2), tex3(t3),
+		mapping(std::move(mp)),
+		tex1(t1), tex2(t2), tex3(t3),
 		brickwidth(brickw), brickheight(brickh), brickdepth(brickd), mortarsize(mortar),
 		run(r), initialbrickwidth(brickw), initialbrickheight(brickh), initialbrickdepth(brickd),
 		modulationBias(modulationBias) {
@@ -199,9 +200,9 @@ Spectrum BrickTexture::GetSpectrumValue(const HitPoint &hitPoint) const {
 	if (b) {
 		// Return brick color
 		if (modulationBias == -1.f) {
-			return tex1->GetSpectrumValue(hitPoint);
+			return GetTexture1().GetSpectrumValue(hitPoint);
 		} else if (modulationBias == 1.f) {
-			return tex3->GetSpectrumValue(hitPoint);
+			return GetTexture3().GetSpectrumValue(hitPoint);
 		}
 		
 		const int rownum = brickIndex.y;
@@ -209,10 +210,10 @@ Spectrum BrickTexture::GetSpectrumValue(const HitPoint &hitPoint) const {
 		const float noise = BrickNoise((rownum << 16) + (bricknum & 0xffff));
 		const float modulation = Clamp(noise + modulationBias, 0.f, 1.f);
 		
-		return Lerp(modulation, tex1->GetSpectrumValue(hitPoint), tex3->GetSpectrumValue(hitPoint));
+		return Lerp(modulation, GetTexture1().GetSpectrumValue(hitPoint), GetTexture3().GetSpectrumValue(hitPoint));
 	} else {
 		// Return mortar color
-		return tex2->GetSpectrumValue(hitPoint);
+		return GetTexture2().GetSpectrumValue(hitPoint);
 	}
 #undef BRICK_EPSILON
 }
@@ -225,20 +226,20 @@ float BrickTexture::BrickNoise(u_int n) const {
 }
 
 
-Properties BrickTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
-	Properties props;
+PropertiesUPtr BrickTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.textures." + name + ".type")("brick"));
-	props.Set(Property("scene.textures." + name + ".bricktex")(tex1->GetSDLValue()));
-	props.Set(Property("scene.textures." + name + ".mortartex")(tex2->GetSDLValue()));
-	props.Set(Property("scene.textures." + name + ".brickmodtex")(tex3->GetSDLValue()));
-	props.Set(Property("scene.textures." + name + ".brickmodbias")(modulationBias));
-	props.Set(Property("scene.textures." + name + ".brickwidth")(initialbrickwidth));
-	props.Set(Property("scene.textures." + name + ".brickheight")(initialbrickheight));
-	props.Set(Property("scene.textures." + name + ".brickdepth")(initialbrickdepth));
-	props.Set(Property("scene.textures." + name + ".mortarsize")(mortarsize));
-	props.Set(Property("scene.textures." + name + ".brickrun")(run));
+	props->Set(Property("scene.textures." + name + ".type")("brick"));
+	props->Set(Property("scene.textures." + name + ".bricktex")(GetTexture1().GetSDLValue()));
+	props->Set(Property("scene.textures." + name + ".mortartex")(GetTexture2().GetSDLValue()));
+	props->Set(Property("scene.textures." + name + ".brickmodtex")(GetTexture3().GetSDLValue()));
+	props->Set(Property("scene.textures." + name + ".brickmodbias")(modulationBias));
+	props->Set(Property("scene.textures." + name + ".brickwidth")(initialbrickwidth));
+	props->Set(Property("scene.textures." + name + ".brickheight")(initialbrickheight));
+	props->Set(Property("scene.textures." + name + ".brickdepth")(initialbrickdepth));
+	props->Set(Property("scene.textures." + name + ".mortarsize")(mortarsize));
+	props->Set(Property("scene.textures." + name + ".brickrun")(run));
 
 	string brickBondValue;
 	switch (bond) {
@@ -262,9 +263,10 @@ Properties BrickTexture::ToProperties(const ImageMapCache &imgMapCache, const bo
 			brickBondValue = "stacked";
 			break;
 	}
-	props.Set(Property("scene.textures." + name + ".brickbond")(brickBondValue));
+	props->Set(Property("scene.textures." + name + ".brickbond")(brickBondValue));
 
-	props.Set(mapping->ToProperties("scene.textures." + name + ".mapping"));
+	props->Set(mapping->ToProperties("scene.textures." + name + ".mapping"));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

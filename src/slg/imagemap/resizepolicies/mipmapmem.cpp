@@ -17,7 +17,7 @@
  ***************************************************************************/
 
 #include <boost/format.hpp>
-#include <boost/filesystem.hpp>
+#include <filesystem>
 
 #include "slg/scene/scene.h"
 #include "slg/imagemap/imagemapcache.h"
@@ -31,7 +31,7 @@ using namespace slg;
 // ImageMapResizeMipMapMemPolicy::ApplyResizePolicy()
 //------------------------------------------------------------------------------
 
-ImageMap *ImageMapResizeMipMapMemPolicy::ApplyResizePolicy(const std::string &fileName,
+ImageMapUPtr ImageMapResizeMipMapMemPolicy::ApplyResizePolicy(const std::string &fileName,
 		const ImageMapConfig &imgCfg, bool &toApply) const {
 	const string srcFileName = SLG_FileNameResolver.ResolveFile(fileName);
 	
@@ -39,8 +39,8 @@ ImageMap *ImageMapResizeMipMapMemPolicy::ApplyResizePolicy(const std::string &fi
 	const string dstFileName = srcFileName + ".tx";
 
 	// Check if the TX file exist and it is up to date
-	if (!boost::filesystem::exists(dstFileName) ||
-			(boost::filesystem::last_write_time(srcFileName) > boost::filesystem::last_write_time(dstFileName))) {
+	if (!std::filesystem::exists(dstFileName) ||
+			(std::filesystem::last_write_time(srcFileName) > std::filesystem::last_write_time(dstFileName))) {
 		SDL_LOG("Creating TX image for file:  " << srcFileName);
 
 		ImageMap::MakeTx(srcFileName, dstFileName);
@@ -63,7 +63,7 @@ ImageMap *ImageMapResizeMipMapMemPolicy::ApplyResizePolicy(const std::string &fi
 		SDL_LOG("Probe ImageMap: " << dstFileName << " [from " << width << "x" << height <<
 				" to " << newWidth << "x" << newHeight <<"]");
 
-		ImageMap *im = new ImageMap(dstFileName, imgCfg, newWidth, newHeight);
+		auto im = std::make_unique<ImageMap>(dstFileName, imgCfg, newWidth, newHeight);
 		// Set the ImageMap with  the original name
 		im->SetName(fileName);
 
@@ -73,7 +73,7 @@ ImageMap *ImageMapResizeMipMapMemPolicy::ApplyResizePolicy(const std::string &fi
 
 		return im;
 	} else {
-		ImageMap *im = new ImageMap(fileName, imgCfg);
+		auto im = std::make_unique<ImageMap>(fileName, imgCfg);
 
 		toApply = false;
 
@@ -85,29 +85,36 @@ ImageMap *ImageMapResizeMipMapMemPolicy::ApplyResizePolicy(const std::string &fi
 // ImageMapResizeMinMemPolicy::Preprocess()
 //------------------------------------------------------------------------------
 
-void ImageMapResizeMipMapMemPolicy::Preprocess(ImageMapCache &imc, const Scene *scene,
-		const bool useRTMode) const {
+void ImageMapResizeMipMapMemPolicy::Preprocess(
+	ImageMapCache &imc,
+	SceneConstRef scene,
+	const bool useRTMode
+) const {
 	if (useRTMode)
 		return;
 
 	SDL_LOG("Applying resize policy " << ImageMapResizePolicyType2String(GetType()) << "...");
-	
+
+	// TODO Debug
 	const double startTime = WallClockTime();
-	
+
 	// Build the list of image maps to check
-	vector<u_int> imgMapsIndices;
+	std::vector<u_int> imgMapsIndices;
 	for (u_int i = 0; i < imc.resizePolicyToApply.size(); ++i) {
 		if (imc.resizePolicyToApply[i]) {
 			//SDL_LOG("Image map to process:  " << imc.maps[i]->GetName());
 			imgMapsIndices.push_back(i);
 		}
 	}
-	
+
 	SDL_LOG("Image maps to process:  " << imgMapsIndices.size());
 
+
+
 	// Enable instrumentation for image maps to check
-	for (auto i : imgMapsIndices)
+	for (auto i : imgMapsIndices) {
 		imc.maps[i]->EnableInstrumentation();
+	}
 
 	// Do a test render to establish the optimal image maps sizes
 	CalcOptimalImageMapSizes(imc, scene, imgMapsIndices);
@@ -153,15 +160,15 @@ void ImageMapResizeMipMapMemPolicy::Preprocess(ImageMapCache &imc, const Scene *
 
 		imc.resizePolicyToApply[i] = false;
 
-		originalMemUsed += originalWidth * originalHeigth * imc.maps[i]->GetStorage()->GetMemoryPixelSize();
+		originalMemUsed += originalWidth * originalHeigth * imc.maps[i]->GetStorage().GetMemoryPixelSize();
 
 		// Reload the original image map with the best mip map level
 		const string srcFileName = SLG_FileNameResolver.ResolveFile(imc.maps[i]->GetName());
 		const string dstFileName = srcFileName + ".tx";
 		imc.maps[i]->Reload(dstFileName, newWidth, newHeight);
 
-		currentMemUsed += imc.maps[i]->GetStorage()->GetMemorySize();
-		
+		currentMemUsed += imc.maps[i]->GetStorage().GetMemorySize();
+
 		SDL_LOG("Image maps \"" << imc.maps[i]->GetName() << "\" scaled: " <<
 				originalWidth << "x" << originalHeigth << " => " <<
 				imc.maps[i]->GetWidth() << "x" << imc.maps[i]->GetHeight());
@@ -169,11 +176,16 @@ void ImageMapResizeMipMapMemPolicy::Preprocess(ImageMapCache &imc, const Scene *
 
 	SDL_LOG("Memory required for original Image maps: " + ToMemString(originalMemUsed));
 	SDL_LOG("Memory required for MIPMAPMEM Image maps: " + ToMemString(currentMemUsed));
-	
-	// Delete instrumentation for image maps checked
-	for (auto i : imgMapsIndices)
-		imc.maps[i]->DeleteInstrumentation();
 
-	SDL_LOG("Applying resize policy " << ImageMapResizePolicyType2String(GetType()) << " time: " <<
-			(boost::format("%.1f") % (WallClockTime() - startTime)) << "secs");
+	//TODO
+	//// Delete instrumentation for image maps checked
+	//for (auto i : imgMapsIndices)
+		//imc.maps[i]->DeleteInstrumentation();
+
+	SDL_LOG(
+		"Applying resize policy "
+		<< ImageMapResizePolicyType2String(GetType())
+		<< " time: " << (boost::format("%.1f") % (WallClockTime() - startTime)) << "secs"
+	);
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

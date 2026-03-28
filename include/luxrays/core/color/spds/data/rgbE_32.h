@@ -156,3 +156,4 @@ static const float refrgb2spect_blue[] =  { 9.9209771469720676e-01,   9.88764260
 //static float refrgb2spect_blue[] =	{ 1.0000, 1.0000, 0.8916, 0.3323, 0.0000, 0.0000, 0.0003, 0.0369, 0.0483, 0.0496 };
 
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

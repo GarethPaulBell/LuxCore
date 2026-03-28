@@ -97,3 +97,4 @@ BOOST_CLASS_IMPLEMENTATION(luxrays::Quaternion, boost::serialization::object_ser
 BOOST_CLASS_EXPORT_KEY(luxrays::Quaternion)
 
 #endif // _LUXRAYS_QUATERNION_H
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

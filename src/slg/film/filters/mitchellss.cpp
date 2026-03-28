@@ -17,6 +17,7 @@
  ***************************************************************************/
 
 #include "slg/film/filters/mitchellss.h"
+#include <memory>
 
 using namespace std;
 using namespace luxrays;
@@ -24,41 +25,47 @@ using namespace slg;
 
 BOOST_CLASS_EXPORT_IMPLEMENT(slg::MitchellSSFilter)
 
-Properties MitchellSSFilter::ToProperties() const {
-	return Properties() <<
-			Property("film.filter.filter.mitchell.b")(B) <<
+PropertiesUPtr MitchellSSFilter::ToProperties() const {
+	PropertiesUPtr props = std::make_unique<Properties>();
+	*props <<
+				Property("film.filter.filter.mitchell.b")(B) <<
 			Property("film.filter.filter.mitchell.c")(C);
+	return props;
 }
 
 //------------------------------------------------------------------------------
 // Static methods used by FilterRegistry
 //------------------------------------------------------------------------------
 
-Properties MitchellSSFilter::ToProperties(const Properties &cfg) {
-	return Properties() <<
-			cfg.Get(GetDefaultProps().Get("film.filter.type")) <<
-			cfg.Get(GetDefaultProps().Get("film.filter.mitchellss.b")) <<
-			cfg.Get(GetDefaultProps().Get("film.filter.mitchellss.c"));
+PropertiesUPtr MitchellSSFilter::ToProperties(const Properties &cfg) {
+	PropertiesUPtr props = std::make_unique<Properties>();
+	
+	*props <<
+				cfg.Get(GetDefaultProps()->Get("film.filter.type")) <<
+			cfg.Get(GetDefaultProps()->Get("film.filter.mitchellss.b")) <<
+			cfg.Get(GetDefaultProps()->Get("film.filter.mitchellss.c"));
+	
+	return props;
 }
 
-Filter *MitchellSSFilter::FromProperties(const Properties &cfg) {
-	const float defaultFilterWidth = cfg.Get(GetDefaultProps().Get("film.filter.width")).Get<float>();
-	const float filterXWidth = cfg.Get(Property("film.filter.xwidth")(defaultFilterWidth)).Get<float>();
-	const float filterYWidth = cfg.Get(Property("film.filter.ywidth")(defaultFilterWidth)).Get<float>();
+FilterUPtr MitchellSSFilter::FromProperties(const Properties &cfg) {
+	const float defaultFilterWidth = cfg.Get(GetDefaultProps()->Get("film.filter.width")).Get<double>();
+	const float filterXWidth = cfg.Get(Property("film.filter.xwidth")(defaultFilterWidth)).Get<double>();
+	const float filterYWidth = cfg.Get(Property("film.filter.ywidth")(defaultFilterWidth)).Get<double>();
 
-	const float b = cfg.Get(GetDefaultProps().Get("film.filter.mitchellss.b")).Get<float>();
-	const float c = cfg.Get(GetDefaultProps().Get("film.filter.mitchellss.c")).Get<float>();
+	const float b = cfg.Get(GetDefaultProps()->Get("film.filter.mitchellss.b")).Get<double>();
+	const float c = cfg.Get(GetDefaultProps()->Get("film.filter.mitchellss.c")).Get<double>();
 
-	return new MitchellSSFilter(filterXWidth, filterYWidth, b, c);
+	return std::make_unique<MitchellSSFilter>(filterXWidth, filterYWidth, b, c);
 }
 
 slg::ocl::Filter *MitchellSSFilter::FromPropertiesOCL(const Properties &cfg) {
-	const float defaultFilterWidth = cfg.Get(GetDefaultProps().Get("film.filter.width")).Get<float>();
-	const float filterXWidth = cfg.Get(Property("film.filter.xwidth")(defaultFilterWidth)).Get<float>();
-	const float filterYWidth = cfg.Get(Property("film.filter.ywidth")(defaultFilterWidth)).Get<float>();
+	const float defaultFilterWidth = cfg.Get(GetDefaultProps()->Get("film.filter.width")).Get<double>();
+	const float filterXWidth = cfg.Get(Property("film.filter.xwidth")(defaultFilterWidth)).Get<double>();
+	const float filterYWidth = cfg.Get(Property("film.filter.ywidth")(defaultFilterWidth)).Get<double>();
 
-//	const float b = cfg.Get(GetDefaultProps().Get("film.filter.mitchellss.b")).Get<float>();
-//	const float c = cfg.Get(GetDefaultProps().Get("film.filter.mitchellss.c")).Get<float>();
+//	const float b = cfg.Get(GetDefaultProps()->Get("film.filter.mitchellss.b")).Get<double>();
+//	const float c = cfg.Get(GetDefaultProps()->Get("film.filter.mitchellss.c")).Get<double>();
 
 	slg::ocl::Filter *oclFilter = new slg::ocl::Filter();
 
@@ -76,8 +83,9 @@ slg::ocl::Filter *MitchellSSFilter::FromPropertiesOCL(const Properties &cfg) {
 	return oclFilter;
 }
 
-const Properties &MitchellSSFilter::GetDefaultProps() {
-	static Properties props = Properties() <<
+PropertiesUPtr MitchellSSFilter::GetDefaultProps() {
+	auto props = std::make_unique<Properties>();
+	*props <<
 			Filter::GetDefaultProps() <<
 			Property("film.filter.type")(GetObjectTag()) <<
 			Property("film.filter.mitchellss.b")(1.f / 3.f) <<
@@ -85,3 +93,4 @@ const Properties &MitchellSSFilter::GetDefaultProps() {
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

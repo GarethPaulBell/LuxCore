@@ -17,6 +17,7 @@
  ***************************************************************************/
 
 #include "slg/engines/bidirvmcpu/bidirvmcpu.h"
+#include <memory>
 
 using namespace luxrays;
 using namespace slg;
@@ -25,20 +26,20 @@ using namespace slg;
 // BiDirCPURenderEngine
 //------------------------------------------------------------------------------
 
-BiDirVMCPURenderEngine::BiDirVMCPURenderEngine(const RenderConfig *rcfg) :
+BiDirVMCPURenderEngine::BiDirVMCPURenderEngine(RenderConfigRef rcfg) :
 		BiDirCPURenderEngine(rcfg) {
 }
 
 void BiDirVMCPURenderEngine::StartLockLess() {
-	const Properties &cfg = renderConfig->cfg;
+	const auto& cfg = renderConfig.GetConfig();
 
 	//--------------------------------------------------------------------------
 	// Rendering parameters
 	//--------------------------------------------------------------------------
 
-	lightPathsCount = Max(1024u, cfg.Get(GetDefaultProps().Get("bidirvm.lightpath.count")).Get<u_int>());
-	baseRadius = cfg.Get(GetDefaultProps().Get("bidirvm.startradius.scale")).Get<float>() * renderConfig->scene->dataSet->GetBSphere().rad;
-	radiusAlpha = cfg.Get(GetDefaultProps().Get("bidirvm.alpha")).Get<float>();
+	lightPathsCount = Max(1024u, cfg.Get(GetDefaultProps()->Get("bidirvm.lightpath.count")).Get<u_int>());
+	baseRadius = cfg.Get(GetDefaultProps()->Get("bidirvm.startradius.scale")).Get<double>() * renderConfig.GetScene().GetDataSet().GetBSphere().rad;
+	radiusAlpha = cfg.Get(GetDefaultProps()->Get("bidirvm.alpha")).Get<double>();
 
 	BiDirCPURenderEngine::StartLockLess();
 }
@@ -47,20 +48,25 @@ void BiDirVMCPURenderEngine::StartLockLess() {
 // Static methods used by RenderEngineRegistry
 //------------------------------------------------------------------------------
 
-Properties BiDirVMCPURenderEngine::ToProperties(const Properties &cfg) {
-	return BiDirCPURenderEngine::ToProperties(cfg) <<
-			cfg.Get(GetDefaultProps().Get("renderengine.type")) <<
-			cfg.Get(GetDefaultProps().Get("bidirvm.lightpath.count")) <<
-			cfg.Get(GetDefaultProps().Get("bidirvm.startradius.scale")) <<
-			cfg.Get(GetDefaultProps().Get("bidirvm.alpha"));
+PropertiesUPtr BiDirVMCPURenderEngine::ToProperties(const Properties &cfg) {
+	PropertiesUPtr props = BiDirCPURenderEngine::ToProperties(cfg);
+	
+	*props <<
+				cfg.Get(GetDefaultProps()->Get("renderengine.type")) <<
+			cfg.Get(GetDefaultProps()->Get("bidirvm.lightpath.count")) <<
+			cfg.Get(GetDefaultProps()->Get("bidirvm.startradius.scale")) <<
+			cfg.Get(GetDefaultProps()->Get("bidirvm.alpha"));
+	
+	return props;
 }
 
-RenderEngine *BiDirVMCPURenderEngine::FromProperties(const RenderConfig *rcfg) {
+RenderEngine *BiDirVMCPURenderEngine::FromProperties(RenderConfigRef rcfg) {
 	return new BiDirVMCPURenderEngine(rcfg);
 }
 
-const Properties &BiDirVMCPURenderEngine::GetDefaultProps() {
-	static Properties props = Properties() <<
+PropertiesUPtr BiDirVMCPURenderEngine::GetDefaultProps() {
+	auto props = std::make_unique<Properties>();
+	*props <<
 			BiDirCPURenderEngine::GetDefaultProps() <<
 			Property("renderengine.type")(GetObjectTag()) <<
 			Property("bidirvm.lightpath.count")(16 * 1024) <<
@@ -69,3 +75,4 @@ const Properties &BiDirVMCPURenderEngine::GetDefaultProps() {
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

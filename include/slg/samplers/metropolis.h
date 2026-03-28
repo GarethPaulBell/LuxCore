@@ -43,8 +43,16 @@ public:
 
 	virtual void Reset();
 
-	static SamplerSharedData *FromProperties(const luxrays::Properties &cfg,
-			luxrays::RandomGenerator *rndGen, Film *film);
+	static std::unique_ptr<SamplerSharedData> FromProperties(
+		const luxrays::Properties &cfg,
+		const luxrays::RandomGeneratorUPtr & rndGen,
+		FilmPtr film
+	);
+	static std::unique_ptr<SamplerSharedData> FromProperties(
+		const luxrays::Properties &cfg,
+		const luxrays::RandomGeneratorUPtr & rndGen,
+		FilmRef film
+	);
 
 	// I'm storing totalLuminance, sampleCount and noBlackSampleCount on shared variables
 	// in order to have far more accurate estimation in the image mean intensity
@@ -73,10 +81,12 @@ typedef enum {
 
 class MetropolisSampler : public Sampler {
 public:
-	MetropolisSampler(luxrays::RandomGenerator *rnd, Film *film,
-			const FilmSampleSplatter *flmSplatter, const bool imgSamplesEnable,
+	MetropolisSampler(const luxrays::RandomGeneratorUPtr & rnd, FilmPtr film,
+			const FilmSampleSplatterUPtr& flmSplatter, const bool imgSamplesEnable,
 			const u_int maxRej, const float pLarge, const float imgRange,
-			const bool addOnlyCstcs, MetropolisSamplerSharedData *samplerSharedData);
+			const bool addOnlyCstcs,
+			SamplerSharedDataSPtr samplerSharedData
+		);
 	virtual ~MetropolisSampler();
 
 	virtual SamplerType GetType() const { return GetObjectType(); }
@@ -89,26 +99,28 @@ public:
 	// Used, most of the times, when not having a film
 	MetropolisSampleType GetLastSampleAcceptance(float &weight) const;
 
-	virtual luxrays::Properties ToProperties() const;
+	virtual luxrays::PropertiesUPtr ToProperties() const;
 
 	u_int GetLargeMutationCount() const { return largeMutationCount; }
-	
+
 	//--------------------------------------------------------------------------
 	// Static methods used by SamplerRegistry
 	//--------------------------------------------------------------------------
 
 	static SamplerType GetObjectType() { return METROPOLIS; }
 	static std::string GetObjectTag() { return "METROPOLIS"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static Sampler *FromProperties(const luxrays::Properties &cfg, luxrays::RandomGenerator *rndGen,
-		Film *film, const FilmSampleSplatter *flmSplatter, SamplerSharedData *sharedData);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static SamplerUPtr FromProperties(
+		const luxrays::Properties &cfg, const luxrays::RandomGeneratorUPtr & rndGen,
+		FilmPtr film, const FilmSampleSplatterUPtr& flmSplatter,
+		SamplerSharedDataSPtr sharedData);
 	static slg::ocl::Sampler *FromPropertiesOCL(const luxrays::Properties &cfg);
 	static void AddRequiredChannels(Film::FilmChannels &channels, const luxrays::Properties &cfg);
 
 private:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
-	MetropolisSamplerSharedData *sharedData;
+	std::shared_ptr<MetropolisSamplerSharedData> sharedData;;
 
 	u_int maxRejects;
 	float largeMutationProbability, imageMutationRange;
@@ -140,3 +152,4 @@ private:
 }
 
 #endif	/* _SLG_METROPOLIS_SAMPLER_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

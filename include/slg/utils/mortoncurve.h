@@ -63,3 +63,4 @@ inline u_int DecodeMorton2Y(const u_int code) {
 }
 
 #endif	/* _SLG_MORTONCURVE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

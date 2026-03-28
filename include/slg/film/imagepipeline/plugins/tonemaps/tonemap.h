@@ -61,3 +61,4 @@ BOOST_SERIALIZATION_ASSUME_ABSTRACT(slg::ToneMap)
 BOOST_CLASS_VERSION(slg::ToneMap, 1)
 
 #endif	/* _SLG_TONEMAP_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

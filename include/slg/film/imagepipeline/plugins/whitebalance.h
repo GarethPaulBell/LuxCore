@@ -67,4 +67,4 @@ BOOST_CLASS_VERSION(slg::WhiteBalance, 2)
 
 BOOST_CLASS_EXPORT_KEY(slg::WhiteBalance)
 
-#endif
+#endif// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

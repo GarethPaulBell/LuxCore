@@ -25,6 +25,7 @@
 #include "luxrays/utils/properties.h"
 #include "luxrays/utils/proputils.h"
 #include "luxrays/utils/serializationutils.h"
+#include "luxrays/usings.h"
 
 namespace slg {
 
@@ -64,15 +65,18 @@ public:
 	bool HasType(const FilmOutputType type) const { return (std::count(types.begin(), types.end(), type) > 0); }
 	FilmOutputType GetType(const u_int index) const { return types[index]; }
 	const std::string &GetFileName(const u_int index) const { return fileNames[index]; }
-	const luxrays::Properties &GetProperties(const u_int index) const { return outputProps[index]; }
+	const luxrays::PropertiesRPtr GetProperties(const u_int index) { return outputProps[index]; }
 
-	void Add(const FilmOutputType type, const std::string &fileName,
-		const luxrays::Properties *prop = NULL);
+	void Add(
+		const FilmOutputType type,
+		const std::string &fileName,
+		luxrays::PropertiesUPtr&& prop = nullptr
+	);
 
 	bool UseSafeSave() const { return safeSave; }
 	void SetSafeSave(const bool v) { safeSave = v; }
-	
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
+
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
 	static FilmOutputType String2FilmOutputType(const std::string &type);
 	static const std::string FilmOutputType2String(const FilmOutputType type);
 
@@ -88,7 +92,7 @@ private:
 
 	std::vector<FilmOutputType> types;
 	std::vector<std::string> fileNames;
-	std::vector<luxrays::Properties> outputProps;
+	std::vector<luxrays::PropertiesUPtr> outputProps;
 
 	bool safeSave;
 };
@@ -98,3 +102,4 @@ private:
 BOOST_CLASS_VERSION(slg::FilmOutputs, 2)
 
 #endif	/* _SLG_FILMOUTPUTS_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

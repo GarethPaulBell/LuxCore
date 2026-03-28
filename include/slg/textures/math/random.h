@@ -29,7 +29,7 @@ namespace slg {
 
 class RandomTexture : public Texture {
 public:
-	RandomTexture(const Texture *t, const u_int o) : tex(t), seedOffset(o) { }
+	RandomTexture(TextureRef t, const u_int o) : tex(t), seedOffset(o) { }
 	virtual ~RandomTexture() { }
 
 	virtual TextureType GetType() const { return RANDOM_TEX; }
@@ -38,29 +38,30 @@ public:
 	virtual float Y() const { return luxrays::Spectrum(.5f).Y(); }
 	virtual float Filter() const { return .5f; }
 
-	virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 		Texture::AddReferencedTextures(referencedTexs);
 
-		tex->AddReferencedTextures(referencedTexs);
+		GetTexture().AddReferencedTextures(referencedTexs);
 	}
-	virtual void AddReferencedImageMaps(boost::unordered_set<const ImageMap *> &referencedImgMaps) const {
-		tex->AddReferencedImageMaps(referencedImgMaps);
-	}
-
-	virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
-		if (tex == oldTex)
-			tex = newTex;
+	virtual void AddReferencedImageMaps(std::unordered_set<const ImageMap * > &referencedImgMaps) const {
+		GetTexture().AddReferencedImageMaps(referencedImgMaps);
 	}
 
-	const Texture *GetTexture() const { return tex; }
+	virtual void UpdateTextureReferences(TextureRef oldTex, TextureRef newTex) {
+		updtex(tex, oldTex, newTex);
+	}
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	TextureConstRef GetTexture() const { return tex; }
+
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
-	const Texture *tex;
+	std::reference_wrapper<Texture> tex;
+
 	const u_int seedOffset;
 };
 
 }
 
 #endif	/* _SLG_RANDOMTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

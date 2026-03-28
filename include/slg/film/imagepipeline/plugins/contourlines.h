@@ -75,3 +75,4 @@ BOOST_CLASS_VERSION(slg::ContourLinesPlugin, 1)
 BOOST_CLASS_EXPORT_KEY(slg::ContourLinesPlugin)
 
 #endif	/*  _SLG_CONTOURLINES_PLUGIN_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

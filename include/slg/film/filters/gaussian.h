@@ -47,7 +47,7 @@ public:
 	}
 
 	// Transform the current object in Properties
-	virtual luxrays::Properties ToProperties() const;
+	virtual luxrays::PropertiesUPtr ToProperties() const;
 
 	//--------------------------------------------------------------------------
 	// Static methods used by FilterRegistry
@@ -55,8 +55,8 @@ public:
 
 	static FilterType GetObjectType() { return FILTER_GAUSSIAN; }
 	static std::string GetObjectTag() { return "GAUSSIAN"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static Filter *FromProperties(const luxrays::Properties &cfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static FilterUPtr FromProperties(const luxrays::Properties &cfg);
 	static slg::ocl::Filter *FromPropertiesOCL(const luxrays::Properties &cfg);
 
 	float alpha;
@@ -64,7 +64,7 @@ public:
 	friend class boost::serialization::access;
 
 private:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	// Used by serialization
 	GaussianFilter() { }
@@ -92,3 +92,4 @@ BOOST_CLASS_VERSION(slg::GaussianFilter, 1)
 BOOST_CLASS_EXPORT_KEY(slg::GaussianFilter)
 
 #endif	/* _SLG_GAUSSIAN_FILTER_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -21,8 +21,6 @@
 
 #if !defined(LUXRAYS_DISABLE_OPENCL)
 
-#include <boost/unordered_set.hpp>
-
 #include "slg/slg.h"
 #include "slg/editaction.h"
 
@@ -33,12 +31,13 @@
 #include "slg/lights/strategies/dlscache.h"
 #include "slg/lights/visibility/envlightvisibilitycache.h"
 #include "slg/engines/pathtracer.h"
+#include "slg/cameras/camera.h"
 
 namespace slg {
 
 class CompiledScene {
 public:
-	CompiledScene(Scene *scn, const PathTracer *pt);
+	CompiledScene(SceneConstRef scn, const PathTracer *pt);
 	~CompiledScene();
 	
 	void SetMaxMemPageSize(const size_t maxSize);
@@ -139,8 +138,8 @@ public:
 		wasPhotonGICompiled;
 
 private:
-	void AddToImageMapMem(slg::ocl::ImageMap &im, void *data, const size_t memSize);
-	u_int CompileImageMap(const ImageMap *im);
+	void AddToImageMapMem(slg::ocl::ImageMap &im, const void *data, const size_t memSize);
+	u_int CompileImageMap(ImageMapConstRef im);
 
 	void CompileCamera();
 	void CompileSceneObjects();
@@ -157,8 +156,14 @@ private:
 			std::vector<slg::ocl::MaterialEvalOp> &evalOps) const;
 	void CompileMaterialOps();
 	void CompileMaterials();
-	void CompileTextureMapping2D(slg::ocl::TextureMapping2D *mapping, const TextureMapping2D *m);
-	void CompileTextureMapping3D(slg::ocl::TextureMapping3D *mapping, const TextureMapping3D *m);
+	void CompileTextureMapping2D(
+		slg::ocl::TextureMapping2D *mapping,
+		TextureMapping2DConstRef m
+	);
+	void CompileTextureMapping3D(
+		slg::ocl::TextureMapping3D *mapping,
+		TextureMapping3DConstRef m
+	);
 	u_int CompileTextureOpsGenericBumpMap(const u_int texIndex);
 	u_int CompileTextureOps(const u_int texIndex, const slg::ocl::TextureEvalOpType opType);
 	void CompileTextureOps();
@@ -166,18 +171,18 @@ private:
 	void CompileImageMaps();
 	void CompileLights();
 
-	void CompileDLSC(const LightStrategyDLSCache *dlscLightStrategy);
-	void CompileELVC(const EnvLightVisibilityCache *visibilityMapCache);
+	void CompileDLSC(const LightStrategyDLSCache& dlscLightStrategy);
+	void CompileELVC(EnvLightVisibilityCacheConstPtr visibilityMapCache);
 	void CompileLightStrategy();
 	
 	void CompilePhotonGI();
 	void CompilePathTracer();
 
-	Scene *scene;
+	SceneConstRef scene;
 	const PathTracer *pathTracer;
 
 	size_t maxMemPageSize;
-	boost::unordered_set<std::string> enabledCode;
+	std::unordered_set<std::string> enabledCode;
 }; 
 
 }
@@ -185,3 +190,4 @@ private:
 #endif
 
 #endif	/* _SLG_COMPILEDSESSION_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

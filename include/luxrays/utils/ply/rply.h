@@ -363,3 +363,4 @@ int ply_close(p_ply ply);
  * ---------------------------------------------------------------------- */
 
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

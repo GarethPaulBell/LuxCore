@@ -38,23 +38,23 @@ public:
 		const luxrays::Transform **alignedLight2World, const luxrays::Transform **lightProjection) const;
 
 	virtual LightSourceType GetType() const { return TYPE_PROJECTION; }
-	virtual float GetPower(const Scene &scene) const;
+	virtual float GetPower(SceneConstRef scene) const;
 
-	virtual luxrays::Spectrum Emit(const Scene &scene,
+	virtual luxrays::Spectrum Emit(SceneConstRef scene,
 		const float time, const float u0, const float u1,
 		const float u2, const float u3, const float passThroughEvent,
 		luxrays::Ray &ray, float &emissionPdfW,
 		float *directPdfA = NULL, float *cosThetaAtLight = NULL) const;
 
-    virtual luxrays::Spectrum Illuminate(const Scene &scene, const BSDF &bsdf,
+    virtual luxrays::Spectrum Illuminate(SceneConstRef scene, const BSDF &bsdf,
 		const float time, const float u0, const float u1, const float passThroughEvent,
         luxrays::Ray &shadowRay, float &directPdfW,
 		float *emissionPdfW = NULL, float *cosThetaAtLight = NULL) const;
 
-	virtual bool IsAlwaysInShadow(const Scene &scene,
+	virtual bool IsAlwaysInShadow(SceneConstRef scene,
 			const luxrays::Point &p, const luxrays::Normal &n) const;
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 	luxrays::Spectrum color;
 	float power, efficiency;
@@ -63,7 +63,7 @@ public:
 	luxrays::Point localPos, localTarget;
 
 	float fov;
-	const ImageMap *imageMap;
+	ImageMapConstPtr imageMap;
 
 protected:
 	luxrays::Spectrum emittedFactor;
@@ -77,3 +77,4 @@ protected:
 }
 
 #endif	/* _SLG_PROJECTIONLIGHT_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

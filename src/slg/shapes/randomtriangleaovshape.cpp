@@ -30,30 +30,30 @@ using namespace std;
 using namespace luxrays;
 using namespace slg;
 
-RandomTriangleAOVShape::RandomTriangleAOVShape(luxrays::ExtTriangleMesh *srcMesh,
+RandomTriangleAOVShape::RandomTriangleAOVShape(luxrays::ExtTriangleMeshRef srcMesh,
 		const u_int srcDataIndex, const u_int dstDataIndex) {
-	SDL_LOG("RandomTriangleAOV shape " << srcMesh->GetName());
+	SDL_LOG("RandomTriangleAOV shape " << srcMesh.GetName());
 
-	if (!srcMesh->HasTriAOV(srcDataIndex)) {
+	if (!srcMesh.HasTriAOV(srcDataIndex)) {
 		SDL_LOG("RandomTriangleAOV shape has no triangle AOV: " << srcDataIndex);
-		mesh = srcMesh->Copy();
+		mesh = srcMesh.Copy();
 		return;
 	}
 	
 	const double startTime = WallClockTime();
 
-	const u_int triCount = srcMesh->GetTotalTriangleCount();
+	const u_int triCount = srcMesh.GetTotalTriangleCount();
 	float *dstTriAOV = new float[triCount];
 	for (u_int i = 0; i < triCount; ++i) {
 		// Use here the same algorithm used in RandomTexture
-		const u_int seed = (int)srcMesh->GetTriAOV(i, srcDataIndex);
+		const u_int seed = (int)srcMesh.GetTriAOV(i, srcDataIndex);
 
 		TauswortheRandomGenerator rnd(seed);
 
 		dstTriAOV[i] = rnd.floatValue();
 	}
 	
-	mesh = srcMesh->Copy();
+	mesh = srcMesh.Copy();
 	mesh->DeleteTriAOV(dstDataIndex);
 	mesh->SetTriAOV(dstDataIndex, &dstTriAOV[0]);
 
@@ -62,10 +62,9 @@ RandomTriangleAOVShape::RandomTriangleAOVShape(luxrays::ExtTriangleMesh *srcMesh
 }
 
 RandomTriangleAOVShape::~RandomTriangleAOVShape() {
-	if (!refined)
-		delete mesh;
 }
 
-ExtTriangleMesh *RandomTriangleAOVShape::RefineImpl(const Scene *scene) {
-	return mesh;
+ExtTriangleMeshUPtr RandomTriangleAOVShape::RefineImpl(SceneConstRef scene) {
+	return std::move(mesh);
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -20,8 +20,11 @@
 #define	_LUXRAYS_NAMEDOBJECT_H
 
 #include <string>
+#include <iostream>
+#include <type_traits>
 
 #include "luxrays/luxrays.h"
+#include "luxrays/usings.h"
 #include "luxrays/utils/properties.h"
 #include "luxrays/utils/serializationutils.h"
 
@@ -33,12 +36,20 @@ public:
 	NamedObject(const std::string &name);
 	virtual ~NamedObject();
 
+	// Delete copy operations (if you don't want copying)
+	NamedObject(const NamedObject&) = delete;
+	NamedObject& operator=(const NamedObject&) = delete;
+
+	// Declare default move operations
+	NamedObject(NamedObject&&) = default;
+	NamedObject& operator=(NamedObject&&) = default;
+
 	const std::string &GetName() const { return name; }
 	void SetName(const std::string &nm) { name = nm; }
 
 	// Returns the Properties required to create this object
-	virtual luxrays::Properties ToProperties() const;
-	
+	virtual luxrays::PropertiesUPtr ToProperties() const;
+
 	// Most sub-class will implement the many standard static methods used
 	// in ObjectStaticRegistry
 
@@ -54,10 +65,20 @@ private:
 	std::string name;
 };
 
+
+inline bool operator==(const NamedObject& lhs, const NamedObject& rhs) {
+	return std::addressof(lhs) == std::addressof(rhs);
 }
+
+inline bool operator!=(const NamedObject& lhs, const NamedObject& rhs) {
+	return not (lhs == rhs);
+}
+
+}  // namespace luxrays
 
 BOOST_SERIALIZATION_ASSUME_ABSTRACT(luxrays::NamedObject)
 
 BOOST_CLASS_VERSION(luxrays::NamedObject, 3)
 
 #endif	/* _LUXRAYS_NAMEDOBJECT_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

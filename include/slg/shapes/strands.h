@@ -22,6 +22,7 @@
 #include <string>
 #include <vector>
 
+#include "luxrays/usings.h"
 #include "luxrays/utils/cyhair/cyHairFile.h"
 
 #include "slg/shapes/shape.h"
@@ -35,33 +36,33 @@ public:
 		TESSEL_SOLID, TESSEL_SOLID_ADAPTIVE
 	} TessellationType;
 
-	StrendsShape(const Scene *scene,
+	StrendsShape(SceneConstRef scene,
 			const luxrays::cyHairFile *hairFile, const TessellationType tesselType,
 			const u_int adaptiveMaxDepth, const float adaptiveError, 
 			const u_int solidSideCount, const bool solidCapBottom, const bool solidCapTop,
 			const bool useCameraPosition);
 	virtual ~StrendsShape();
 
-	virtual ShapeType GetType() const { return STRANDS; }
+	virtual ShapeType GetType() const override { return STRANDS; }
 
 protected:
-	virtual luxrays::ExtTriangleMesh *RefineImpl(const Scene *scene);
-	
-	void TessellateRibbon(const Scene *scene,
+	virtual luxrays::ExtTriangleMeshUPtr RefineImpl(SceneConstRef scene) override;
+
+	void TessellateRibbon(SceneConstRef scene,
 		const std::vector<luxrays::Point> &hairPoints,
 		const std::vector<float> &hairSizes, const std::vector<luxrays::Spectrum> &hairCols,
 		const std::vector<luxrays::UV> &hairUVs, const std::vector<float> &hairTransps,
 		std::vector<luxrays::Point> &meshVerts, std::vector<luxrays::Normal> &meshNorms,
 		std::vector<luxrays::Triangle> &meshTris, std::vector<luxrays::UV> &meshUVs, std::vector<luxrays::Spectrum> &meshCols,
 		std::vector<float> &meshTransps) const;
-	void TessellateAdaptive(const Scene *scene,
+	void TessellateAdaptive(SceneConstRef scene,
 		const bool solid, const std::vector<luxrays::Point> &hairPoints,
 		const std::vector<float> &hairSizes, const std::vector<luxrays::Spectrum> &hairCols,
 		const std::vector<luxrays::UV> &hairUVs, const std::vector<float> &hairTransps,
 		std::vector<luxrays::Point> &meshVerts, std::vector<luxrays::Normal> &meshNorms,
 		std::vector<luxrays::Triangle> &meshTris, std::vector<luxrays::UV> &meshUVs, std::vector<luxrays::Spectrum> &meshCols,
 		std::vector<float> &meshTransps) const;
-	void TessellateSolid(const Scene *scene,
+	void TessellateSolid(SceneConstRef scene,
 		const std::vector<luxrays::Point> &hairPoints,
 		const std::vector<float> &hairSizes, const std::vector<luxrays::Spectrum> &hairCols,
 		const std::vector<luxrays::UV> &hairUVs, const std::vector<float> &hairTransps,
@@ -76,9 +77,9 @@ protected:
 	bool solidCapBottom, solidCapTop;
 	bool useCameraPosition;
 
-	luxrays::ExtTriangleMesh *mesh;
 };
 
 }
 
 #endif	/* _SLG_STRANDSSHAPE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

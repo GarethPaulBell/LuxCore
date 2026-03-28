@@ -29,18 +29,18 @@ using namespace slg;
 // Filter
 //------------------------------------------------------------------------------
 
-Properties Filter::ToProperties() const {
-	Properties props;
-	
-	props << Property("film.filter.type")(FilterType2String(GetType()));
-	
+PropertiesUPtr Filter::ToProperties() const {
+	auto props = std::make_unique<Properties>();
+
+	*props << Property("film.filter.type")(FilterType2String(GetType()));
+
 	if (xWidth == yWidth)
-		props << Property("film.filter.width")(xWidth);
+		*props << Property("film.filter.width")(xWidth);
 	else
-		props <<
+		*props <<
 				Property("film.filter.xwidth")(xWidth) <<
 				Property("film.filter.ywidth")(yWidth);
-	
+
 	return props;
 }
 
@@ -48,29 +48,31 @@ Properties Filter::ToProperties() const {
 // Static methods used by FilterRegistry
 //------------------------------------------------------------------------------
 
-Properties Filter::ToProperties(const Properties &cfg) {
+PropertiesUPtr Filter::ToProperties(const Properties &cfg) {
 	const string type = cfg.Get(Property("film.filter.type")(BlackmanHarrisFilter::GetObjectTag())).Get<string>();
 
 	FilterRegistry::ToProperties func;
 
 	if (FilterRegistry::STATICTABLE_NAME(ToProperties).Get(type, func)) {
-		Properties props;
+		auto props = std::make_unique<Properties>();
 
-		const float defaultFilterWidth = cfg.Get(GetDefaultProps().Get("film.filter.width")).Get<float>();
+		const float defaultFilterWidth = cfg.Get(GetDefaultProps()->Get("film.filter.width")).Get<double>();
 		const Property filterXWidth = cfg.Get(Property("film.filter.xwidth")(defaultFilterWidth));
 		const Property filterYWidth = cfg.Get(Property("film.filter.ywidth")(defaultFilterWidth));
 
-		if (filterXWidth.Get<float>() == filterYWidth.Get<float>())
-			props << Property("film.filter.width")(filterXWidth.Get<float>());
+		if (filterXWidth.Get<double>() == filterYWidth.Get<double>())
+			*props << Property("film.filter.width")(filterXWidth.Get<double>());
 		else
-			props << filterXWidth << filterYWidth;
+			*props << filterXWidth << filterYWidth;
 
-		return func(cfg) << props;
+		auto res = func(cfg);
+		*res << props;
+		return res;
 	} else
 		throw runtime_error("Unknown filter type in Filter::ToProperties(): " + type);
 }
 
-Filter *Filter::FromProperties(const Properties &cfg) {
+FilterUPtr Filter::FromProperties(const Properties &cfg) {
 	const string type = cfg.Get(Property("film.filter.type")(BlackmanHarrisFilter::GetObjectTag())).Get<string>();
 
 	FilterRegistry::FromProperties func;
@@ -106,8 +108,9 @@ const string Filter::FilterType2String(const FilterType type) {
 		throw runtime_error("Unknown filter type in Filter::FilterType2String(): " + ToString(type));
 }
 
-const Properties &Filter::GetDefaultProps() {
-	static Properties props = Properties() <<
+PropertiesUPtr Filter::GetDefaultProps() {
+	auto props = std::make_unique<Properties>();
+	*props <<
 			Property("film.filter.width")(2.f);
 
 	return props;
@@ -136,3 +139,4 @@ OBJECTSTATICREGISTRY_REGISTER(FilterRegistry, BlackmanHarrisFilter);
 OBJECTSTATICREGISTRY_REGISTER(FilterRegistry, SincFilter);
 OBJECTSTATICREGISTRY_REGISTER(FilterRegistry, CatmullRomFilter);
 // Just add here any new Filter (don't forget in the .h too)
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

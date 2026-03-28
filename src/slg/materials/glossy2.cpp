@@ -29,10 +29,10 @@ using namespace slg;
 // LuxRender Glossy2 material porting.
 //------------------------------------------------------------------------------
 
-Glossy2Material::Glossy2Material(const Texture *frontTransp, const Texture *backTransp,
-		const Texture *emitted, const Texture *bump,
-		const Texture *kd, const Texture *ks, const Texture *u, const Texture *v,
-		const Texture *ka, const Texture *d, const Texture *i, const bool mbounce, const bool doublesided) :
+Glossy2Material::Glossy2Material(TextureConstPtr frontTransp, TextureConstPtr backTransp,
+		TextureConstPtr emitted, TextureConstPtr bump,
+		TextureConstPtr kd, TextureConstPtr ks, TextureConstPtr u, TextureConstPtr v,
+		TextureConstPtr ka, TextureConstPtr d, TextureConstPtr i, const bool mbounce, const bool doublesided) :
 			Material(frontTransp, backTransp, emitted, bump), Kd(kd), Ks(ks), nu(u), nv(v),
 			Ka(ka), depth(d), index(i), multibounce(mbounce), doublesided (doublesided) {
 	glossiness = ComputeGlossiness(nu, nv);
@@ -280,7 +280,7 @@ void Glossy2Material::Pdf(const HitPoint &hitPoint,
 	}
 }
 
-void Glossy2Material::AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+void Glossy2Material::AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 	Material::AddReferencedTextures(referencedTexs);
 
 	Kd->AddReferencedTextures(referencedTexs);
@@ -292,48 +292,49 @@ void Glossy2Material::AddReferencedTextures(boost::unordered_set<const Texture *
 	index->AddReferencedTextures(referencedTexs);
 }
 
-void Glossy2Material::UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
+void Glossy2Material::UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
 	Material::UpdateTextureReferences(oldTex, newTex);
 
 	bool updateGlossiness = false;
-	if (Kd == oldTex)
-		Kd = newTex;
-	if (Ks == oldTex)
-		Ks = newTex;
-	if (nu == oldTex) {
-		nu = newTex;
+	if (Kd == &oldTex)
+		Kd = &newTex;
+	if (Ks == &oldTex)
+		Ks = &newTex;
+	if (nu == &oldTex) {
+		nu = &newTex;
 		updateGlossiness = true;
 	}
-	if (nv == oldTex) {
-		nv = newTex;
+	if (nv == &oldTex) {
+		nv = &newTex;
 		updateGlossiness = true;
 	}
-	if (Ka == oldTex)
-		Ka = newTex;
-	if (depth == oldTex)
-		depth = newTex;
-	if (index == oldTex)
-		index = newTex;
+	if (Ka == &oldTex)
+		Ka = &newTex;
+	if (depth == &oldTex)
+		depth = &newTex;
+	if (index == &oldTex)
+		index = &newTex;
 
 	if (updateGlossiness)
 		glossiness = ComputeGlossiness(nu, nv);
 }
 
-Properties Glossy2Material::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
-	Properties props;
+PropertiesUPtr Glossy2Material::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.materials." + name + ".type")("glossy2"));
-	props.Set(Property("scene.materials." + name + ".kd")(Kd->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".ks")(Ks->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".uroughness")(nu->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".vroughness")(nv->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".ka")(Ka->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".d")(depth->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".index")(index->GetSDLValue()));
-	props.Set (Property ("scene.materials." + name + ".multibounce")(multibounce));
-	props.Set (Property ("scene.materials." + name + ".doublesided")(doublesided));
-	props.Set(Material::ToProperties(imgMapCache, useRealFileName));
+	props->Set(Property("scene.materials." + name + ".type")("glossy2"));
+	props->Set(Property("scene.materials." + name + ".kd")(Kd->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".ks")(Ks->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".uroughness")(nu->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".vroughness")(nv->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".ka")(Ka->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".d")(depth->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".index")(index->GetSDLValue()));
+	props->Set(Property ("scene.materials." + name + ".multibounce")(multibounce));
+	props->Set(Property ("scene.materials." + name + ".doublesided")(doublesided));
+	props->Set(Material::ToProperties(imgMapCache, useRealFileName));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

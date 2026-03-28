@@ -26,9 +26,9 @@ using namespace slg;
 // Mirror material
 //------------------------------------------------------------------------------
 
-MirrorMaterial::MirrorMaterial(const Texture *frontTransp, const Texture *backTransp,
-		const Texture *emitted, const Texture *bump,
-		const Texture *refl) : Material(frontTransp, backTransp, emitted, bump), Kr(refl) {
+MirrorMaterial::MirrorMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
+		TextureConstPtr emitted, TextureConstPtr bump,
+		TextureConstPtr refl) : Material(frontTransp, backTransp, emitted, bump), Kr(refl) {
 }
 
 Spectrum MirrorMaterial::Evaluate(const HitPoint &hitPoint,
@@ -49,26 +49,27 @@ Spectrum MirrorMaterial::Sample(const HitPoint &hitPoint,
 	return Kr->GetSpectrumValue(hitPoint).Clamp(0.f, 1.f);
 }
 
-void MirrorMaterial::AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+void MirrorMaterial::AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 	Material::AddReferencedTextures(referencedTexs);
 
 	Kr->AddReferencedTextures(referencedTexs);
 }
 
-void MirrorMaterial::UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
+void MirrorMaterial::UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
 	Material::UpdateTextureReferences(oldTex, newTex);
 
-	if (Kr == oldTex)
-		Kr = newTex;
+	if (Kr == &oldTex)
+		Kr = &newTex;
 }
 
-Properties MirrorMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
-	Properties props;
+PropertiesUPtr MirrorMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.materials." + name + ".type")("mirror"));
-	props.Set(Property("scene.materials." + name + ".kr")(Kr->GetSDLValue()));
-	props.Set(Material::ToProperties(imgMapCache, useRealFileName));
+	props->Set(Property("scene.materials." + name + ".type")("mirror"));
+	props->Set(Property("scene.materials." + name + ".kr")(Kr->GetSDLValue()));
+	props->Set(Material::ToProperties(imgMapCache, useRealFileName));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

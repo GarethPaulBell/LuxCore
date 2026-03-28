@@ -16,6 +16,8 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include <boost/serialization/shared_ptr.hpp>
+
 #include "luxrays/luxrays.h"
 #include "luxrays/utils/serializationutils.h"
 #include "slg/renderstate.h"
@@ -41,10 +43,10 @@ void RenderState::CheckEngineTag(const std::string &tag) {
 		throw runtime_error("Wrong engine type in a render state: " + engineTag + " instead of " + tag);
 }
 
-RenderState *RenderState::LoadSerialized(const std::string &fileName) {
+RenderStateSPtr RenderState::LoadSerialized(const std::string &fileName) {
 	SerializationInputFile sif(fileName);
 
-	RenderState *renderState;
+	RenderStateSPtr renderState;
 	sif.GetArchive() >> renderState;
 
 	if (!sif.IsGood())
@@ -74,3 +76,4 @@ void RenderState::SaveSerialized(const std::string &fileName) {
 		SLG_LOG("Render state saved: " << (size / 1024) << " Kbytes");
 	}
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

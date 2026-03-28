@@ -146,3 +146,4 @@ static const float illumrgb2spect_blue[] = { 1.0570490759328752e+00,   1.0538466
 											1.5769743995852967e-01,   1.9069090525482305e-01 };
 
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -19,11 +19,9 @@
 #ifndef _SLG_PHOTONGICACHE_H
 #define	_SLG_PHOTONGICACHE_H
 
+#include <functional>
 #include <vector>
-#include <boost/atomic.hpp>
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/barrier.hpp>
-#include <boost/function.hpp>
+#include <barrier>
 
 #include "luxrays/core/color/spectrumgroup.h"
 #include "luxrays/utils/properties.h"
@@ -31,6 +29,7 @@
 #include "luxrays/utils/serializationutils.h"
 
 #include "slg/slg.h"
+#include "slg/usings.h"
 #include "slg/samplers/sobol.h"
 #include "slg/bsdf/bsdf.h"
 #include "slg/scene/scene.h"
@@ -44,6 +43,7 @@ namespace slg {
 namespace ocl {
 #include "slg/engines/caches/photongi/pgic_types.cl"
 }
+
 
 //------------------------------------------------------------------------------
 // Photon Mapping based GI cache
@@ -62,7 +62,8 @@ protected:
 	// Used by serialization
 	GenericPhoton() { }
 
-	template<class Archive> void serialize(Archive &ar, const u_int version) {
+	template<class Archive>
+	void serialize(Archive &ar, const u_int version) {
 		ar & p;
 		ar & isVolume;
 	}
@@ -263,12 +264,12 @@ class EyePathInfo;
 
 class PhotonGICache {
 public:
-	PhotonGICache(const Scene *scn, const PhotonGICacheParams &params);
+	PhotonGICache(SceneConstRef scn, const PhotonGICacheParams &params);
 	virtual ~PhotonGICache();
 
-	void SetScene(const Scene *scn) { scene = scn; }
+	void SetScene(SceneRef scn) { scene = scn; }
 	PhotonGIDebugType GetDebugType() const { return params.debugType; }
-	
+
 	bool IsIndirectEnabled() const { return params.indirect.enabled; }
 	bool IsCausticEnabled() const { return params.caustic.enabled; }
 	bool IsPhotonGIEnabled(const BSDF &bsdf) const;
@@ -276,21 +277,21 @@ public:
 			const float lastGlossiness, const float u0) const;
 	bool IsDirectLightHitVisible(const EyePathInfo &pathInfo,
 		const bool photonGICausticCacheUsed) const;
-	
+
 	const PhotonGICacheParams &GetParams() const { return params; }
 
 	void Preprocess(const u_int threadCount);
 	bool Update(const u_int threadIndex, const u_int filmSPP,
-		const boost::function<void()> &threadZeroCallback);
+		const std::function<void()> &threadZeroCallback);
 	bool Update(const u_int threadIndex, const u_int filmSPP) {
-		const boost::function<void()> noCallback;
+		const std::function<void()> noCallback;
 		return Update(threadIndex, filmSPP, noCallback);
 	}
 	void FinishUpdate(const u_int threadIndex);
 
 	const luxrays::SpectrumGroup *GetIndirectRadiance(const BSDF &bsdf) const;
 	luxrays::SpectrumGroup ConnectWithCausticPaths(const BSDF &bsdf) const;
-	
+
 	const std::vector<RadiancePhoton> &GetRadiancePhotons() const { return radiancePhotons; }
 	const PGICRadiancePhotonBvh *GetRadiancePhotonsBVH() const { return radiancePhotonsBVH; }
 	const u_int GetRadiancePhotonTracedCount() const { return indirectPhotonTracedCount; }
@@ -304,9 +305,9 @@ public:
 	static PhotonGIDebugType String2DebugType(const std::string &type);
 	static std::string DebugType2String(const PhotonGIDebugType type);
 
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static const luxrays::Properties &GetDefaultProps();
-	static PhotonGICache *FromProperties(const Scene *scn, const luxrays::Properties &cfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static luxrays::PropertiesUPtr GetDefaultProps();
+	static PhotonGICache *FromProperties(SceneConstRef scn, const luxrays::Properties &cfg);
 
 	friend class PGICSceneVisibility;
 	friend class TracePhotonsThread;
@@ -322,10 +323,10 @@ private:
 	void TraceVisibilityParticles();
 	void TracePhotons(const u_int seedBase, const u_int photonTracedCount,
 		const bool indirectCacheDone, const bool causticCacheDone,
-		boost::atomic<u_int> &globalIndirectPhotonsTraced,
-		boost::atomic<u_int> &globalCausticPhotonsTraced,
-		boost::atomic<u_int> &globalIndirectSize,
-		boost::atomic<u_int> &globalCausticSize);
+		std::atomic<u_int> &globalIndirectPhotonsTraced,
+		std::atomic<u_int> &globalCausticPhotonsTraced,
+		std::atomic<u_int> &globalIndirectSize,
+		std::atomic<u_int> &globalCausticSize);
 	void TracePhotons(const bool indirectEnabled, const bool causticEnabled);
 	void FilterVisibilityParticlesRadiance(const std::vector<luxrays::SpectrumGroup> &radianceValues,
 			std::vector<luxrays::SpectrumGroup> &filteredRadianceValues) const;
@@ -336,11 +337,17 @@ private:
 
 	template<class Archive> void serialize(Archive &ar, const u_int version);
 
-	const Scene *scene;
+	std::reference_wrapper<const Scene> scene;
+
 	PhotonGICacheParams params;
 
 	u_int threadCount;
-	std::unique_ptr<boost::barrier> threadsSyncBarrier;
+
+    struct completion_t {
+        void operator()() noexcept { }
+    };
+    completion_t pgic_completion();
+	std::unique_ptr< std::barrier<completion_t> > threadsSyncBarrier;
 	u_int lastUpdateSpp, updateSeedBase;
 	bool finishUpdateFlag;
 
@@ -376,3 +383,4 @@ BOOST_CLASS_EXPORT_KEY(slg::PhotonGICacheParams)
 BOOST_CLASS_EXPORT_KEY(slg::PhotonGICache)
 
 #endif	/* _SLG_PHOTONGICACHE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

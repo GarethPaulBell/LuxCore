@@ -33,12 +33,12 @@ namespace slg {
 
 class OCLRenderEngine : public RenderEngine {
 public:
-	OCLRenderEngine(const RenderConfig *cfg, const bool supportsNativeThreads);
+	OCLRenderEngine(RenderConfigRef cfg, const bool supportsNativeThreads);
 
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	u_int oclRenderThreadCount, nativeRenderThreadCount;
 	bool useFilmOutOfCoreMemory;
@@ -47,3 +47,4 @@ protected:
 }
 
 #endif	/* _SLG_RENDERENGINE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

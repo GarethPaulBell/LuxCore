@@ -79,3 +79,4 @@ extern std::string KernelSource_mc_funcs;
 } }
 
 #endif	/* _LUXRAYS_KERNELS_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

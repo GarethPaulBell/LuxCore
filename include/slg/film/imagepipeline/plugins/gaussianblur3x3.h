@@ -91,3 +91,4 @@ BOOST_CLASS_VERSION(slg::GaussianBlur3x3FilterPlugin, 1)
 BOOST_CLASS_EXPORT_KEY(slg::GaussianBlur3x3FilterPlugin)
 
 #endif	/*  _SLG_GAUSSIANBLUR_3X3_PLUGIN_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -19,16 +19,20 @@
 // NOTE: this is code is heavily based on Tomas Davidovic's SmallVCM
 // (http://www.davidovic.cz and http://www.smallvcm.com)
 
+#include <thread>
+#include <cassert>
 #include <boost/format.hpp>
-#include <boost/function.hpp>
 
 #include "luxrays/utils/thread.h"
 
 #include "slg/engines/bidircpu/bidircpu.h"
+#include "slg/cameras/camera.h"
+#include "slg/lights/light.h"
 
 using namespace std;
 using namespace luxrays;
 using namespace slg;
+using namespace std::literals::chrono_literals;
 
 //------------------------------------------------------------------------------
 // BiDirCPU RenderThread
@@ -50,20 +54,24 @@ BiDirCPURenderThread::BiDirCPURenderThread(BiDirCPURenderEngine *engine,
 		CPUNoTileRenderThread(engine, index, device) {
 }
 
-void BiDirCPURenderThread::AOVWarmUp(RandomGenerator *rndGen) {
+void BiDirCPURenderThread::AOVWarmUp(
+	std::stop_token stop_token,
+	const luxrays::RandomGeneratorUPtr & rndGen
+) {
 	if (threadIndex == 0)
 		SLG_LOG("[BiDirCPURenderThread::" << threadIndex << "] AOV warmup started");
-	
+
 	const double start = WallClockTime();
 	double lastProgressPrint = start;
-		
-	BiDirCPURenderEngine *engine = (BiDirCPURenderEngine *)renderEngine;
-	Scene *scene = engine->renderConfig->scene;
-	Camera *camera = scene->camera;
 
-	SobolSampler sampler(rndGen, engine->film, engine->sampleSplatter, true, 0.f, 0.f,
+	BiDirCPURenderEngine *engine = (BiDirCPURenderEngine *)renderEngine;
+	auto& scene = engine->renderConfig.GetScene();
+	auto& camera = scene.GetCamera();
+
+	SobolSampler sampler(rndGen, engine->GetFilm(), engine->GetSampleSplatter(), true, 0.f, 0.f,
 		16, 16, 1, 1,
-		engine->aovWarmupSamplerSharedData);
+		engine->aovWarmupSamplerSharedData
+	);
 
 	// Request the samples
 	const u_int sampleBootSize = 5;
@@ -80,7 +88,7 @@ void BiDirCPURenderThread::AOVWarmUp(RandomGenerator *rndGen) {
 		Film::ALBEDO, Film::AVG_SHADING_NORMAL
 	});
 
-	sampleResult.Init(&sampleResultsChannels, engine->film->GetRadianceGroupCount());
+	sampleResult.Init(&sampleResultsChannels, engine->GetFilm().GetRadianceGroupCount());
 
 	// Initialize the max. path depth
 	PathDepthInfo maxPathDepthInfo;
@@ -90,18 +98,18 @@ void BiDirCPURenderThread::AOVWarmUp(RandomGenerator *rndGen) {
 	maxPathDepthInfo.specularDepth = engine->maxEyePathDepth;
 
 	while (sampler.GetPassCount() < engine->aovWarmupSPP) {
-		if (boost::this_thread::interruption_requested())
+		if (stop_token.stop_requested())
 			return;
 
 		sampleResult.filmX = sampler.GetSample(0);
 		sampleResult.filmY = sampler.GetSample(1);
 
 		const float timeSample = sampler.GetSample(4);
-		const float time = scene->camera->GenerateRayTime(timeSample);
+		const float time = scene.GetCamera().GenerateRayTime(timeSample);
 
 		Ray eyeRay;
 		PathVolumeInfo volInfo;
-		camera->GenerateRay(time,
+		camera.GenerateRay(time,
 				sampleResult.filmX, sampleResult.filmY, &eyeRay,
 				&volInfo, sampler.GetSample(2), sampler.GetSample(3));
 
@@ -120,7 +128,7 @@ void BiDirCPURenderThread::AOVWarmUp(RandomGenerator *rndGen) {
 			// not in any other place)
 			RayHit eyeRayHit;
 			Spectrum connectionThroughput;
-			const bool hit = scene->Intersect(device,
+			const bool hit = scene.Intersect(device,
 					EYE_RAY | (sampleResult.firstPathVertex ? CAMERA_RAY : INDIRECT_RAY),
 					&volInfo, sampler.GetSample(sampleOffset),
 					&eyeRay, &eyeRayHit, &bsdf,
@@ -180,7 +188,7 @@ void BiDirCPURenderThread::AOVWarmUp(RandomGenerator *rndGen) {
 			const double delta = end - lastProgressPrint;
 
 			if (delta > 2.0) {
-				const u_int *filmSubRegion = engine->film->GetSubRegion();
+				const u_int *filmSubRegion = engine->GetFilm().GetSubRegion();
 				const u_int subRegionWidth = filmSubRegion[1] - filmSubRegion[0] + 1;
 				const u_int subRegionHeight = filmSubRegion[3] - filmSubRegion[2] + 1;
 
@@ -195,14 +203,14 @@ void BiDirCPURenderThread::AOVWarmUp(RandomGenerator *rndGen) {
 		}
 #ifdef WIN32
 		// Work around Windows bad scheduling
-		renderThread->yield();
+        std::this_thread::yield();
 #endif
 	}
 	
 	if (threadIndex == 0) {
 		const double end = WallClockTime();
 		
-		const u_int *filmSubRegion = engine->film->GetSubRegion();
+		const u_int *filmSubRegion = engine->GetFilm().GetSubRegion();
 		const u_int subRegionWidth = filmSubRegion[1] - filmSubRegion[0] + 1;
 		const u_int subRegionHeight = filmSubRegion[3] - filmSubRegion[2] + 1;
 		
@@ -223,7 +231,7 @@ SampleResult &BiDirCPURenderThread::AddResult(vector<SampleResult> &sampleResult
 
 	sampleResult.Init(
 			fromLight ? &lightSampleResultsChannels : &eyeSampleResultsChannels,
-			engine->film->GetRadianceGroupCount());
+			engine->GetFilm().GetRadianceGroupCount());
 
 	return sampleResult;
 }
@@ -232,7 +240,7 @@ void BiDirCPURenderThread::ConnectVertices(const float time,
 		const PathVertexVM &eyeVertex, const PathVertexVM &lightVertex,
 		SampleResult &eyeSampleResult, const float u0) const {
 	BiDirCPURenderEngine *engine = (BiDirCPURenderEngine *)renderEngine;
-	Scene *scene = engine->renderConfig->scene;
+	auto& scene = engine->renderConfig.GetScene();
 
 	Vector p2pDir(lightVertex.bsdf.hitPoint.p - eyeVertex.bsdf.hitPoint.p);
 	const float p2pDistance2 = p2pDir.LengthSquared();
@@ -278,7 +286,14 @@ void BiDirCPURenderThread::ConnectVertices(const float time,
 			BSDF bsdfConn;
 			Spectrum connectionThroughput;
 			PathVolumeInfo volInfo = eyeVertex.volInfo; // I need to use a copy here
-			if (!scene->Intersect(device, LIGHT_RAY | INDIRECT_RAY | SHADOW_RAY, &volInfo, u0, &p2pRay, &p2pRayHit, &bsdfConn,
+			// For the connection event, we need to evaluate the volume based
+			// on whether the shadow ray is going into the object or not
+			bool connectionIntoObject = (Dot(lightVertex.bsdf.hitPoint.geometryN, -shadowRayDir) < 0.f);
+			volInfo.SetCurrentVolume(connectionIntoObject ?
+				lightVertex.bsdf.hitPoint.interiorVolume :
+				lightVertex.bsdf.hitPoint.exteriorVolume
+			);
+			if (!scene.Intersect(device, LIGHT_RAY | INDIRECT_RAY | SHADOW_RAY, &volInfo, u0, &p2pRay, &p2pRayHit, &bsdfConn,
 					&connectionThroughput)) {
 				// Nothing was hit, the light path vertex is visible
 
@@ -323,30 +338,56 @@ void BiDirCPURenderThread::ConnectToEye(const float time,
 		return;
 
 	BiDirCPURenderEngine *engine = (BiDirCPURenderEngine *)renderEngine;
-	Scene *scene = engine->renderConfig->scene;
+	auto& scene = engine->renderConfig.GetScene();
 
-	Vector eyeDir(lightVertex.bsdf.hitPoint.p - lensPoint);
-	const float eyeDistance = eyeDir.Length();
-	eyeDir /= eyeDistance;
+	Vector eyeDir;
+	float eyeDistance = 0;
+    if (scene.GetCamera().GetType() == Camera::ORTHOGRAPHIC){
+		// Orthographic camera need to be handled separately,
+		// lensPoint can not be pre-calculated in this case
+		Point p = lightVertex.bsdf.hitPoint.p;
+		eyeDir = scene.GetCamera().GetDir();
+		// calculate distance from vertex to camera plane
+		const float D = -eyeDir.x*lensPoint.x - eyeDir.y*lensPoint.y - eyeDir.z*lensPoint.z;
+		eyeDistance = eyeDir.x*p.x + eyeDir.y*p.y + eyeDir.z*p.z + D;
+		eyeDistance = fabsf(eyeDistance);
+	} else {
+		eyeDir = Vector(lightVertex.bsdf.hitPoint.p - lensPoint);
+		eyeDistance = eyeDir.Length();
+		eyeDir /= eyeDistance;
+	}
 
 	float bsdfPdfW, bsdfRevPdfW;
 	BSDFEvent event;
 	const Spectrum bsdfEval = lightVertex.bsdf.Evaluate(-eyeDir, &event, &bsdfPdfW, &bsdfRevPdfW);
 
 	if (!bsdfEval.Black()) {
-		Ray eyeRay(lensPoint, eyeDir,
+		float filmX, filmY;
+		bool sampleSuccess;
+		Ray eyeRay;
+		
+		if (scene.GetCamera().GetType() == Camera::ORTHOGRAPHIC){
+			Vector rayDir(lightVertex.bsdf.hitPoint.p - lensPoint);
+			eyeRay = Ray(lightVertex.bsdf.hitPoint.p, rayDir,
 				0.f,
 				eyeDistance,
 				time);
-		scene->camera->ClampRay(&eyeRay);
-		eyeRay.UpdateMinMaxWithEpsilon();
-
-		float filmX, filmY;
-		if (scene->camera->GetSamplePosition(&eyeRay, &filmX, &filmY)) {
+			// Do not clamp the ray here because of the check inside ProjectToImage
+			sampleSuccess = scene.GetCamera().ProjectToImage(&eyeRay, &filmX, &filmY);
+		} else {
+			eyeRay = Ray(lensPoint, eyeDir,
+				0.f,
+				eyeDistance,
+				time);
+			// Do not clamp the ray here because of the check inside GetSamplePosition
+			sampleSuccess = scene.GetCamera().GetSamplePosition(&eyeRay, &filmX, &filmY);
+		}
+		if (sampleSuccess) {
 			// I have to flip the direction of the traced ray because
 			// the information inside PathVolumeInfo are about the path from
 			// the light toward the camera (i.e. ray.o would be in the wrong
 			// place).
+			scene.GetCamera().ClampRay(&eyeRay); // Clamp the ray here (see comment above)
 			Ray traceRay(lightVertex.bsdf.GetRayOrigin(-eyeRay.d), -eyeRay.d,
 					eyeDistance - eyeRay.maxt,
 					eyeDistance - eyeRay.mint,
@@ -356,7 +397,7 @@ void BiDirCPURenderThread::ConnectToEye(const float time,
 			BSDF bsdfConn;
 			Spectrum connectionThroughput;
 			PathVolumeInfo volInfo = lightVertex.volInfo; // I need to use a copy here
-			if (!scene->Intersect(device, LIGHT_RAY | CAMERA_RAY, &volInfo, u0, &traceRay, &traceRayHit, &bsdfConn,
+			if (!scene.Intersect(device, LIGHT_RAY | CAMERA_RAY, &volInfo, u0, &traceRay, &traceRayHit, &bsdfConn,
 					&connectionThroughput)) {
 				// Nothing was hit, the light path vertex is visible
 
@@ -368,7 +409,7 @@ void BiDirCPURenderThread::ConnectToEye(const float time,
 
 				const float cosToCamera = Dot(lightVertex.bsdf.hitPoint.shadeN, -eyeDir);
 				float cameraPdfW, fluxToRadianceFactor;
-				scene->camera->GetPDF(eyeRay, eyeDistance, filmX, filmY, &cameraPdfW, &fluxToRadianceFactor);
+				scene.GetCamera().GetPDF(eyeRay, eyeDistance, filmX, filmY, &cameraPdfW, &fluxToRadianceFactor);
 				const float cameraPdfA = PdfWtoA(cameraPdfW, eyeDistance, cosToCamera);
 				// Was:
 				//  const float fluxToRadianceFactor = cameraPdfA;	
@@ -404,22 +445,24 @@ void BiDirCPURenderThread::DirectLightSampling(const float time,
 		const PathVertexVM &eyeVertex,
 		SampleResult &eyeSampleResult) const {
 	BiDirCPURenderEngine *engine = (BiDirCPURenderEngine *)renderEngine;
-	Scene *scene = engine->renderConfig->scene;
+	auto& scene = engine->renderConfig.GetScene();
 	
 	if (!eyeVertex.bsdf.IsDelta()) {
 		// Pick a light source to sample
 		const Normal landingNormal = eyeVertex.bsdf.hitPoint.intoObject ? eyeVertex.bsdf.hitPoint.geometryN : -eyeVertex.bsdf.hitPoint.geometryN;
 		float lightPickPdf;
-		const LightSource *light = scene->lightDefs.GetEmitLightStrategy()->SampleLights(u0,
-				eyeVertex.bsdf.hitPoint.p,
-				landingNormal,
-				eyeVertex.bsdf.IsVolume(),
-				&lightPickPdf);
+		auto light = scene.GetLightSources().GetEmitLightStrategy().SampleLights(
+			scene, u0,
+			eyeVertex.bsdf.hitPoint.p,
+			landingNormal,
+			eyeVertex.bsdf.IsVolume(),
+			&lightPickPdf
+		);
 
 		if (light) {
 			Ray shadowRay;
 			float directPdfW, emissionPdfW, cosThetaAtLight;
-			const Spectrum lightRadiance = light->Illuminate(*scene, eyeVertex.bsdf,
+			const Spectrum lightRadiance = light->Illuminate(scene, eyeVertex.bsdf,
 					time, u1, u2, u3, shadowRay, directPdfW, &emissionPdfW,
 					&cosThetaAtLight);
 
@@ -434,7 +477,7 @@ void BiDirCPURenderThread::DirectLightSampling(const float time,
 					Spectrum connectionThroughput;
 					PathVolumeInfo volInfo = eyeVertex.volInfo; // I need to use a copy here
 					// Check if the light source is visible
-					if (!scene->Intersect(device, EYE_RAY | SHADOW_RAY, &volInfo, u4,
+					if (!scene.Intersect(device, EYE_RAY | SHADOW_RAY, &volInfo, u4,
 							&shadowRay, &shadowRayHit, &shadowBsdf, &connectionThroughput)) {
 						// I'm ignoring volume emission because it is not sampled in
 						// direct light step.
@@ -481,9 +524,13 @@ void BiDirCPURenderThread::DirectLightSampling(const float time,
 }
 
 void BiDirCPURenderThread::DirectHitLight(
-		const LightSource *light, const Spectrum &lightRadiance,
-		const float directPdfA, const float emissionPdfW,
-		const PathVertexVM &eyeVertex, Spectrum *radiance) const {
+	LightSourceConstRef light,
+	const Spectrum &lightRadiance,
+	const float directPdfA,
+	const float emissionPdfW,
+	const PathVertexVM &eyeVertex,
+	Spectrum *radiance
+) const {
 	if (lightRadiance.Black())
 		return;
 
@@ -493,11 +540,14 @@ void BiDirCPURenderThread::DirectHitLight(
 	}
 
 	BiDirCPURenderEngine *engine = (BiDirCPURenderEngine *)renderEngine;
-	Scene *scene = engine->renderConfig->scene;
+	auto& scene = engine->renderConfig.GetScene();
 
-	const float lightPickPdf = scene->lightDefs.GetEmitLightStrategy()->SampleLightPdf(light,
-			eyeVertex.bsdf.hitPoint.p, eyeVertex.bsdf.hitPoint.geometryN,
-			eyeVertex.bsdf.IsVolume());
+	const float lightPickPdf = scene.GetLightSources().GetEmitLightStrategy().SampleLightPdf(
+		light,
+		eyeVertex.bsdf.hitPoint.p,
+		eyeVertex.bsdf.hitPoint.geometryN,
+		eyeVertex.bsdf.IsVolume()
+	);
 
 	// MIS weight
 	const float weightCamera = MIS(directPdfA * lightPickPdf) * eyeVertex.dVCM +
@@ -505,45 +555,55 @@ void BiDirCPURenderThread::DirectHitLight(
 	const float misWeight = 1.f / (weightCamera + 1.f);
 
 	*radiance += misWeight * eyeVertex.throughput * lightRadiance;
-	
+
 	assert (radiance->IsValid());
 }
 
-void BiDirCPURenderThread::DirectHitLight(const bool finiteLightSource,
-		const PathVertexVM &eyeVertex, SampleResult &eyeSampleResult) const {
+void BiDirCPURenderThread::DirectHitLight(
+	const bool finiteLightSource,
+	const PathVertexVM &eyeVertex,
+	SampleResult &eyeSampleResult
+) const {
 	float directPdfA, emissionPdfW;
 	if (finiteLightSource) {
-		const Spectrum lightRadiance = eyeVertex.bsdf.GetEmittedRadiance(&directPdfA, &emissionPdfW);
+		const Spectrum lightRadiance = eyeVertex.bsdf.GetEmittedRadiance(
+			&directPdfA, &emissionPdfW
+		);
 
-		DirectHitLight(eyeVertex.bsdf.GetLightSource(), lightRadiance, directPdfA, emissionPdfW,
-				eyeVertex, &eyeSampleResult.radiance[eyeVertex.bsdf.GetLightID()]);
+		DirectHitLight(
+			*eyeVertex.bsdf.GetLightSource(),
+			lightRadiance,
+			directPdfA,
+			emissionPdfW,
+			eyeVertex, &eyeSampleResult.radiance[eyeVertex.bsdf.GetLightID()]
+		);
 	} else {
 		BiDirCPURenderEngine *engine = (BiDirCPURenderEngine *)renderEngine;
-		Scene *scene = engine->renderConfig->scene;
+		auto& scene = engine->renderConfig.GetScene();
 
-		BOOST_FOREACH(EnvLightSource *el, scene->lightDefs.GetEnvLightSources()) {
-			const Spectrum lightRadiance = el->GetRadiance(*scene,
+		for(EnvLightSource& el: scene.GetLightSources().GetEnvLightSources()) {
+			const Spectrum lightRadiance = el.GetRadiance(scene,
 					(eyeVertex.depth == 1) ? nullptr : &eyeVertex.bsdf,
 					eyeVertex.bsdf.hitPoint.fixedDir, &directPdfA, &emissionPdfW);
 
 			DirectHitLight(el, lightRadiance, directPdfA, emissionPdfW,
-					eyeVertex, &eyeSampleResult.radiance[el->GetID()]);
+					eyeVertex, &eyeSampleResult.radiance[el.GetID()]);
 		}
 	}
 }
 
 bool BiDirCPURenderThread::TraceLightPath(const float time,
-		Sampler *sampler, const Point &lensPoint,
+		const SamplerUPtr& sampler, CameraConstRef camera,
 		vector<PathVertexVM> &lightPathVertices,
 		vector<SampleResult> &sampleResults) const {
 	BiDirCPURenderEngine *engine = (BiDirCPURenderEngine *)renderEngine;
-	Scene *scene = engine->renderConfig->scene;
+	auto& scene = engine->renderConfig.GetScene();
 
 	// Select one light source
 	// BiDir can use only a single strategy, emit in this case
 	float lightPickPdf;
-	const LightSource *light = scene->lightDefs.GetEmitLightStrategy()->
-			SampleLights(sampler->GetSample(2), &lightPickPdf);
+	auto light = scene.GetLightSources().GetEmitLightStrategy().
+			SampleLights(scene, sampler->GetSample(2), &lightPickPdf);
 	if (!light)
 		return false;
 
@@ -553,7 +613,7 @@ bool BiDirCPURenderThread::TraceLightPath(const float time,
 	
 	float lightEmitPdfW, lightDirectPdfW, cosThetaAtLight;
 	Ray lightRay;
-	lightVertex.throughput = light->Emit(*scene,
+	lightVertex.throughput = light->Emit(scene,
 			time, sampler->GetSample(5), sampler->GetSample(6),
 			sampler->GetSample(7), sampler->GetSample(8), sampler->GetSample(9),
 			lightRay, lightEmitPdfW,
@@ -585,7 +645,7 @@ bool BiDirCPURenderThread::TraceLightPath(const float time,
 
 			RayHit nextEventRayHit;
 			Spectrum connectionThroughput;
-			const bool hit = scene->Intersect(device, LIGHT_RAY | INDIRECT_RAY,
+			const bool hit = scene.Intersect(device, LIGHT_RAY | INDIRECT_RAY,
 					&lightVertex.volInfo, sampler->GetSample(sampleOffset),
 					&lightRay, &nextEventRayHit, &lightVertex.bsdf,
 					&connectionThroughput);
@@ -596,7 +656,7 @@ bool BiDirCPURenderThread::TraceLightPath(const float time,
 				// Check if it is something with a not black shadow transparency
 				// and stop if it has. Direct light sampling will take care of
 				// this kind of paths.
-				if (!lightVertex.bsdf.GetPassThroughShadowTransparency().Black())
+				if (!lightVertex.bsdf.GetPassThroughShadowTransparency().Black() & !lightVertex.bsdf.GetPassThroughShadowTransparencyOverride())
 					break;
 
 				// Update the new light vertex
@@ -617,6 +677,10 @@ bool BiDirCPURenderThread::TraceLightPath(const float time,
 					//----------------------------------------------------------
 					// Try to connect the light path vertex with the eye
 					//----------------------------------------------------------
+
+					// Sample a point on the camera lens
+					Point lensPoint;
+					camera.SampleLens(time, sampler->GetSample(3), sampler->GetSample(4), &lensPoint);
 
 					ConnectToEye(time, lightVertex, sampler->GetSample(sampleOffset + 1),
 							lensPoint, sampleResults);
@@ -641,7 +705,7 @@ bool BiDirCPURenderThread::TraceLightPath(const float time,
 	return true;
 }
 
-bool BiDirCPURenderThread::Bounce(const float time, Sampler *sampler,
+bool BiDirCPURenderThread::Bounce(const float time, const SamplerUPtr& sampler,
 		const u_int sampleOffset, PathVertexVM *pathVertex, Ray *nextEventRay) const {
 	BiDirCPURenderEngine *engine = (BiDirCPURenderEngine *)renderEngine;
 
@@ -709,8 +773,10 @@ bool BiDirCPURenderThread::Bounce(const float time, Sampler *sampler,
 	return true;
 }
 
-void BiDirCPURenderThread::RenderFunc() {
-	//SLG_LOG("[BiDirCPURenderThread::" << threadIndex << "] Rendering thread started");
+void BiDirCPURenderThread::RenderFunc(std::stop_token stop_token) {
+#ifndef NDEBUG
+	SLG_LOG("[BiDirCPURenderThread::" << threadIndex << "] Rendering thread started");
+#endif
 
 	//--------------------------------------------------------------------------
 	// Initialization
@@ -722,19 +788,24 @@ void BiDirCPURenderThread::RenderFunc() {
 	BiDirCPURenderEngine *engine = (BiDirCPURenderEngine *)renderEngine;
 	// (engine->seedBase + 1) seed is used for sharedRndGen
 
-	RandomGenerator *rndGen = new RandomGenerator(engine->seedBase + 1 + threadIndex);
-	Scene *scene = engine->renderConfig->scene;
-	Camera *camera = scene->camera;
+	auto rndGen = std::make_unique<RandomGenerator>(engine->seedBase + 1 + threadIndex);
+	auto& scene = engine->renderConfig.GetScene();
+	auto& camera = scene.GetCamera();
 	PhotonGICache *photonGICache = engine->photonGICache;
 
 	// Albedo and Normal AOV warm up
 	if (engine->aovWarmupSPP > 0)
-		AOVWarmUp(rndGen);
-	
+		AOVWarmUp(stop_token, rndGen);
+
 	// Setup the sampler
-	Sampler *sampler = engine->renderConfig->AllocSampler(rndGen, engine->film, engine->sampleSplatter,
-			engine->samplerSharedData, Properties());
-	const u_int sampleSize = 
+	auto sampler = engine->renderConfig.AllocSampler(
+		rndGen,
+		engine->GetFilm(),
+		engine->GetSampleSplatter(),
+		engine->samplerSharedData,
+		Properties()
+	);
+	const u_int sampleSize =
 		sampleBootSize + // To generate the initial light vertex and trace eye ray
 		engine->maxLightPathDepth * sampleLightStepSize + // For each light vertex
 		engine->maxEyePathDepth * sampleEyeStepSize; // For each eye vertex
@@ -750,14 +821,14 @@ void BiDirCPURenderThread::RenderFunc() {
 	vector<SampleResult> sampleResults;
 	vector<PathVertexVM> lightPathVertices;
 
-	for(u_int steps = 0; !boost::this_thread::interruption_requested(); ++steps) {
+	for(u_int steps = 0; !stop_token.stop_requested(); ++steps) {
 		// Check if we are in pause mode
 		if (engine->pauseMode) {
 			// Check every 100ms if I have to continue the rendering
-			while (!boost::this_thread::interruption_requested() && engine->pauseMode)
-				boost::this_thread::sleep(boost::posix_time::millisec(100));
+			while (!stop_token.stop_requested() && engine->pauseMode)
+				std::this_thread::sleep_for(100ms);
 
-			if (boost::this_thread::interruption_requested())
+			if (stop_token.stop_requested())
 				break;
 		}
 
@@ -765,23 +836,25 @@ void BiDirCPURenderThread::RenderFunc() {
 		lightPathVertices.clear();
 
 		const float timeSample = sampler->GetSample(12);
-		const float time = scene->camera->GenerateRayTime(timeSample);
+		const float time = scene.GetCamera().GenerateRayTime(timeSample);
 
+		/*
 		// Sample a point on the camera lens
 		Point lensPoint;
-		if (!camera->SampleLens(time, sampler->GetSample(3), sampler->GetSample(4),
+		if (!camera.SampleLens(time, sampler->GetSample(3), sampler->GetSample(4),
 				&lensPoint)) {
 			assert (SampleResult::IsAllValid(sampleResults));
 
 			sampler->NextSample(sampleResults);
 			continue;
 		}
+		*/
 
 		//----------------------------------------------------------------------
 		// Trace light path
 		//----------------------------------------------------------------------
 
-		const bool validLightPath = TraceLightPath(time, sampler, lensPoint, lightPathVertices, sampleResults);
+		const bool validLightPath = TraceLightPath(time, sampler, camera, lightPathVertices, sampleResults);
 		assert (SampleResult::IsAllValid(sampleResults));
 
 		if (validLightPath) {
@@ -795,7 +868,7 @@ void BiDirCPURenderThread::RenderFunc() {
 			eyeSampleResult.filmX = sampler->GetSample(0);
 			eyeSampleResult.filmY = sampler->GetSample(1);
 			Ray eyeRay;
-			camera->GenerateRay(time,
+			camera.GenerateRay(time,
 					eyeSampleResult.filmX, eyeSampleResult.filmY, &eyeRay,
 					&eyeVertex.volInfo, sampler->GetSample(10), sampler->GetSample(11));
 
@@ -803,7 +876,7 @@ void BiDirCPURenderThread::RenderFunc() {
 			eyeVertex.bsdf.hitPoint.fixedDir = -eyeRay.d;
 			eyeVertex.throughput = Spectrum(1.f);
 			float cameraPdfW;
-			scene->camera->GetPDF(eyeRay, 0.f, eyeSampleResult.filmX, eyeSampleResult.filmY, &cameraPdfW, nullptr);
+			scene.GetCamera().GetPDF(eyeRay, 0.f, eyeSampleResult.filmX, eyeSampleResult.filmY, &cameraPdfW, nullptr);
 			eyeVertex.dVCM = MIS(1.f / cameraPdfW);
 			eyeVertex.dVC = 0.f;
 			eyeVertex.dVM = 0.f;
@@ -825,7 +898,7 @@ void BiDirCPURenderThread::RenderFunc() {
 				// not in any other place)
 				RayHit eyeRayHit;
 				Spectrum connectionThroughput;
-				const bool hit = scene->Intersect(device,
+				const bool hit = scene.Intersect(device,
 						EYE_RAY | (eyeSampleResult.firstPathVertex ? CAMERA_RAY : INDIRECT_RAY),
 						&eyeVertex.volInfo, sampler->GetSample(sampleOffset),
 						&eyeRay, &eyeRayHit, &eyeVertex.bsdf,
@@ -871,6 +944,7 @@ void BiDirCPURenderThread::RenderFunc() {
 					albedoToDo = false;
 				}
 
+				float t_MIS;
 				if (eyeSampleResult.firstPathVertex) {
 					eyeSampleResult.alpha = 1.f;
 					eyeSampleResult.depth = eyeRayHit.t;
@@ -879,11 +953,18 @@ void BiDirCPURenderThread::RenderFunc() {
 					eyeSampleResult.materialID = eyeVertex.bsdf.GetMaterialID();
 					eyeSampleResult.objectID = eyeVertex.bsdf.GetObjectID();
 					eyeSampleResult.uv = eyeVertex.bsdf.hitPoint.GetUV(0);
+					// for the camera ray, we need to add the clipping distance
+					// because eyeRayHit.t is measured from clipping start.
+					// Otherwise, the brightness near the front clipping plane may be distorted.
+					t_MIS = eyeRayHit.t + camera.clipHither;
+				} 
+				else{
+					t_MIS = eyeRayHit.t;
 				}
 
 				// Update MIS constants
 				const float factor = 1.f / MIS(AbsDot(eyeVertex.bsdf.hitPoint.shadeN, eyeVertex.bsdf.hitPoint.fixedDir));
-				eyeVertex.dVCM *= MIS(eyeRayHit.t * eyeRayHit.t) * factor;
+				eyeVertex.dVCM *= MIS(t_MIS * t_MIS) * factor;
 				eyeVertex.dVC *= factor;
 				eyeVertex.dVM *= factor;
 
@@ -957,7 +1038,7 @@ void BiDirCPURenderThread::RenderFunc() {
 
 #ifdef WIN32
 				// Work around Windows bad scheduling
-				renderThread->yield();
+                std::this_thread::yield();
 #endif
 			}
 		}
@@ -967,7 +1048,7 @@ void BiDirCPURenderThread::RenderFunc() {
 		// Variance clamping
 		if (varianceClamping.hasClamping()) {
 			for(u_int i = 0; i < sampleResults.size(); ++i)
-				varianceClamping.Clamp(*(engine->film), sampleResults[i]);
+				varianceClamping.Clamp(engine->GetFilm(), sampleResults[i]);
 
 			assert (SampleResult::IsAllValid(sampleResults));
 		}
@@ -975,22 +1056,14 @@ void BiDirCPURenderThread::RenderFunc() {
 		sampler->NextSample(sampleResults);
 
 		// Check halt conditions
-		if (engine->film->GetConvergence() == 1.f)
+		if (engine->GetFilm().GetConvergence() == 1.f)
 			break;
 
 		if (photonGICache) {
-			try {
-				const u_int spp = engine->film->GetTotalEyeSampleCount() / engine->film->GetPixelCount();
-				photonGICache->Update(threadIndex, spp);
-			} catch (boost::thread_interrupted &ti) {
-				// I have been interrupted, I must stop
-				break;
-			}
-		}
-	}
-
-	delete sampler;
-	delete rndGen;
+			const u_int spp = engine->GetFilm().GetTotalEyeSampleCount() / engine->GetFilm().GetPixelCount();
+			photonGICache->Update(threadIndex, spp);
+                }
+	} // ~for
 
 	threadDone = true;
 
@@ -1000,5 +1073,8 @@ void BiDirCPURenderThread::RenderFunc() {
 	if (photonGICache)
 		photonGICache->FinishUpdate(threadIndex);
 
-	//SLG_LOG("[BiDirCPURenderThread::" << threadIndex << "] Rendering thread halted");
+#ifndef NDEBUG
+	SLG_LOG("[BiDirCPURenderThread::" << threadIndex << "] Rendering thread halted");
+#endif
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

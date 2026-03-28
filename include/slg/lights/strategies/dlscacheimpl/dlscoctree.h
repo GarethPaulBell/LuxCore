@@ -44,3 +44,4 @@ private:
 }
 
 #endif	/* _SLG_LIGHTSTRATEGY_DLSCOCTREE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

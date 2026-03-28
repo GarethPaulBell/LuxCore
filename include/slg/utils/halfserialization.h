@@ -44,3 +44,4 @@ template<class Archive> void load(Archive &ar, half &h, unsigned int version) {
 }
 
 #endif	/* _SLG_HALFSERIALIZATION_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

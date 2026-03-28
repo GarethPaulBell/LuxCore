@@ -16,6 +16,9 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include <boost/serialization/split_free.hpp>
+#include <boost/serialization/unique_ptr.hpp>
+#include "luxrays/usings.h"
 #include "slg/scene/extmeshcache.h"
 
 using namespace std;
@@ -35,11 +38,10 @@ template<class Archive> void ExtMeshCache::load(Archive &ar, const u_int version
 
 	for (u_int i = 0; i < size; ++i) {
 		// Load the mesh
-		luxrays::ExtMesh *m;
+		luxrays::ExtMeshUPtr m;
 		ar & m;
 		SDL_LOG("Loading serialized mesh: " << m->GetName());
-
-		meshes.DefineObj(m);
+		meshes.DefineObj(std::move(m));
 	}
 
 	ar & deleteMeshData;
@@ -51,7 +53,9 @@ template<class Archive> void ExtMeshCache::save(Archive &ar, const u_int version
 	ar & size;
 
 	for (u_int i = 0; i < size; ++i) {
-		const luxrays::ExtMesh *m = static_cast<const luxrays::ExtMesh *>(meshes.GetObj(i));
+		auto& obj = meshes.objs[i];
+		auto ptr = obj.get();
+		ExtMeshUPtr m{dynamic_cast<ExtMesh *>(ptr)};
 		SDL_LOG("Saving serialized mesh: " << m->GetName());
 
 		// Save the mesh
@@ -65,4 +69,7 @@ namespace slg {
 // Explicit instantiations for portable archives
 template void ExtMeshCache::save(LuxOutputArchive &ar, const u_int version) const;
 template void ExtMeshCache::load(LuxInputArchive &ar, const u_int version);
+template void ExtMeshCache::save(LuxOutputArchiveText &ar, const u_int version) const;
+template void ExtMeshCache::load(LuxInputArchiveText &ar, const u_int version);
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

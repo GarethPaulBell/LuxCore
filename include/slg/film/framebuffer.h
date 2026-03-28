@@ -36,7 +36,9 @@ public:
 		std::fill(pixels.begin(), pixels.begin() + width * height * CHANNELS, value);
 	};
 	
-	void Copy(const GenericFrameBuffer<CHANNELS, WEIGHT_CHANNELS, T> *src) {
+	void Copy(
+		const std::unique_ptr<GenericFrameBuffer<CHANNELS, WEIGHT_CHANNELS, T>>& src
+	) {
 		// Copy the current image
 		const T *srcPixel = src->GetPixels();
 		const u_int dataCount = width * height * CHANNELS;
@@ -372,3 +374,4 @@ BOOST_CLASS_EXPORT_KEY(slg::GenericFrameBuffer10UInt)
 
 #endif	/* _SLG_FRAMEBUFFER_H */
 
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

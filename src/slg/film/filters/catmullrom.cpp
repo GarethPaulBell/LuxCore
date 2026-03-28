@@ -17,6 +17,7 @@
  ***************************************************************************/
 
 #include "slg/film/filters/catmullrom.h"
+#include <memory>
 
 using namespace std;
 using namespace luxrays;
@@ -24,32 +25,38 @@ using namespace slg;
 
 BOOST_CLASS_EXPORT_IMPLEMENT(slg::CatmullRomFilter)
 
-Properties CatmullRomFilter::ToProperties() const {
-	return Filter::ToProperties() <<
+PropertiesUPtr CatmullRomFilter::ToProperties() const {
+	auto props = std::make_unique<Properties>();
+	*props << Filter::ToProperties() <<
 			Property("film.filter.sinc.tau")(alpha);
+	return props;
 }
 
 //------------------------------------------------------------------------------
 // Static methods used by FilterRegistry
 //------------------------------------------------------------------------------
 
-Properties CatmullRomFilter::ToProperties(const Properties &cfg) {
-	return Properties() <<
-			cfg.Get(GetDefaultProps().Get("film.filter.type"));
+PropertiesUPtr CatmullRomFilter::ToProperties(const Properties &cfg) {
+	PropertiesUPtr props = std::make_unique<Properties>();
+	
+	*props <<
+				cfg.Get(GetDefaultProps()->Get("film.filter.type"));
+	
+	return props;
 }
 
-Filter *CatmullRomFilter::FromProperties(const Properties &cfg) {
-	const float defaultFilterWidth = cfg.Get(GetDefaultProps().Get("film.filter.width")).Get<float>();
-	const float filterXWidth = cfg.Get(Property("film.filter.xwidth")(defaultFilterWidth)).Get<float>();
-	const float filterYWidth = cfg.Get(Property("film.filter.ywidth")(defaultFilterWidth)).Get<float>();
+FilterUPtr CatmullRomFilter::FromProperties(const Properties &cfg) {
+	const float defaultFilterWidth = cfg.Get(GetDefaultProps()->Get("film.filter.width")).Get<double>();
+	const float filterXWidth = cfg.Get(Property("film.filter.xwidth")(defaultFilterWidth)).Get<double>();
+	const float filterYWidth = cfg.Get(Property("film.filter.ywidth")(defaultFilterWidth)).Get<double>();
 
-	return new CatmullRomFilter(filterXWidth, filterYWidth);
+	return std::make_unique<CatmullRomFilter>(filterXWidth, filterYWidth);
 }
 
 slg::ocl::Filter *CatmullRomFilter::FromPropertiesOCL(const Properties &cfg) {
-	const float defaultFilterWidth = cfg.Get(GetDefaultProps().Get("film.filter.width")).Get<float>();
-	const float filterXWidth = cfg.Get(Property("film.filter.xwidth")(defaultFilterWidth)).Get<float>();
-	const float filterYWidth = cfg.Get(Property("film.filter.ywidth")(defaultFilterWidth)).Get<float>();
+	const float defaultFilterWidth = cfg.Get(GetDefaultProps()->Get("film.filter.width")).Get<double>();
+	const float filterXWidth = cfg.Get(Property("film.filter.xwidth")(defaultFilterWidth)).Get<double>();
+	const float filterYWidth = cfg.Get(Property("film.filter.ywidth")(defaultFilterWidth)).Get<double>();
 
 	slg::ocl::Filter *oclFilter = new slg::ocl::Filter();
 
@@ -59,10 +66,12 @@ slg::ocl::Filter *CatmullRomFilter::FromPropertiesOCL(const Properties &cfg) {
 	return oclFilter;
 }
 
-const Properties &CatmullRomFilter::GetDefaultProps() {
-	static Properties props = Properties() <<
+PropertiesUPtr CatmullRomFilter::GetDefaultProps() {
+	auto props = std::make_unique<Properties>();
+	*props <<
 			Filter::GetDefaultProps() <<
 			Property("film.filter.type")(GetObjectTag());
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

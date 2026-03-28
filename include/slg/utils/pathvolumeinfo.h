@@ -21,6 +21,7 @@
 
 #include <ostream>
 
+#include "luxrays/usings.h"
 #include "slg/slg.h"
 
 namespace slg {
@@ -44,35 +45,45 @@ class PathVolumeInfo {
 public:
 	PathVolumeInfo();
 
-	const Volume *GetCurrentVolume() const { return currentVolume; }
-	const Volume *GetVolume(const u_int i) const { return volumeList[i]; }
+	VolumeConstRef GetCurrentVolume() const { return *currentVolume; }
+	bool HasCurrentVolume() const { return bool(currentVolume); }
+	VolumeConstRef GetVolume(const u_int i) const { return *volumeList[i]; }
 	const u_int GetListSize() const { return volumeListSize; }
 
-	void AddVolume(const Volume *vol);
-	void RemoveVolume(const Volume *vol);
+	void AddVolume(VolumeConstPtr vol);
+	void AddVolume(VolumeConstRef vol);
+	void RemoveVolume(VolumeConstPtr vol);
+	void SetCurrentVolume(VolumeConstPtr vol) { currentVolume = vol; }
+	void SetCurrentVolume(VolumeConstRef vol) { currentVolume = std::addressof(vol); }
+	void SetVolume(const u_int i, VolumeConstPtr vol) { volumeList[i] = vol; }
 
-	const Volume *SimulateRemoveVolume(const Volume *vol) const;
-	const Volume *SimulateAddVolume(const Volume *vol) const;
+	VolumeConstPtr SimulateRemoveVolume(VolumeConstPtr vol) const;
+	VolumeConstPtr SimulateAddVolume(VolumeConstPtr) const;
 
 	void SetScatteredStart(const bool v) { scatteredStart = v; }
 	bool IsScatteredStart() const { return scatteredStart; }
-	
+
 	void Update(const BSDFEvent eventType, const BSDF &bsdf);
 	bool ContinueToTrace(const BSDF &bsdf) const;
 
-	void SetHitPointVolumes(HitPoint &hitPoint,
-		const Volume *matInteriorVolume,
-		const Volume *matExteriorVolume,
-		const Volume *defaultWorldVolume) const;
+	void SetHitPointVolumes(
+		HitPoint &hitPoint,
+		VolumeConstPtr matInteriorVolume,
+		VolumeConstPtr matExteriorVolume,
+		VolumeConstPtr defaultWorldVolume
+	) const;
 
 private:
-	static bool CompareVolumePriorities(const Volume *vol1, const Volume *vol2);
+	static bool CompareVolumePriorities(
+		VolumeConstPtr vol1,
+		VolumeConstPtr vol2
+	);
 
-	const Volume *currentVolume;
+	VolumeConstPtr currentVolume;
 	// Using a fixed array here mostly to have the same code as the OpenCL implementation
-	const Volume *volumeList[PATHVOLUMEINFO_SIZE];
+	std::array<VolumeConstPtr, PATHVOLUMEINFO_SIZE> volumeList;
 	u_int volumeListSize;
-	
+
 	bool scatteredStart;
 };
 
@@ -81,3 +92,4 @@ extern std::ostream &operator<<(std::ostream &os, const PathVolumeInfo &pvi);
 }
 
 #endif	/* _SLG_VOLUMEINFO_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -157,3 +157,4 @@ extern std::string KernelSource_tonemap_reinhard02_funcs;
 } }
 
 #endif	/* _SLG_KERNELS_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -113,3 +113,4 @@ protected:
 }
 
 #endif // _LUXRAYS_SPD_H
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

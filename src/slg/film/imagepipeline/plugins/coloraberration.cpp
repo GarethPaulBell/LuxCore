@@ -17,8 +17,6 @@
  ***************************************************************************/
 
 #include <stdexcept>
-#include <boost/foreach.hpp>
-#include <boost/regex.hpp>
 
 #include "luxrays/kernels/kernels.h"
 #include "slg/kernels/kernels.h"
@@ -219,3 +217,4 @@ void ColorAberrationPlugin::ApplyHW(Film &film, const u_int index) {
 	hardwareDevice->EnqueueKernel(copyKernel, HardwareDeviceRange(RoundUp(width * height, 256u)),
 			HardwareDeviceRange(256));
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

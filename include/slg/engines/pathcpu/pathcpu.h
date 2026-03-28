@@ -19,6 +19,7 @@
 #ifndef _SLG_PATHCPU_H
 #define	_SLG_PATHCPU_H
 
+#include "luxrays/utils/thread.h"
 #include "slg/slg.h"
 #include "slg/engines/cpurenderengine.h"
 #include "slg/engines/pathtracer.h"
@@ -45,19 +46,25 @@ public:
 	friend class PathCPURenderEngine;
 
 protected:
-	void RenderFunc();
-	virtual boost::thread *AllocRenderThread() { return new boost::thread(&PathCPURenderThread::RenderFunc, this); }
+	void RenderFunc(std::stop_token stop_token);
+	virtual luxrays::JThreadUPtr AllocRenderThread() {
+		auto t = std::make_unique<luxrays::JThread>(
+			std::bind_front(&PathCPURenderThread::RenderFunc, this)
+		);
+		luxrays::SetThreadName(t, "LxPathCPU");
+		return std::move(t);
+	}
 };
 
 class PathCPURenderEngine : public CPUNoTileRenderEngine {
 public:
-	PathCPURenderEngine(const RenderConfig *cfg);
+	PathCPURenderEngine(RenderConfigRef cfg);
 	virtual ~PathCPURenderEngine();
 
 	virtual RenderEngineType GetType() const { return GetObjectType(); }
 	virtual std::string GetTag() const { return GetObjectTag(); }
 
-	virtual RenderState *GetRenderState();
+	virtual RenderStateSPtr GetRenderState();
 
 	//--------------------------------------------------------------------------
 	// Static methods used by RenderEngineRegistry
@@ -65,17 +72,17 @@ public:
 
 	static RenderEngineType GetObjectType() { return PATHCPU; }
 	static std::string GetObjectTag() { return "PATHCPU"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static RenderEngine *FromProperties(const RenderConfig *rcfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static RenderEngine *FromProperties(RenderConfigRef rcfg);
 
 	friend class PathCPURenderThread;
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
-	CPURenderThread *NewRenderThread(const u_int index,
+	CPURenderThreadUPtr NewRenderThread(const u_int index,
 			luxrays::IntersectionDevice *device) {
-		return new PathCPURenderThread(this, index, device);
+		return std::make_unique<PathCPURenderThread>(this, index, device);
 	}
 
 	virtual void InitFilm();
@@ -83,12 +90,13 @@ protected:
 	virtual void StopLockLess();
 	virtual void EndSceneEditLockLess(const EditActionList &editActions);
 
-	PhotonGICache *photonGICache;
 	PathTracer pathTracer;
-	FilmSampleSplatter *lightSampleSplatter;
-	SamplerSharedData *lightSamplerSharedData;
+	FilmSampleSplatterUPtr lightSampleSplatter;
+	SamplerSharedDataSPtr lightSamplerSharedData;  // Shared data, shared ownership
+	PhotonGICache *photonGICache;
 };
 
 }
 
 #endif	/* _SLG_PATHCPU_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

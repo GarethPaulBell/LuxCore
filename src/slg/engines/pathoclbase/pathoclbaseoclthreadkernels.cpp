@@ -18,6 +18,7 @@
 
 #if !defined(LUXRAYS_DISABLE_OPENCL)
 
+#include <mutex>
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string/replace.hpp>
 
@@ -496,7 +497,7 @@ void PathOCLBaseOCLRenderThread::SetKernelArgs() {
 	// OpenCL kernel setArg() is the only non thread safe function in OpenCL 1.1 so
 	// I need to use a mutex here
 
-	boost::unique_lock<boost::mutex> lock(renderEngine->setKernelArgsMutex);
+	std::unique_lock<std::mutex> lock(renderEngine->setKernelArgsMutex);
 
 	//--------------------------------------------------------------------------
 	// advancePathsKernels
@@ -538,3 +539,4 @@ void PathOCLBaseOCLRenderThread::EnqueueAdvancePathsKernel() {
 }
 
 #endif
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

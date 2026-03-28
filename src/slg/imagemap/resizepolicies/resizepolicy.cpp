@@ -16,7 +16,6 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
-#include <boost/foreach.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/format.hpp>
 
@@ -35,7 +34,7 @@ using namespace slg;
 ImageMapResizePolicy *ImageMapResizePolicy::FromProperties(const luxrays::Properties &props) {
 	// For compatibility with the past
 	if (!props.IsDefined("scene.images.resizepolicy.type") && props.IsDefined("images.scale")) {
-		const float imageScale = Max(.01f, props.Get(Property("images.scale")(1.f)).Get<float>());
+		const float imageScale = Max(.01, props.Get(Property("images.scale")(1.0)).Get<double>());
 		return new ImageMapResizeFixedPolicy(imageScale, 128);
 	}
 	
@@ -44,19 +43,19 @@ ImageMapResizePolicy *ImageMapResizePolicy::FromProperties(const luxrays::Proper
 		case POLICY_NONE:
 			return new ImageMapResizeNonePolicy();
 		case POLICY_FIXED: {
-			const float scale = Max(.001f, props.Get(Property("scene.images.resizepolicy.scale")(1.f)).Get<float>());
+			const float scale = Max(.001, props.Get(Property("scene.images.resizepolicy.scale")(1.0)).Get<double>());
 			const u_int minSize = Max(2u, props.Get(Property("scene.images.resizepolicy.minsize")(64)).Get<u_int>());
 
 			return new ImageMapResizeFixedPolicy(scale, minSize);
 		}
 		case POLICY_MINMEM: {
-			const float scale = Max(.001f, props.Get(Property("scene.images.resizepolicy.scale")(1.f)).Get<float>());
+			const float scale = Max(.001, props.Get(Property("scene.images.resizepolicy.scale")(1.0)).Get<double>());
 			const u_int minSize = Max(2u, props.Get(Property("scene.images.resizepolicy.minsize")(64)).Get<u_int>());
 
 			return new ImageMapResizeMinMemPolicy(scale, minSize);
 		}
 		case POLICY_MIPMAPMEM: {
-			const float scale = Max(.001f, props.Get(Property("scene.images.resizepolicy.scale")(1.f)).Get<float>());
+			const float scale = Max(.001, props.Get(Property("scene.images.resizepolicy.scale")(1.0)).Get<double>());
 			const u_int minSize = Max(2u, props.Get(Property("scene.images.resizepolicy.minsize")(64)).Get<u_int>());
 
 			return new ImageMapResizeMipMapMemPolicy(scale, minSize);
@@ -92,3 +91,4 @@ string ImageMapResizePolicy::ImageMapResizePolicyType2String(const ImageMapResiz
 			throw runtime_error("Unknown image map resize policy type in ImageMapResizePolicy::ImageMapResizePolicyType2String(): " + ToString(type));
 	}
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

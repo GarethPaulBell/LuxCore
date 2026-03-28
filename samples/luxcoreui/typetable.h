@@ -20,7 +20,7 @@
 #define	_LUXCOREAPP_TYPETABLE_H
 
 #include <string>
-#include <boost/unordered_map.hpp>
+#include <unordered_map>
 
 class TypeTable {
 public:
@@ -69,8 +69,8 @@ public:
 	}
 
 private:
-	boost::unordered_map<std::string, int> toValTable;
-	boost::unordered_map<int, std::string> toStringTable;
+	std::unordered_map<std::string, int> toValTable;
+	std::unordered_map<int, std::string> toStringTable;
 
 	std::string defaultTag;
 	

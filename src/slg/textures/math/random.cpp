@@ -28,7 +28,7 @@ using namespace slg;
 //------------------------------------------------------------------------------
 
 float RandomTexture::GetFloatValue(const HitPoint &hitPoint) const {
-	const u_int seed = (int)tex->GetFloatValue(hitPoint);
+	const u_int seed = (int)GetTexture().GetFloatValue(hitPoint);
 
 	TauswortheRandomGenerator rnd(seed + seedOffset);
 
@@ -39,13 +39,14 @@ Spectrum RandomTexture::GetSpectrumValue(const HitPoint &hitPoint) const {
 	return Spectrum(GetFloatValue(hitPoint));
 }
 
-Properties RandomTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
-	Properties props;
+PropertiesUPtr RandomTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.textures." + name + ".type")("random"));
-	props.Set(Property("scene.textures." + name + ".texture")(tex->GetSDLValue()));
-	props.Set(Property("scene.textures." + name + ".seed")(seedOffset));
+	props->Set(Property("scene.textures." + name + ".type")("random"));
+	props->Set(Property("scene.textures." + name + ".texture")(GetTexture().GetSDLValue()));
+	props->Set(Property("scene.textures." + name + ".seed")(seedOffset));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

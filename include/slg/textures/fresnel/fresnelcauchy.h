@@ -29,9 +29,10 @@ namespace slg {
 // Fresnel cauchy and abbe texture
 //------------------------------------------------------------------------------
 
-extern FresnelTexture *AllocFresnelCauchyTex(const luxrays::Properties &props, const std::string &propName);
-extern FresnelTexture *AllocFresnelAbbeTex(const luxrays::Properties &props, const std::string &propName);
+extern std::unique_ptr<FresnelTexture> AllocFresnelCauchyTex(const luxrays::Properties &props, const std::string &propName);
+extern std::unique_ptr<FresnelTexture> AllocFresnelAbbeTex(const luxrays::Properties &props, const std::string &propName);
 
 }
 
 #endif	/* _SLG_FRESNELCAUCHYTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

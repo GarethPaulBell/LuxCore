@@ -16,6 +16,7 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include "slg/slg.h"
 #if !defined(LUXRAYS_DISABLE_OPENCL)
 
 #include <memory>
@@ -70,6 +71,10 @@ DeviceType OpenCLDeviceDescription::GetOCLDeviceType(const cl_device_id oclDevic
 
 void OpenCLDeviceDescription::GetPlatformsList(std::vector<cl_platform_id> &platformsList) {
 	cl_uint platformsCount;
+	if (!clGetPlatformIDs) {
+		SLG_LOG("Warning: no OpenCL implementation found");
+		return;
+	}
 	const cl_int err = clGetPlatformIDs(0, nullptr, &platformsCount);
 	// -1001 is CL_PLATFORM_NOT_FOUND_KHR and it means not a valid OpenCL ICD has been
 	// found so I just return an empty list.
@@ -104,7 +109,7 @@ void OpenCLDeviceDescription::AddDeviceDescs(const cl_platform_id oclPlatform,
 //------------------------------------------------------------------------------
 
 OpenCLDevice::OpenCLDevice(
-		const Context *context,
+		const Context & context,
 		OpenCLDeviceDescription *desc,
 		const size_t devIndex) :
 		Device(context, devIndex),
@@ -124,12 +129,13 @@ OpenCLDevice::OpenCLDevice(
 	oclContext = clCreateContext(nullptr, 1, devices, nullptr, nullptr, &error);
 	CHECK_OCL_ERROR(error);
 
-	kernelCache = new oclKernelPersistentCache("LUXRAYS_" LUXRAYS_VERSION);
+	kernelCache = std::make_unique<oclKernelPersistentCache>("LUXRAYS_" LUXRAYS_VERSION);
 }
 
 OpenCLDevice::~OpenCLDevice() {
-	delete kernelCache;
-
+	
+	if (oclQueue)
+		CHECK_OCL_ERROR(clReleaseCommandQueue(oclQueue));
 	if (oclContext)
 		CHECK_OCL_ERROR(clReleaseContext(oclContext));
 }
@@ -146,9 +152,12 @@ void OpenCLDevice::Start() {
 void OpenCLDevice::Stop() {
 	HardwareDevice::Stop();
 
-	if (oclQueue)
+	if (oclQueue) {
 		CHECK_OCL_ERROR(clReleaseCommandQueue(oclQueue));
+		oclQueue = nullptr;
+	}
 }
+
 
 //------------------------------------------------------------------------------
 // Kernels handling for hardware (aka GPU) only applications
@@ -172,6 +181,8 @@ void OpenCLDevice::CompileProgram(HardwareDeviceProgram **program,
 
 	LR_LOG(deviceContext, "[" << programName << "] Compiler options: " << oclKernelPersistentCache::ToOptsString(oclProgramParameters));
 	LR_LOG(deviceContext, "[" << programName << "] Compiling kernels ");
+	LR_LOG(deviceContext, "[" << programName << "] Cache directory: " << oclKernelPersistentCache::GetCacheDir(dynamic_cast<oclKernelPersistentCache*>(kernelCache.get())->GetApplicationName()));
+        
 
 	const string oclProgramSource =
 		luxrays::ocl::KernelSource_ocldevice_funcs +
@@ -321,11 +332,13 @@ void OpenCLDevice::EnqueueWriteBuffer(const HardwareDeviceBuffer *buff,
 }
 
 void OpenCLDevice::FlushQueue() {
-	CHECK_OCL_ERROR(clFlush(oclQueue));
+	if (oclQueue)
+		CHECK_OCL_ERROR(clFlush(oclQueue));
 }
 
 void OpenCLDevice::FinishQueue() {
-	CHECK_OCL_ERROR(clFinish(oclQueue));
+	if (oclQueue)
+		CHECK_OCL_ERROR(clFinish(oclQueue));
 }
 
 //------------------------------------------------------------------------------
@@ -426,3 +439,4 @@ void OpenCLDevice::FreeBuffer(HardwareDeviceBuffer **buff) {
 }
 
 #endif
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

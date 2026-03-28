@@ -28,19 +28,42 @@ using namespace slg;
 // LuxRender Metal2 material porting.
 //------------------------------------------------------------------------------
 
-Metal2Material::Metal2Material(const Texture *frontTransp, const Texture *backTransp,
-		const Texture *emitted, const Texture *bump,
-		const Texture *nn, const Texture *kk, const Texture *u, const Texture *v) :
-			Material(frontTransp, backTransp, emitted, bump),
-			fresnelTex(NULL), n(nn), k(kk), nu(u), nv(v) {
+Metal2Material::Metal2Material(
+	TextureConstPtr frontTransp,
+	TextureConstPtr backTransp,
+	TextureConstPtr emitted,
+	TextureConstPtr bump,
+	TextureConstPtr nn,
+	TextureConstPtr kk,
+	TextureConstPtr u,
+	TextureConstPtr v
+) :
+	Material(frontTransp, backTransp, emitted, bump),
+	fresnelTex(nullptr),
+	n(nn),
+	k(kk),
+	nu(u),
+	nv(v)
+{
 	glossiness = ComputeGlossiness(nu, nv);
 }
 
-Metal2Material::Metal2Material(const Texture *frontTransp, const Texture *backTransp,
-		const Texture *emitted, const Texture *bump,
-		const FresnelTexture *ft, const Texture *u, const Texture *v) :
-			Material(frontTransp, backTransp, emitted, bump),
-			fresnelTex(ft), n(NULL), k(NULL), nu(u), nv(v) {
+Metal2Material::Metal2Material(
+	TextureConstPtr frontTransp,
+	TextureConstPtr backTransp,
+	TextureConstPtr emitted,
+	TextureConstPtr bump,
+	FresnelTextureConstPtr ft,
+	TextureConstPtr u,
+	TextureConstPtr v)
+	:
+	Material(frontTransp, backTransp, emitted, bump),
+	fresnelTex(ft),
+	n(nullptr),
+	k(nullptr),
+	nu(u),
+	nv(v)
+{
 	glossiness = ComputeGlossiness(nu, nv);
 }
 
@@ -167,7 +190,7 @@ void Metal2Material::Pdf(const HitPoint &hitPoint,
 		*reversePdfW = SchlickDistribution_Pdf(roughness, wh, anisotropy) / (4.f * AbsDot(localLightDir, wh));
 }
 
-void Metal2Material::AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+void Metal2Material::AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 	Material::AddReferencedTextures(referencedTexs);
 
 	if (fresnelTex)
@@ -181,22 +204,22 @@ void Metal2Material::AddReferencedTextures(boost::unordered_set<const Texture *>
 	nv->AddReferencedTextures(referencedTexs);
 }
 
-void Metal2Material::UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
+void Metal2Material::UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
 	Material::UpdateTextureReferences(oldTex, newTex);
 
 	bool updateGlossiness = false;
-	if (fresnelTex == oldTex)
-		fresnelTex = (FresnelTexture *)newTex;
-	if (n == oldTex)
-		n = newTex;
-	if (k == oldTex)
-		k = newTex;
-	if (nu == oldTex) {
-		nu = newTex;
+	if (fresnelTex == static_cast<const FresnelTexture *>(std::addressof(oldTex)))
+		fresnelTex = static_cast<const FresnelTexture *>(&newTex);
+	if (n == &oldTex)
+		n = &newTex;
+	if (k == &oldTex)
+		k = &newTex;
+	if (nu == &oldTex) {
+		nu = &newTex;
 		updateGlossiness = true;
 	}
-	if (nv == oldTex) {
-		nv = newTex;
+	if (nv == &oldTex) {
+		nv = &newTex;
 		updateGlossiness = true;
 	}
 	
@@ -204,20 +227,21 @@ void Metal2Material::UpdateTextureReferences(const Texture *oldTex, const Textur
 		glossiness = ComputeGlossiness(nu, nv);
 }
 
-Properties Metal2Material::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
-	Properties props;
+PropertiesUPtr Metal2Material::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.materials." + name + ".type")("metal2"));
+	props->Set(Property("scene.materials." + name + ".type")("metal2"));
 	if (fresnelTex)
-		props.Set(Property("scene.materials." + name + ".fresnel")(fresnelTex->GetSDLValue()));
+		props->Set(Property("scene.materials." + name + ".fresnel")(fresnelTex->GetSDLValue()));
 	if (n)
-		props.Set(Property("scene.materials." + name + ".n")(n->GetSDLValue()));
+		props->Set(Property("scene.materials." + name + ".n")(n->GetSDLValue()));
 	if (k)
-		props.Set(Property("scene.materials." + name + ".k")(k->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".uroughness")(nu->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".vroughness")(nv->GetSDLValue()));
-	props.Set(Material::ToProperties(imgMapCache, useRealFileName));
+		props->Set(Property("scene.materials." + name + ".k")(k->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".uroughness")(nu->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".vroughness")(nv->GetSDLValue()));
+	props->Set(Material::ToProperties(imgMapCache, useRealFileName));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

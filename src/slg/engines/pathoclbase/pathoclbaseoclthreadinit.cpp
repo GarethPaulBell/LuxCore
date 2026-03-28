@@ -49,8 +49,8 @@ void PathOCLBaseOCLRenderThread::InitFilm() {
 	u_int threadFilmWidth, threadFilmHeight, threadFilmSubRegion[4];
 	GetThreadFilmSize(&threadFilmWidth, &threadFilmHeight, threadFilmSubRegion);
 
-	BOOST_FOREACH(ThreadFilm *threadFilm, threadFilms)
-		threadFilm->Init(renderEngine->film, threadFilmWidth, threadFilmHeight,
+	for(ThreadFilmRPtr threadFilm: threadFilms)
+		threadFilm->Init(renderEngine->GetFilm(), threadFilmWidth, threadFilmHeight,
 			threadFilmSubRegion);
 }
 
@@ -199,10 +199,19 @@ void PathOCLBaseOCLRenderThread::InitLights() {
 	} else
 		intersectionDevice->FreeBuffer(&envLightIndicesBuff);
 
-	intersectionDevice->AllocBufferRO(&lightIndexOffsetByMeshIndexBuff, &cscene->lightIndexOffsetByMeshIndex[0],
-		sizeof(u_int) * cscene->lightIndexOffsetByMeshIndex.size(), "Light offsets (Part I)");
-	intersectionDevice->AllocBufferRO(&lightIndexByTriIndexBuff, &cscene->lightIndexByTriIndex[0],
-		sizeof(u_int) * cscene->lightIndexByTriIndex.size(), "Light offsets (Part II)");
+	if (cscene->lightIndexOffsetByMeshIndex.size() > 0) {
+		intersectionDevice->AllocBufferRO(&lightIndexOffsetByMeshIndexBuff, &cscene->lightIndexOffsetByMeshIndex[0],
+			sizeof(u_int) * cscene->lightIndexOffsetByMeshIndex.size(), "Light offsets (Part I)");
+	} else {
+		intersectionDevice->FreeBuffer(&lightIndexOffsetByMeshIndexBuff);
+	}
+	if (cscene->lightIndexByTriIndex.size() > 0) {
+		intersectionDevice->AllocBufferRO(&lightIndexByTriIndexBuff, &cscene->lightIndexByTriIndex[0],
+			sizeof(u_int) * cscene->lightIndexByTriIndex.size(), "Light offsets (Part II)");
+	} else {
+		intersectionDevice->FreeBuffer(&lightIndexByTriIndexBuff);
+	}
+
 
 	if (cscene->envLightDistributions.size() > 0) {
 		intersectionDevice->AllocBufferRO(&envLightDistributionsBuff, &cscene->envLightDistributions[0],
@@ -210,10 +219,20 @@ void PathOCLBaseOCLRenderThread::InitLights() {
 	} else
 		intersectionDevice->FreeBuffer(&envLightDistributionsBuff);
 
-	intersectionDevice->AllocBufferRO(&lightsDistributionBuff, cscene->lightsDistribution,
-		cscene->lightsDistributionSize, "LightsDistribution");
-	intersectionDevice->AllocBufferRO(&infiniteLightSourcesDistributionBuff, cscene->infiniteLightSourcesDistribution,
-		cscene->infiniteLightSourcesDistributionSize, "InfiniteLightSourcesDistribution");
+	if (cscene->lightsDistributionSize > 0) {
+		intersectionDevice->AllocBufferRO(&lightsDistributionBuff, cscene->lightsDistribution,
+			cscene->lightsDistributionSize, "LightsDistribution");
+	} else {
+		intersectionDevice->FreeBuffer(&lightsDistributionBuff);
+	}
+
+	if (cscene->infiniteLightSourcesDistributionSize > 0) {
+		intersectionDevice->AllocBufferRO(&infiniteLightSourcesDistributionBuff, cscene->infiniteLightSourcesDistribution,
+			cscene->infiniteLightSourcesDistributionSize, "InfiniteLightSourcesDistribution");
+	} else {
+		intersectionDevice->FreeBuffer(&infiniteLightSourcesDistributionBuff);
+	}
+
 	if (cscene->dlscAllEntries.size() > 0) {
 		intersectionDevice->AllocBufferRO(&dlscAllEntriesBuff, &cscene->dlscAllEntries[0],
 			cscene->dlscAllEntries.size() * sizeof(slg::ocl::DLSCacheEntry), "DLSC all entries");
@@ -338,7 +357,7 @@ void PathOCLBaseOCLRenderThread::InitGPUTaskBuffer() {
 }
 
 void PathOCLBaseOCLRenderThread::InitSamplerSharedDataBuffer() {
-	const u_int *subRegion = renderEngine->film->GetSubRegion();
+	const u_int *subRegion = renderEngine->GetFilm().GetSubRegion();
 	const u_int filmRegionPixelCount = (subRegion[1] - subRegion[0] + 1) * (subRegion[3] - subRegion[2] + 1);
 
 	size_t size = 0;
@@ -645,7 +664,7 @@ void PathOCLBaseOCLRenderThread::InitRender() {
 	SetKernelArgs();
 
 	// Clear all thread films
-	BOOST_FOREACH(ThreadFilm *threadFilm, threadFilms) {
+	for(ThreadFilmRPtr threadFilm: threadFilms) {
 		intersectionDevice->PushThreadCurrentDevice();
 		threadFilm->ClearFilm(intersectionDevice, filmClearKernel, filmClearWorkGroupSize);
 		intersectionDevice->PopThreadCurrentDevice();
@@ -658,3 +677,4 @@ void PathOCLBaseOCLRenderThread::InitRender() {
 }
 
 #endif
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

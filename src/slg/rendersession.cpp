@@ -16,7 +16,9 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include <mutex>
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/serialization/shared_ptr.hpp>
 
 #include "slg/rendersession.h"
 #include "slg/renderstate.h"
@@ -33,8 +35,12 @@ void (*slg::SLG_DebugHandler)(const char *msg) = NULL;
 void slg::NullDebugHandler(const char *msg) {
 }
 
-RenderSession::RenderSession(RenderConfig *rcfg, RenderState *startState, Film *startFilm) {
-	renderConfig = rcfg;
+RenderSession::RenderSession(
+	RenderConfigRef rcfg,
+	RenderStateSPtr startState,
+	FilmPtr startFilm
+) : renderConfig(rcfg) {
+	SDL_LOG("Creating session");
 
 	const double now = WallClockTime();
 	lastPeriodicFilmOutputsSave = now;
@@ -45,24 +51,25 @@ RenderSession::RenderSession(RenderConfig *rcfg, RenderState *startState, Film *
 	// Create the Film
 	//--------------------------------------------------------------------------
 
-	film = renderConfig->AllocFilm();
+	film = renderConfig.AllocFilm();
 
 	//--------------------------------------------------------------------------
 	// Create the RenderEngine
 	//--------------------------------------------------------------------------
 
-	renderEngine = renderConfig->AllocRenderEngine();
+	renderEngine = renderConfig.AllocRenderEngine();
 	renderEngine->SetRenderState(startState, startFilm);
 }
 
 RenderSession::~RenderSession() {
-	if (renderEngine->IsInSceneEdit())
+	if (renderEngine->IsInSceneEdit()) {
 		EndSceneEdit();
-	if (renderEngine->IsStarted())
+	}
+	if (renderEngine->IsStarted()) {
 		Stop();
-
-	delete renderEngine;
-	delete film;
+	}
+	renderEngine.reset();
+	film.reset();
 }
 
 void RenderSession::Start() {
@@ -71,15 +78,11 @@ void RenderSession::Start() {
 		// used. For instance, it can happen when stopping and starting the
 		// same session.
 
-		// Delete the old film
-		delete film;
-		film = NULL;
-
 		// Create the new film
-		film = renderConfig->AllocFilm();
+		film = renderConfig.AllocFilm();
 	}
 
-	renderEngine->Start(film, &filmMutex);
+	renderEngine->Start(*film, &filmMutex);
 }
 
 void RenderSession::Stop() {
@@ -95,8 +98,8 @@ void RenderSession::BeginSceneEdit() {
 
 void RenderSession::EndSceneEdit() {
 	// Make a copy of the edit actions
-	const EditActionList editActions = renderConfig->scene->editActions;
-	
+	const EditActionList& editActions = renderConfig.GetScene().GetEditActions();
+
 	if ((renderEngine->GetType() != RTPATHOCL) &&
 			(renderEngine->GetType() != RTPATHCPU)) {
 		SLG_LOG("[RenderSession] Edit actions: " << editActions);
@@ -118,25 +121,25 @@ void RenderSession::Resume() {
 }
 
 bool RenderSession::HasPeriodicFilmOutputsSave() {
-	const double period = renderConfig->GetProperty("periodicsave.film.outputs.period").Get<double>();
+	const double period = renderConfig.GetProperty("periodicsave.film.outputs.period").Get<double>();
 
 	return (period > 0.0);
 }
 
 bool RenderSession::HasPeriodicFilmSave() {
-	const double period = renderConfig->GetProperty("periodicsave.film.period").Get<double>();
+	const double period = renderConfig.GetProperty("periodicsave.film.period").Get<double>();
 
 	return (period > 0.0);
 }
 
 bool RenderSession::HasResumeRenderingSave() {
-	const double period = renderConfig->GetProperty("periodicsave.resumerendering.period").Get<double>();
+	const double period = renderConfig.GetProperty("periodicsave.resumerendering.period").Get<double>();
 
 	return (period > 0.0);
 }
 
 bool RenderSession::NeedPeriodicFilmOutputsSave(const bool force) {
-	const double period = renderConfig->GetProperty("periodicsave.film.outputs.period").Get<double>();
+	const double period = renderConfig.GetProperty("periodicsave.film.outputs.period").Get<double>();
 	if (period > 0.0) {
 		if (force)
 			return true;
@@ -152,7 +155,7 @@ bool RenderSession::NeedPeriodicFilmOutputsSave(const bool force) {
 }
 
 bool RenderSession::NeedPeriodicFilmSave(const bool force) {
-	const double period = renderConfig->GetProperty("periodicsave.film.period").Get<double>();
+	const double period = renderConfig.GetProperty("periodicsave.film.period").Get<double>();
 	if (period > 0.0) {
 		if (force)
 			return true;
@@ -168,7 +171,7 @@ bool RenderSession::NeedPeriodicFilmSave(const bool force) {
 }
 
 bool RenderSession::NeedResumeRenderingSave(const bool force) {
-	const double period = renderConfig->GetProperty("periodicsave.resumerendering.period").Get<double>();
+	const double period = renderConfig.GetProperty("periodicsave.resumerendering.period").Get<double>();
 	if (period > 0.0) {
 		if (force)
 			return true;
@@ -190,16 +193,16 @@ void RenderSession::SaveFilm(const string &fileName) {
 	renderEngine->UpdateFilm();
 
 	// renderEngine->UpdateFilm() uses the film lock on its own
-	boost::unique_lock<boost::mutex> lock(filmMutex);
+	std::unique_lock<std::mutex> lock(filmMutex);
 
-	if (renderConfig->GetProperty("film.safesave").Get<bool>()) {
+	if (renderConfig.GetProperty("film.safesave").Get<bool>()) {
 		SafeSave safeSave(fileName);
 
-		Film::SaveSerialized(safeSave.GetSaveFileName(), film);
+		Film::SaveSerialized(safeSave.GetSaveFileName(), *film);
 
 		safeSave.Process();
 	} else
-		Film::SaveSerialized(fileName, film);
+		Film::SaveSerialized(fileName, *film);
 }
 
 void RenderSession::SaveFilmOutputs() {
@@ -207,13 +210,13 @@ void RenderSession::SaveFilmOutputs() {
 	renderEngine->UpdateFilm();
 
 	// renderEngine->UpdateFilm() uses the film lock on its own
-	boost::unique_lock<boost::mutex> lock(filmMutex);
+	std::unique_lock<std::mutex> lock(filmMutex);
 
 	// Save the film
 	film->Output();
 }
 
-RenderState *RenderSession::GetRenderState() {
+RenderStateSPtr RenderSession::GetRenderState() {
 	// Check if we are in the right state
 	if (!IsInPause())
 		throw runtime_error("A rendering state can be retrieved only while the rendering session is paused");
@@ -221,35 +224,31 @@ RenderState *RenderSession::GetRenderState() {
 	return renderEngine->GetRenderState();
 }
 
-void RenderSession::Parse(const luxrays::Properties &props) {
+void RenderSession::Parse(luxrays::PropertiesRPtr props) {
 	assert (renderEngine->IsStarted());
 
-	if ((props.IsDefined("film.width") && (props.Get("film.width").Get<u_int>() != film->GetWidth())) ||
-			(props.IsDefined("film.height") && (props.Get("film.height").Get<u_int>() != film->GetHeight()))) {
+	if ((props->IsDefined("film.width") && (props->Get("film.width").Get<u_int>() != film->GetWidth())) ||
+			(props->IsDefined("film.height") && (props->Get("film.height").Get<u_int>() != film->GetHeight()))) {
 		// I have to use a special procedure if the parsed props include
 		// a film resize
 		renderEngine->BeginFilmEdit();
 
 		// Update render config properties
-		renderConfig->UpdateFilmProperties(props);
-
-		// Delete the old film
-		delete film;
-		film = NULL;
+		renderConfig.UpdateFilmProperties(*props);
 
 		// Create the new film
-		film = renderConfig->AllocFilm();
+		film = renderConfig.AllocFilm();
 
 		// I have to update the camera
-		renderConfig->scene->PreprocessCamera(film->GetWidth(), film->GetHeight(), film->GetSubRegion());
+		renderConfig.GetScene().PreprocessCamera(film->GetWidth(), film->GetHeight(), film->GetSubRegion());
 
-		renderEngine->EndFilmEdit(film, &filmMutex);
+		renderEngine->EndFilmEdit(*film, &filmMutex);
 	} else {
-		boost::unique_lock<boost::mutex> lock(filmMutex);
+		std::unique_lock<std::mutex> lock(filmMutex);
 		film->Parse(props);
 
 		// Update render config properties
-		renderConfig->UpdateFilmProperties(props);
+		renderConfig.UpdateFilmProperties(*props);
 	}
 }
 
@@ -260,7 +259,7 @@ void RenderSession::CheckPeriodicSave(const bool force) {
 
 	// Film periodic save
 	if (NeedPeriodicFilmSave(force)) {
-		const string fileName = renderConfig->GetProperty("periodicsave.film.filename").Get<string>();
+		const string fileName = renderConfig.GetProperty("periodicsave.film.filename").Get<string>();
 
 		SaveFilm(fileName);
 	}
@@ -270,7 +269,7 @@ void RenderSession::CheckPeriodicSave(const bool force) {
 		// The .rsm file can be save only during a pause
 		Pause();
 
-		const string fileName = renderConfig->GetProperty("periodicsave.resumerendering.filename").Get<string>();
+		const string fileName = renderConfig.GetProperty("periodicsave.resumerendering.filename").Get<string>();
 		SaveResumeFile(fileName);
 		
 		Resume();
@@ -284,9 +283,9 @@ static size_t SaveRsmFile(RenderSession *renderSession, const std::string &fileN
 	sof.GetArchive() << renderSession->renderConfig;
 
 	// Save the render state
-	RenderState *renderState = renderSession->GetRenderState();
+	auto renderState = renderSession->GetRenderState();
 	sof.GetArchive() << renderState;
-	delete renderState;
+	renderState.reset();
 
 	// Save the film
 	sof.GetArchive() << renderSession->film;
@@ -302,7 +301,7 @@ static size_t SaveRsmFile(RenderSession *renderSession, const std::string &fileN
 void RenderSession::SaveResumeFile(const string &fileName) {
 	size_t fileSize;
 
-	if (renderConfig->GetProperty("resumerendering.filesafe").Get<bool>()) {
+	if (renderConfig.GetProperty("resumerendering.filesafe").Get<bool>()) {
 		SafeSave safeSave(fileName);
 		
 		fileSize = SaveRsmFile(this, safeSave.GetSaveFileName());
@@ -313,3 +312,4 @@ void RenderSession::SaveResumeFile(const string &fileName) {
 
 	SLG_LOG("Render configuration saved: " << (fileSize / 1024) << " Kbytes");
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

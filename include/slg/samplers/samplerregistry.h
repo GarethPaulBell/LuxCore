@@ -48,7 +48,9 @@ class SamplerSharedDataRegistry {
 
 protected:
 	// Used to register all sub-class FromProperties() static methods
-	typedef SamplerSharedData *(*FromProperties)(const luxrays::Properties &cfg, luxrays::RandomGenerator *rndGen, Film *film);
+	typedef std::unique_ptr<SamplerSharedData> (*FromProperties)(
+		const luxrays::Properties &cfg, const luxrays::RandomGeneratorUPtr & rndGen, FilmPtr film
+	);
 	STATICTABLE_DECLARE_DECLARATION(SamplerSharedDataRegistry, std::string, FromProperties);
 
 	// For the registration of each SamplerSharedData sub-class with SamplerSharedData StaticTable
@@ -96,10 +98,10 @@ protected:
 	// Used to register all sub-class SamplerType2String() static methods
 	typedef std::string (*GetObjectTag)();
 	// Used to register all sub-class ToProperties() static methods
-	typedef luxrays::Properties (*ToProperties)(const luxrays::Properties &cfg);
+	typedef luxrays::PropertiesUPtr (*ToProperties)(const luxrays::Properties &cfg);
 	// Used to register all sub-class FromProperties() static methods
-	typedef Sampler *(*FromProperties)(const luxrays::Properties &cfg, luxrays::RandomGenerator *rndGen,
-		Film *film, const FilmSampleSplatter *flmSplatter, SamplerSharedData *sharedData);
+	typedef SamplerUPtr (*FromProperties)(const luxrays::Properties &cfg, const luxrays::RandomGeneratorUPtr & rndGen,
+		FilmPtr film, const FilmSampleSplatterUPtr& flmSplatter, std::shared_ptr<SamplerSharedData> sharedData);
 	// Used to register all sub-class FromPropertiesOCL() static methods
 	typedef slg::ocl::Sampler *(*FromPropertiesOCL)(const luxrays::Properties &cfg);
 	// Used to register all sub-class AddRequiredChannels() static methods
@@ -122,3 +124,4 @@ protected:
 }
 
 #endif	/* _SLG_SAMPLERREGISTRY_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

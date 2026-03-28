@@ -29,3 +29,4 @@ extern luxrays::Spectrum CalcFilmColor(const luxrays::Vector &localFixedDir, con
 }
 
 #endif /* _SLG_THINFILMCOATING_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

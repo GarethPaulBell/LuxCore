@@ -26,3 +26,4 @@
 #endif
 
 #endif	/* _LUXRAYS_OPENCL_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

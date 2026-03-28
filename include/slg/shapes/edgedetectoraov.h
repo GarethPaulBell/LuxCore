@@ -27,18 +27,17 @@ namespace slg {
 
 class EdgeDetectorAOVShape : public Shape {
 public:
-	EdgeDetectorAOVShape(luxrays::ExtTriangleMesh *srcMesh,
+	EdgeDetectorAOVShape(luxrays::ExtTriangleMeshRef srcMesh,
 		const u_int destAOVIndex0, const u_int destAOVIndex1, const u_int destAOVIndex2);
 	virtual ~EdgeDetectorAOVShape();
 
-	virtual ShapeType GetType() const { return EDGEDETECTORAOV; }
+	virtual ShapeType GetType() const override { return EDGEDETECTORAOV; }
 
 protected:
-	virtual luxrays::ExtTriangleMesh *RefineImpl(const Scene *scene);
-
-	luxrays::ExtTriangleMesh *mesh;
+	virtual luxrays::ExtTriangleMeshUPtr RefineImpl(SceneConstRef scene) override;
 };
 
 }
 
 #endif	/* _SLG_EDGEDETECTORAOV_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

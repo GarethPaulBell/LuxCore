@@ -41,7 +41,7 @@ namespace sinks {
 				memory_buf_t formatted;
 				base_sink<Mutex>::formatter_->format(msg, formatted);
 
-				logHandler(fmt::to_string(formatted).c_str());
+				logHandler(formatted.c_str());
 			}
 		}
 		
@@ -69,3 +69,4 @@ inline std::shared_ptr<logger> luxcore_callback_st(const std::string &logger_nam
 }
 
 #endif	/* _LUXCORE_SINKS_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

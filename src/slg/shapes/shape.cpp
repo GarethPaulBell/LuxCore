@@ -24,12 +24,13 @@ using namespace std;
 using namespace luxrays;
 using namespace slg;
 
-ExtTriangleMesh *Shape::Refine(const Scene *scene) {
+ExtTriangleMeshUPtr Shape::Refine(SceneConstRef scene) {
 	if (refined)
 		throw runtime_error("Called Shape::Refine() on an already refined shape");
-	
-	ExtTriangleMesh *mesh = RefineImpl(scene);
+
+	auto mesh = RefineImpl(scene);
 	refined = true;
 
 	return mesh;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

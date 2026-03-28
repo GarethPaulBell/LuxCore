@@ -18,7 +18,6 @@
 
 #include <iostream>
 #include <boost/format.hpp>
-#include <boost/thread/mutex.hpp>
 
 #include "spdlog/spdlog.h"
 #include "spdlog/sinks/rotating_file_sink.h"
@@ -105,8 +104,8 @@ static void UpdateLuxCoreLogger() {
 
 void luxcore::Init(void (*LogHandler)(const char *)) {
 	// To be thread safe
-	static boost::mutex initMutex;
-	boost::unique_lock<boost::mutex> lock(initMutex);
+	static std::mutex initMutex;
+	std::unique_lock<std::mutex> lock(initMutex);
 
 	slg::Init();
 
@@ -180,3 +179,4 @@ void luxcore::PrintLogMsg(const std::string &msg) {
 
 	//API_END();
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

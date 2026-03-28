@@ -25,9 +25,8 @@
 #include <sstream>
 #include <vector>
 
-#include <boost/foreach.hpp>
 #include <boost/algorithm/string/replace.hpp>
-	
+
 #include "luxcore/luxcore.h"
 #include "luxcore/luxcoreimpl.h"
 
@@ -37,10 +36,10 @@ using namespace luxcore;
 
 namespace luxcore { namespace parselxs {
 
-Properties *renderConfigProps = NULL;
-Properties *sceneProps = NULL;
+PropertiesPtr renderConfigProps;
+PropertiesPtr sceneProps;
 
-Properties overwriteProps;
+luxrays::Properties overwriteProps;
 Transform worldToCamera;
 
 static string GetLuxCoreValidName(const string &name) {
@@ -91,11 +90,39 @@ public:
 		exteriorVolumeName = "";
 		currentLightGroup = 0;
 	}
+	
+	GraphicsState(const GraphicsState &other) {
+		areaLightName = other.areaLightName;
+		materialName = other.materialName;
+		interiorVolumeName = other.interiorVolumeName;
+		exteriorVolumeName = other.exteriorVolumeName;
+		currentLightGroup = other.currentLightGroup;
+		areaLightProps.Set(other.areaLightProps);
+		materialProps.Set(other.materialProps);
+		interiorVolumeProps.Set(other.interiorVolumeProps);
+		exteriorVolumeProps.Set(other.exteriorVolumeProps);
+	}
+	
+	GraphicsState& operator=(const GraphicsState &other) {
+		if (this != &other) {
+			areaLightName = other.areaLightName;
+			materialName = other.materialName;
+			interiorVolumeName = other.interiorVolumeName;
+			exteriorVolumeName = other.exteriorVolumeName;
+			currentLightGroup = other.currentLightGroup;
+			areaLightProps.Set(other.areaLightProps);
+			materialProps.Set(other.materialProps);
+			interiorVolumeProps.Set(other.interiorVolumeProps);
+			exteriorVolumeProps.Set(other.exteriorVolumeProps);
+		}
+		return *this;
+	}
+
 	~GraphicsState() {
 	}
 
 	string areaLightName, materialName, interiorVolumeName, exteriorVolumeName;
-	Properties areaLightProps, materialProps, interiorVolumeProps, exteriorVolumeProps;
+	luxrays::Properties areaLightProps, materialProps, interiorVolumeProps, exteriorVolumeProps;
 
 	u_int currentLightGroup;
 };
@@ -107,20 +134,20 @@ static GraphicsState currentGraphicsState;
 static vector<Transform> transformsStack;
 static Transform currentTransform;
 // The named coordinate systems
-static boost::unordered_map<string, Transform> namedCoordinateSystems;
+static std::unordered_map<string, Transform> namedCoordinateSystems;
 // The light groups
 static u_int freeLightGroupIndex;
-static boost::unordered_map<string, u_int> namedLightGroups;
+static std::unordered_map<string, u_int> namedLightGroups;
 // The named Materials
-static boost::unordered_map<string, Properties> namedMaterials;
+static std::unordered_map<string, luxrays::Properties> namedMaterials;
 // The named Volumes
-static boost::unordered_map<string, Properties> namedVolumes;
+static std::unordered_map<string, luxrays::Properties> namedVolumes;
 // The named Textures
-static boost::unordered_set<string> namedTextures;
+static std::unordered_set<string> namedTextures;
 // The named Object
-static boost::unordered_map<string, vector<string> > namedObjectShapes;
-static boost::unordered_map<string, vector<string> > namedObjectMaterials;
-static boost::unordered_map<string, vector<Transform> > namedObjectTransforms;
+static std::unordered_map<string, vector<string> > namedObjectShapes;
+static std::unordered_map<string, vector<string> > namedObjectMaterials;
+static std::unordered_map<string, vector<Transform> > namedObjectTransforms;
 static string currentObjectName;
 static u_int freeObjectID, freeLightID;
 
@@ -155,49 +182,59 @@ void ResetParser() {
 	freeLightID = 0;
 }
 
-static Properties GetTextureMapping2D(const string &prefix, const Properties &props) {
+static luxrays::PropertiesUPtr GetTextureMapping2D(const string &prefix, const luxrays::Properties &props) {
 	const string type = props.Get(Property("mapping")("uv")).Get<string>();
-	
+
+	auto result = std::make_unique<Properties>();
+
 	if (type == "uv") {
-		return Property(prefix + ".mapping.type")("uvmapping2d") <<
-				Property(prefix + ".mapping.uvscale")(props.Get(Property("uscale")(1.f)).Get<float>(),
-					props.Get(Property("vscale")(1.f)).Get<float>()) <<
-				Property(prefix + ".mapping.uvdelta")(props.Get(Property("udelta")(0.f)).Get<float>(),
-					props.Get(Property("udelta")(0.f)).Get<float>());
+		*result
+			<< Property(prefix + ".mapping.type")("uvmapping2d")
+			<< Property(prefix + ".mapping.uvscale")(
+					props.Get(Property("uscale")(1.f)).Get<double>(),
+					props.Get(Property("vscale")(1.f)).Get<double>()
+			)
+			<< Property(prefix + ".mapping.uvdelta")(props.Get(Property("udelta")(0.f)).Get<double>(),
+					props.Get(Property("udelta")(0.f)).Get<double>());
+		return result;
 	} else {
 		LC_LOG("LuxCore supports only texture coordinate mapping 2D with 'uv' (i.e. not " << type << "). Ignoring the mapping.");
-		return Properties();
+		return result;
 	}
 }
 
-static Properties GetTextureMapping3D(const string &prefix, const Transform &tex2World, const Properties &props) {
+static luxrays::PropertiesUPtr GetTextureMapping3D(const string &prefix, const Transform &tex2World, const luxrays::Properties &props) {
 	const string type = props.Get(Property("coordinates")("uv")).Get<string>();
+	auto result = std::make_unique<Properties>();
 
 	if (type == "uv") {
-		return Property(prefix + ".mapping.type")("uvmapping3d") <<
+		*result << Property(prefix + ".mapping.type")("uvmapping3d") <<
 				Property(prefix + ".mapping.transformation")(tex2World.mInv);
+		return result;
 	} else if (type == "global") {
-		return Property(prefix + ".mapping.type")("globalmapping3d") <<
+		*result << Property(prefix + ".mapping.type")("globalmapping3d") <<
 				Property(prefix + ".mapping.transformation")(tex2World.mInv);
+		return result;
 	} else {
 		LC_LOG("LuxCore supports only texture coordinate mapping 3D with 'uv' and 'global' (i.e. not " << type << "). Ignoring the mapping.");
-		return Properties();
+		return result;
 	}
 }
 
-static Property GetTexture(const string &luxCoreName, const Property defaultProp, const Properties &props) {
+static PropertyUPtr GetTexture(const string &luxCoreName, const Property defaultProp, const luxrays::Properties &props) {
 	Property prop = props.Get(defaultProp);
 	if (prop.GetValueType(0) == PropertyValue::STRING_VAL) {
 		// It is a texture name
 		string texName = GetLuxCoreValidName(prop.Get<string>());
+		auto result = std::make_unique<Property>(Property(luxCoreName)(texName));
 
-		return Property(luxCoreName)(texName);
+		return result;
 	} else
 		return prop.Renamed(luxCoreName);
 }
 
-static void DefineMaterial(const string &name, const Properties &matProps,
-		const Properties &lightProps,
+static void DefineMaterial(const string &name, const luxrays::Properties &matProps,
+		const luxrays::Properties &lightProps,
 		const string &interiorVolumeName, const string &exteriorVolumeName) {
 	const string prefix = "scene.materials." + name;
 
@@ -210,26 +247,26 @@ static void DefineMaterial(const string &name, const Properties &matProps,
 		if (matProps.IsDefined("sigma")) {
 			*sceneProps <<
 				Property(prefix + ".type")("roughmatte") <<
-				GetTexture(prefix + ".kd", Property("Kd")(Spectrum(.9f)), matProps) <<
-				GetTexture(prefix + ".sigma", Property("sigma")(0.f), matProps);
+				*GetTexture(prefix + ".kd", Property("Kd")(Spectrum(.9f)), matProps) <<
+				*GetTexture(prefix + ".sigma", Property("sigma")(0.f), matProps);
 		} else {
 			*sceneProps <<
 				Property(prefix + ".type")("matte") <<
-				GetTexture(prefix + ".kd", Property("Kd")(Spectrum(.9f)), matProps);
+				*GetTexture(prefix + ".kd", Property("Kd")(Spectrum(.9f)), matProps);
 		}
 	} else if (type == "mirror") {
 		*sceneProps <<
 				Property(prefix + ".type")("mirror") <<
-				GetTexture(prefix + ".kr", Property("Kr")(Spectrum(1.f)), matProps);
+				*GetTexture(prefix + ".kr", Property("Kr")(Spectrum(1.f)), matProps);
 	} else if (type == "glass") {
 		const bool isArchitectural = matProps.Get(Property("architectural")(false)).Get<bool>();
 
 		*sceneProps <<
 				Property(prefix + ".type")(isArchitectural ? "archglass" : "glass") <<
-				GetTexture(prefix + ".kr", Property("Kr")(Spectrum(1.f)), matProps) <<
-				GetTexture(prefix + ".kt", Property("Kt")(Spectrum(1.f)), matProps) <<
+				*GetTexture(prefix + ".kr", Property("Kr")(Spectrum(1.f)), matProps) <<
+				*GetTexture(prefix + ".kt", Property("Kt")(Spectrum(1.f)), matProps) <<
 				Property(prefix +".ioroutside")(1.f) <<
-				GetTexture(prefix + ".iorinside", Property("index")(1.5f), matProps);
+				*GetTexture(prefix + ".iorinside", Property("index")(1.5f), matProps);
 	} else if (type == "metal") {
 		string presetName = matProps.Get("name").Get<string>();
 		Spectrum n, k;
@@ -239,22 +276,22 @@ static void DefineMaterial(const string &name, const Properties &matProps,
 				Property(prefix + ".type")("metal2") <<
 				Property(prefix + ".n")(n) <<
 				Property(prefix + ".k")(k) <<
-				GetTexture(prefix + ".uroughness", Property("uroughness")(.1f), matProps) <<
-				GetTexture(prefix + ".vroughness", Property("vroughness")(.1f), matProps);
+				*GetTexture(prefix + ".uroughness", Property("uroughness")(.1f), matProps) <<
+				*GetTexture(prefix + ".vroughness", Property("vroughness")(.1f), matProps);
 	} else if (type == "mattetranslucent") {
 		if (matProps.Get(Property("energyconserving")(false)).Get<bool>() == false)
 			LC_LOG("Mattetranslucent with energyconserving=false is not supported, using energyconservin.");
 		if (matProps.IsDefined("sigma")) {
 			*sceneProps <<
 				Property(prefix + ".type")("roughmattetranslucent") <<
-				GetTexture(prefix + ".kr", Property("Kr")(Spectrum(.9f)), matProps) <<
-				GetTexture(prefix + ".kt", Property("Kt")(Spectrum(1.f)), matProps) <<
-				GetTexture(prefix + ".sigma", Property("sigma")(0.f), matProps);
+				*GetTexture(prefix + ".kr", Property("Kr")(Spectrum(.9f)), matProps) <<
+				*GetTexture(prefix + ".kt", Property("Kt")(Spectrum(1.f)), matProps) <<
+				*GetTexture(prefix + ".sigma", Property("sigma")(0.f), matProps);
 		} else {
 			*sceneProps <<
 				Property(prefix + ".type")("mattetranslucent") <<
-				GetTexture(prefix + ".kr", Property("Kr")(Spectrum(1.f)), matProps) <<
-				GetTexture(prefix + ".kt", Property("Kt")(Spectrum(1.f)), matProps);
+				*GetTexture(prefix + ".kr", Property("Kr")(Spectrum(1.f)), matProps) <<
+				*GetTexture(prefix + ".kt", Property("Kt")(Spectrum(1.f)), matProps);
 		}
 	} else if (type == "null") {
 		*sceneProps <<
@@ -262,7 +299,7 @@ static void DefineMaterial(const string &name, const Properties &matProps,
 	} else if (type == "mix") {
 		*sceneProps <<
 				Property(prefix + ".type")("mix") <<
-				GetTexture(prefix + ".amount", Property("amount")(.5f), matProps) <<
+				*GetTexture(prefix + ".amount", Property("amount")(.5f), matProps) <<
 				Property(prefix + ".material1")(GetLuxCoreValidName(matProps.Get(Property("namedmaterial1")("")).Get<string>())) <<
 				Property(prefix + ".material2")(GetLuxCoreValidName(matProps.Get(Property("namedmaterial2")("")).Get<string>()));
 	} else if (type == "glossy") {
@@ -270,33 +307,33 @@ static void DefineMaterial(const string &name, const Properties &matProps,
 			if (matProps.IsDefined("sigma")) {
 				*sceneProps <<
 					Property(prefix + "~~base.type")("roughmatte") <<
-					GetTexture(prefix + "~~base.kd", Property("Kd")(Spectrum(.9f)), matProps) <<
-					GetTexture(prefix + "~~base.sigma", Property("sigma")(0.f), matProps);
+					*GetTexture(prefix + "~~base.kd", Property("Kd")(Spectrum(.9f)), matProps) <<
+					*GetTexture(prefix + "~~base.sigma", Property("sigma")(0.f), matProps);
 			} else {
 				*sceneProps <<
 					Property(prefix + "~~base.type")("matte") <<
-					GetTexture(prefix + "~~base.kd", Property("Kd")(Spectrum(.9f)), matProps);
+					*GetTexture(prefix + "~~base.kd", Property("Kd")(Spectrum(.9f)), matProps);
 			}
 			*sceneProps <<
 					Property(prefix + ".type")("glossycoating") <<
 					Property(prefix + ".base")(name + "~~base") <<
-					GetTexture(prefix + ".ks", Property("Ks")(.5f), matProps) <<
-					GetTexture(prefix + ".ka", Property("Ka")(0.f), matProps) <<
-					GetTexture(prefix + ".uroughness", Property("uroughness")(.1f), matProps) <<
-					GetTexture(prefix + ".vroughness", Property("vroughness")(.1f), matProps) <<
-					GetTexture(prefix + ".d", Property("d")(0.f), matProps) <<
-					GetTexture(prefix + ".index", Property("index")(0.f), matProps) <<
+					*GetTexture(prefix + ".ks", Property("Ks")(.5f), matProps) <<
+					*GetTexture(prefix + ".ka", Property("Ka")(0.f), matProps) <<
+					*GetTexture(prefix + ".uroughness", Property("uroughness")(.1f), matProps) <<
+					*GetTexture(prefix + ".vroughness", Property("vroughness")(.1f), matProps) <<
+					*GetTexture(prefix + ".d", Property("d")(0.f), matProps) <<
+					*GetTexture(prefix + ".index", Property("index")(0.f), matProps) <<
 					Property(prefix +".multibounce")(matProps.Get(Property("multibounce")(false)).Get<bool>());
 		} else {
 			*sceneProps <<
 					Property(prefix + ".type")("glossy2") <<
-					GetTexture(prefix + ".kd", Property("Kd")(.5f), matProps) <<
-					GetTexture(prefix + ".ks", Property("Ks")(.5f), matProps) <<
-					GetTexture(prefix + ".ka", Property("Ka")(0.f), matProps) <<
-					GetTexture(prefix + ".uroughness", Property("uroughness")(.1f), matProps) <<
-					GetTexture(prefix + ".vroughness", Property("vroughness")(.1f), matProps) <<
-					GetTexture(prefix + ".d", Property("d")(0.f), matProps) <<
-					GetTexture(prefix + ".index", Property("index")(0.f), matProps) <<
+					*GetTexture(prefix + ".kd", Property("Kd")(.5f), matProps) <<
+					*GetTexture(prefix + ".ks", Property("Ks")(.5f), matProps) <<
+					*GetTexture(prefix + ".ka", Property("Ka")(0.f), matProps) <<
+					*GetTexture(prefix + ".uroughness", Property("uroughness")(.1f), matProps) <<
+					*GetTexture(prefix + ".vroughness", Property("vroughness")(.1f), matProps) <<
+					*GetTexture(prefix + ".d", Property("d")(0.f), matProps) <<
+					*GetTexture(prefix + ".index", Property("index")(0.f), matProps) <<
 					Property(prefix +".multibounce")(matProps.Get(Property("multibounce")(false)).Get<bool>());
 		}
 	} else if (type == "metal2") {
@@ -305,9 +342,9 @@ static void DefineMaterial(const string &name, const Properties &matProps,
 			const string texPrefix = "scene.textures." + name;
 			*sceneProps <<
 					Property(texPrefix + "_LUXCORE_PARSERLXS_fresnelapproxn.type")("fresnelapproxn") <<
-					GetTexture(texPrefix + "_LUXCORE_PARSERLXS_fresnelapproxn.texture", Property("Kr")(Spectrum(.5f)), matProps) <<
+					*GetTexture(texPrefix + "_LUXCORE_PARSERLXS_fresnelapproxn.texture", Property("Kr")(Spectrum(.5f)), matProps) <<
 					Property(texPrefix + "_LUXCORE_PARSERLXS_fresnelapproxk.type")("fresnelapproxk") <<
-					GetTexture(texPrefix + "_LUXCORE_PARSERLXS_fresnelapproxk.texture", Property("Kr")(Spectrum(.5f)), matProps);
+					*GetTexture(texPrefix + "_LUXCORE_PARSERLXS_fresnelapproxk.texture", Property("Kr")(Spectrum(.5f)), matProps);
 					Property(prefix + ".type")("metal2") <<
 					Property(prefix + ".n")(fresnelTexName + "_LUXCORE_PARSERLXS_fresnelapproxn") <<
 					Property(prefix + ".k")(fresnelTexName + "_LUXCORE_PARSERLXS_fresnelapproxk");
@@ -318,103 +355,103 @@ static void DefineMaterial(const string &name, const Properties &matProps,
 		}
 
 		*sceneProps <<
-				GetTexture(prefix + ".uroughness", Property("uroughness")(.1f), matProps) <<
-				GetTexture(prefix + ".vroughness", Property("vroughness")(.1f), matProps);
+				*GetTexture(prefix + ".uroughness", Property("uroughness")(.1f), matProps) <<
+				*GetTexture(prefix + ".vroughness", Property("vroughness")(.1f), matProps);
 	} else if (type == "roughglass") {
 		*sceneProps <<
 				Property(prefix + ".type")("roughglass") <<
-				GetTexture(prefix + ".kr", Property("Kr")(Spectrum(1.f)), matProps) <<
-				GetTexture(prefix + ".kt", Property("Kt")(Spectrum(1.f)), matProps) <<
+				*GetTexture(prefix + ".kr", Property("Kr")(Spectrum(1.f)), matProps) <<
+				*GetTexture(prefix + ".kt", Property("Kt")(Spectrum(1.f)), matProps) <<
 				Property(prefix +".ioroutside")(1.f) <<
-				GetTexture(prefix + ".iorinside", Property("index")(1.5f), matProps) <<
-				GetTexture(prefix + ".uroughness", Property("uroughness")(.1f), matProps) <<
-				GetTexture(prefix + ".vroughness", Property("vroughness")(.1f), matProps);
+				*GetTexture(prefix + ".iorinside", Property("index")(1.5f), matProps) <<
+				*GetTexture(prefix + ".uroughness", Property("uroughness")(.1f), matProps) <<
+				*GetTexture(prefix + ".vroughness", Property("vroughness")(.1f), matProps);
 	} else if (type == "velvet") {
 		*sceneProps <<
 				Property(prefix + ".type")("velvet") <<
-				GetTexture(prefix + ".kd", Property("Kd")(Spectrum(1.f)), matProps) <<
-				GetTexture(prefix + ".p1", Property("p1")(2.0f), matProps) <<
-				GetTexture(prefix + ".p2", Property("p2")(20.0f), matProps) <<
-				GetTexture(prefix + ".p3", Property("p3")(-2.0f), matProps);
-				GetTexture(prefix + ".thickness", Property("thickness")(.1f), matProps);
+				*GetTexture(prefix + ".kd", Property("Kd")(Spectrum(1.f)), matProps) <<
+				*GetTexture(prefix + ".p1", Property("p1")(2.0f), matProps) <<
+				*GetTexture(prefix + ".p2", Property("p2")(20.0f), matProps) <<
+				*GetTexture(prefix + ".p3", Property("p3")(-2.0f), matProps);
+				*GetTexture(prefix + ".thickness", Property("thickness")(.1f), matProps);
 	} else if (type == "cloth") {
 		*sceneProps <<
 				Property(prefix + ".type")("cloth") <<
 				Property(prefix + ".preset")(matProps.Get("presetname").Get<string>()) <<
-				GetTexture(prefix + ".weft_kd", Property("weft_kd")(Spectrum(.5f)), matProps) <<
-				GetTexture(prefix + ".weft_ks", Property("weft_ks")(Spectrum(.5f)), matProps) <<
-				GetTexture(prefix + ".warp_kd", Property("weft_kd")(Spectrum(.5f)), matProps) <<
-				GetTexture(prefix + ".warp_ks", Property("weft_ks")(Spectrum(.5f)), matProps) <<
-				Property(prefix + ".repeat_u")(matProps.Get(Property("repeat_u")(100.f)).Get<float>()) <<
-				Property(prefix + ".repeat_v")(matProps.Get(Property("repeat_v")(100.f)).Get<float>());
+				*GetTexture(prefix + ".weft_kd", Property("weft_kd")(Spectrum(.5f)), matProps) <<
+				*GetTexture(prefix + ".weft_ks", Property("weft_ks")(Spectrum(.5f)), matProps) <<
+				*GetTexture(prefix + ".warp_kd", Property("weft_kd")(Spectrum(.5f)), matProps) <<
+				*GetTexture(prefix + ".warp_ks", Property("weft_ks")(Spectrum(.5f)), matProps) <<
+				Property(prefix + ".repeat_u")(matProps.Get(Property("repeat_u")(100.f)).Get<double>()) <<
+				Property(prefix + ".repeat_v")(matProps.Get(Property("repeat_v")(100.f)).Get<double>());
 	} else if (type == "carpaint") {
 		*sceneProps <<
 				Property(prefix + ".type")("carpaint") <<
-				GetTexture(prefix + ".ka", Property("Ka")(Spectrum(0.f)), matProps) <<
-				GetTexture(prefix + ".d", Property("d")(0.f), matProps);
+				*GetTexture(prefix + ".ka", Property("Ka")(Spectrum(0.f)), matProps) <<
+				*GetTexture(prefix + ".d", Property("d")(0.f), matProps);
 		if (matProps.IsDefined("name"))
 			*sceneProps << Property(prefix + ".preset")(matProps.Get("name").Get<string>());
 		if (matProps.IsDefined("Kd"))
-			*sceneProps << GetTexture(prefix + ".kd", Property("Kd")(Spectrum(0.f)), matProps);
+			*sceneProps << *GetTexture(prefix + ".kd", Property("Kd")(Spectrum(0.f)), matProps);
 		if (matProps.IsDefined("Ks1"))
-			*sceneProps << GetTexture(prefix + ".ks1", Property("Ks1")(Spectrum(0.f)), matProps);
+			*sceneProps << *GetTexture(prefix + ".ks1", Property("Ks1")(Spectrum(0.f)), matProps);
 		if (matProps.IsDefined("Ks2"))
-			*sceneProps << GetTexture(prefix + ".ks2", Property("Ks2")(Spectrum(0.f)), matProps);
+			*sceneProps << *GetTexture(prefix + ".ks2", Property("Ks2")(Spectrum(0.f)), matProps);
 		if (matProps.IsDefined("Ks3"))
-			*sceneProps << GetTexture(prefix + ".ks3", Property("Ks3")(Spectrum(0.f)), matProps);
+			*sceneProps << *GetTexture(prefix + ".ks3", Property("Ks3")(Spectrum(0.f)), matProps);
 		if (matProps.IsDefined("R1"))
-			*sceneProps << GetTexture(prefix + ".r1", Property("R1")(0.f), matProps);
+			*sceneProps << *GetTexture(prefix + ".r1", Property("R1")(0.f), matProps);
 		if (matProps.IsDefined("R2"))
-			*sceneProps << GetTexture(prefix + ".r2", Property("R2")(0.f), matProps);
+			*sceneProps << *GetTexture(prefix + ".r2", Property("R2")(0.f), matProps);
 		if (matProps.IsDefined("R3"))
-			*sceneProps << GetTexture(prefix + ".r3", Property("R3")(0.f), matProps);
+			*sceneProps << *GetTexture(prefix + ".r3", Property("R3")(0.f), matProps);
 		if (matProps.IsDefined("M1"))
-			*sceneProps << GetTexture(prefix + ".m1", Property("M1")(0.f), matProps);
+			*sceneProps << *GetTexture(prefix + ".m1", Property("M1")(0.f), matProps);
 		if (matProps.IsDefined("M2"))
-			*sceneProps << GetTexture(prefix + ".m2", Property("M2")(0.f), matProps);
+			*sceneProps << *GetTexture(prefix + ".m2", Property("M2")(0.f), matProps);
 		if (matProps.IsDefined("M3"))
-			*sceneProps << GetTexture(prefix + ".m3", Property("M3")(0.f), matProps);
+			*sceneProps << *GetTexture(prefix + ".m3", Property("M3")(0.f), matProps);
 	} else if (type == "glossytranslucent") {
 		*sceneProps <<
 				Property(prefix + ".type")("glossytranslucent") <<
-				GetTexture(prefix + ".kd", Property("Kd")(.5f), matProps) <<
-				GetTexture(prefix + ".kt", Property("Kt")(.5f), matProps) <<
-				GetTexture(prefix + ".ks", Property("Ks")(.5f), matProps) <<
-				GetTexture(prefix + ".ka", Property("Ka")(0.f), matProps) <<
-				GetTexture(prefix + ".uroughness", Property("uroughness")(.1f), matProps) <<
-				GetTexture(prefix + ".vroughness", Property("vroughness")(.1f), matProps) <<
-				GetTexture(prefix + ".d", Property("d")(0.f), matProps) <<
-				GetTexture(prefix + ".index", Property("index")(0.f), matProps) <<
+				*GetTexture(prefix + ".kd", Property("Kd")(.5f), matProps) <<
+				*GetTexture(prefix + ".kt", Property("Kt")(.5f), matProps) <<
+				*GetTexture(prefix + ".ks", Property("Ks")(.5f), matProps) <<
+				*GetTexture(prefix + ".ka", Property("Ka")(0.f), matProps) <<
+				*GetTexture(prefix + ".uroughness", Property("uroughness")(.1f), matProps) <<
+				*GetTexture(prefix + ".vroughness", Property("vroughness")(.1f), matProps) <<
+				*GetTexture(prefix + ".d", Property("d")(0.f), matProps) <<
+				*GetTexture(prefix + ".index", Property("index")(0.f), matProps) <<
 				Property(prefix +".multibounce")(matProps.Get(Property("multibounce")(false)).Get<bool>());
 		if (matProps.Get(Property("onesided")(true)).Get<bool>()) {
 			*sceneProps <<
-				GetTexture(prefix + ".ks_bf", Property("Ks")(.5f), matProps) <<
-				GetTexture(prefix + ".ka_bf", Property("Ka")(0.f), matProps) <<
-				GetTexture(prefix + ".uroughness_bf", Property("uroughness")(.1f), matProps) <<
-				GetTexture(prefix + ".vroughness_bf", Property("vroughness")(.1f), matProps) <<
-				GetTexture(prefix + ".d_bf", Property("d")(0.f), matProps) <<
-				GetTexture(prefix + ".index_bf", Property("index")(0.f), matProps) <<
+				*GetTexture(prefix + ".ks_bf", Property("Ks")(.5f), matProps) <<
+				*GetTexture(prefix + ".ka_bf", Property("Ka")(0.f), matProps) <<
+				*GetTexture(prefix + ".uroughness_bf", Property("uroughness")(.1f), matProps) <<
+				*GetTexture(prefix + ".vroughness_bf", Property("vroughness")(.1f), matProps) <<
+				*GetTexture(prefix + ".d_bf", Property("d")(0.f), matProps) <<
+				*GetTexture(prefix + ".index_bf", Property("index")(0.f), matProps) <<
 				Property(prefix +".multibounce_bf")(matProps.Get(Property("multibounce")(false)).Get<bool>());
 		} else {
 			*sceneProps <<
-				GetTexture(prefix + ".ks_bf", Property("backface_Ks")(.5f), matProps) <<
-				GetTexture(prefix + ".ka_bf", Property("backface_Ka")(0.f), matProps) <<
-				GetTexture(prefix + ".uroughness_bf", Property("backface_uroughness")(.1f), matProps) <<
-				GetTexture(prefix + ".vroughness_bf", Property("backface_vroughness")(.1f), matProps) <<
-				GetTexture(prefix + ".d_bf", Property("backface_d")(0.f), matProps) <<
-				GetTexture(prefix + ".index_bf", Property("backface_index")(0.f), matProps) <<
+				*GetTexture(prefix + ".ks_bf", Property("backface_Ks")(.5f), matProps) <<
+				*GetTexture(prefix + ".ka_bf", Property("backface_Ka")(0.f), matProps) <<
+				*GetTexture(prefix + ".uroughness_bf", Property("backface_uroughness")(.1f), matProps) <<
+				*GetTexture(prefix + ".vroughness_bf", Property("backface_vroughness")(.1f), matProps) <<
+				*GetTexture(prefix + ".d_bf", Property("backface_d")(0.f), matProps) <<
+				*GetTexture(prefix + ".index_bf", Property("backface_index")(0.f), matProps) <<
 				Property(prefix +".multibounce_bf")(matProps.Get(Property("backface_multibounce")(false)).Get<bool>());
 		}
 	} else if (type == "glossycoating") {
 		*sceneProps <<
 				Property(prefix + ".type")("glossycoating") <<
 				Property(prefix + ".base")(GetLuxCoreValidName(matProps.Get(Property("basematerial")("")).Get<string>())) <<
-				GetTexture(prefix + ".ks", Property("Ks")(.5f), matProps) <<
-				GetTexture(prefix + ".ka", Property("Ka")(0.f), matProps) <<
-				GetTexture(prefix + ".uroughness", Property("uroughness")(.1f), matProps) <<
-				GetTexture(prefix + ".vroughness", Property("vroughness")(.1f), matProps) <<
-				GetTexture(prefix + ".d", Property("d")(0.f), matProps) <<
-				GetTexture(prefix + ".index", Property("index")(0.f), matProps) <<
+				*GetTexture(prefix + ".ks", Property("Ks")(.5f), matProps) <<
+				*GetTexture(prefix + ".ka", Property("Ka")(0.f), matProps) <<
+				*GetTexture(prefix + ".uroughness", Property("uroughness")(.1f), matProps) <<
+				*GetTexture(prefix + ".vroughness", Property("vroughness")(.1f), matProps) <<
+				*GetTexture(prefix + ".d", Property("d")(0.f), matProps) <<
+				*GetTexture(prefix + ".index", Property("index")(0.f), matProps) <<
 				Property(prefix +".multibounce")(matProps.Get(Property("multibounce")(false)).Get<bool>());
 	} else {
 		LC_LOG("LuxCore::ParserLXS supports only Matte, Mirror, Glass, Metal, MatteTranslucent, Null, "
@@ -443,10 +480,10 @@ static void DefineMaterial(const string &name, const Properties &matProps,
 
 	if (lightProps.GetSize() > 0) {
 		*sceneProps <<
-				GetTexture(prefix + ".emission", Property("L")(Spectrum(1.f)), lightProps) << 
-				Property(prefix + ".emission.gain")(Spectrum(lightProps.Get(Property("gain")(1.f)).Get<float>())) <<
-				Property(prefix + ".emission.power")(lightProps.Get(Property("power")(100.f)).Get<float>()) <<
-				Property(prefix + ".emission.efficency")(lightProps.Get(Property("efficency")(17.f)).Get<float>()) <<
+				*GetTexture(prefix + ".emission", Property("L")(Spectrum(1.f)), lightProps) << 
+				Property(prefix + ".emission.gain")(Spectrum(lightProps.Get(Property("gain")(1.f)).Get<double>())) <<
+				Property(prefix + ".emission.power")(lightProps.Get(Property("power")(100.f)).Get<double>()) <<
+				Property(prefix + ".emission.efficency")(lightProps.Get(Property("efficency")(17.f)).Get<double>()) <<
 				Property(prefix + ".emission.id")(currentGraphicsState.currentLightGroup);
 				
 				// Only define the .emission.iesfile and .emission.mapfile props if we already have values for them.
@@ -474,7 +511,7 @@ static void DefineMaterial(const string &name, const Properties &matProps,
 	}
 }
 
-static void DefineVolume(const string &name, const Properties &volProps) {
+static void DefineVolume(const string &name, const luxrays::Properties &volProps) {
 	const string prefix = "scene.volumes." + name;
 
 	//--------------------------------------------------------------------------
@@ -485,20 +522,20 @@ static void DefineVolume(const string &name, const Properties &volProps) {
 	if (type == "clear") {
 		*sceneProps <<
 				Property(prefix + ".type")("clear") <<
-				GetTexture(prefix + ".absorption", Property("absorption")(0.f, 0.f, 0.f), volProps);
+				*GetTexture(prefix + ".absorption", Property("absorption")(0.f, 0.f, 0.f), volProps);
 	} else if (type == "homogenous") {
 		*sceneProps <<
 				Property(prefix + ".type")("homogenous") <<
-				GetTexture(prefix + ".absorption", Property("sigma_a")(0.f, 0.f, 0.f), volProps) <<
-				GetTexture(prefix + ".scattering", Property("sigma_s")(0.f, 0.f, 0.f), volProps) <<
-				GetTexture(prefix + ".asymmetry", Property("g")(0.f, 0.f, 0.f), volProps);
+				*GetTexture(prefix + ".absorption", Property("sigma_a")(0.f, 0.f, 0.f), volProps) <<
+				*GetTexture(prefix + ".scattering", Property("sigma_s")(0.f, 0.f, 0.f), volProps) <<
+				*GetTexture(prefix + ".asymmetry", Property("g")(0.f, 0.f, 0.f), volProps);
 	} else if (type == "heterogeneous") {
 		*sceneProps <<
 				Property(prefix + ".type")("heterogeneous") <<
-				GetTexture(prefix + ".absorption", Property("sigma_a")(0.f, 0.f, 0.f), volProps) <<
-				GetTexture(prefix + ".scattering", Property("sigma_s")(0.f, 0.f, 0.f), volProps) <<
-				GetTexture(prefix + ".asymmetry", Property("g")(0.f, 0.f, 0.f), volProps) <<
-				GetTexture(prefix + ".steps.size", Property("stepsize")(1.f), volProps);
+				*GetTexture(prefix + ".absorption", Property("sigma_a")(0.f, 0.f, 0.f), volProps) <<
+				*GetTexture(prefix + ".scattering", Property("sigma_s")(0.f, 0.f, 0.f), volProps) <<
+				*GetTexture(prefix + ".asymmetry", Property("g")(0.f, 0.f, 0.f), volProps) <<
+				*GetTexture(prefix + ".steps.size", Property("stepsize")(1.f), volProps);
 	} else {
 		LC_LOG("LuxCore::ParserLXS supports clear, homogenous "
 				"and heterogeneous volumes (i.e. not " <<
@@ -642,7 +679,7 @@ static bool LookupType(const char *token, ParamType *type, string &name) {
 	return true;
 }
 
-static void InitProperties(Properties &props, const u_int count, const ParamListElem *list) {
+static void InitProperties(luxrays::Properties &props, const u_int count, const ParamListElem *list) {
 	for (u_int i = 0; i < count; ++i) {
 		ParamType type;
 		string name;
@@ -919,7 +956,7 @@ ri_stmt_list: ri_stmt_list ri_stmt
 
 ri_stmt: ACCELERATOR STRING paramlist
 {
-	Properties props;
+	luxrays::Properties props;
 	InitProperties(props, CPS, CP);
 
 	// Map kdtree and bvh to luxrays' bvh accel otherwise just use the default settings
@@ -958,29 +995,29 @@ ri_stmt: ACCELERATOR STRING paramlist
 	if (name != "perspective")
 		throw runtime_error("LuxCore supports only perspective camera");
 
-	Properties props;
+	luxrays::Properties props;
 	InitProperties(props, CPS, CP);
 	
 	if (props.IsDefined("screenwindow")) {
 		Property prop = props.Get("screenwindow");
-		*sceneProps << Property("scene.camera.screenwindow")(
-			prop.Get<float>(0), prop.Get<float>(1), prop.Get<float>(2), prop.Get<float>(3));
+		*sceneProps << Property("scene.GetCamera().screenwindow")(
+			prop.Get<double>(0), prop.Get<double>(1), prop.Get<double>(2), prop.Get<double>(3));
 	}
 
 	if (props.IsDefined("clippingplane")) {
 		Property prop = props.Get("clippingplane");
 		*sceneProps <<
-				Property("scene.camera.clippingplane.enable")(1) <<
-				Property("scene.camera.clippingplane.center")(prop.Get<float>(0), prop.Get<float>(1), prop.Get<float>(2)) <<
-				Property("scene.camera.clippingplane.normal")(prop.Get<float>(3), prop.Get<float>(4), prop.Get<float>(5));
+				Property("scene.GetCamera().clippingplane.enable")(1) <<
+				Property("scene.GetCamera().clippingplane.center")(prop.Get<double>(0), prop.Get<double>(1), prop.Get<double>(2)) <<
+				Property("scene.GetCamera().clippingplane.normal")(prop.Get<double>(3), prop.Get<double>(4), prop.Get<double>(5));
 	}
 
 	*sceneProps <<
-			Property("scene.camera.fieldofview")(props.Get(Property("fov")(90.f)).Get<float>()) <<
-			Property("scene.camera.lensradius")(props.Get(Property("lensradius")(0.f)).Get<float>()) <<
-			Property("scene.camera.focaldistance")(props.Get(Property("focaldistance")(1e30f)).Get<float>()) <<
-			Property("scene.camera.hither")(props.Get(Property("cliphither")(1e-3f)).Get<float>()) <<
-			Property("scene.camera.yon")(props.Get(Property("clipyon")(1e30f)).Get<float>());
+			Property("scene.GetCamera().fieldofview")(props.Get(Property("fov")(90.f)).Get<double>()) <<
+			Property("scene.GetCamera().lensradius")(props.Get(Property("lensradius")(0.f)).Get<double>()) <<
+			Property("scene.GetCamera().focaldistance")(props.Get(Property("focaldistance")(1e30f)).Get<double>()) <<
+			Property("scene.GetCamera().hither")(props.Get(Property("cliphither")(1e-3f)).Get<double>()) <<
+			Property("scene.GetCamera().yon")(props.Get(Property("clipyon")(1e30f)).Get<double>());
 
 	worldToCamera = currentTransform;
 	namedCoordinateSystems["camera"] = currentTransform;
@@ -1020,19 +1057,19 @@ ri_stmt: ACCELERATOR STRING paramlist
 		throw runtime_error("Named volume '" + name + "' unknown");
 
 	currentGraphicsState.exteriorVolumeName = name;
-	currentGraphicsState.exteriorVolumeProps = namedVolumes[name];
+	currentGraphicsState.exteriorVolumeProps = Properties(std::move(namedVolumes[name]));
 
 	// If I'm not defining an object, set the world volume
 	if (graphicsStatesStack.size() == 0) {
 		*sceneProps <<
-				Property("scene.camera.autovolume.enable")(false) <<
-				Property("scene.camera.volume")(name);
-				
+				Property("scene.GetCamera().autovolume.enable")(false) <<
+				Property("scene.GetCamera().volume")(name);
+
 	}
 }
 | FILM STRING paramlist
 {
-	Properties props;
+	luxrays::Properties props;
 	InitProperties(props, CPS, CP);
 
 	// Image size
@@ -1052,9 +1089,9 @@ ri_stmt: ACCELERATOR STRING paramlist
 	} else if (toneMapType == "linear") {
 		*renderConfigProps <<
 			Property(pluginPrefix + ".type")("TONEMAP_LUXLINEAR") <<
-			Property(pluginPrefix + ".sensitivity")(props.Get(Property("linear_sensitivity")(100.f)).Get<float>()) <<
-			Property(pluginPrefix + ".exposure")(props.Get(Property("linear_exposure")(1.f / 1000.f)).Get<float>()) <<
-			Property(pluginPrefix + ".fstop")(props.Get(Property("linear_fstop")(2.8f)).Get<float>());
+			Property(pluginPrefix + ".sensitivity")(props.Get(Property("linear_sensitivity")(100.f)).Get<double>()) <<
+			Property(pluginPrefix + ".exposure")(props.Get(Property("linear_exposure")(1.f / 1000.f)).Get<double>()) <<
+			Property(pluginPrefix + ".fstop")(props.Get(Property("linear_fstop")(2.8f)).Get<double>());
 	} else {
 		LC_LOG("LuxCore supports only linear tone mapping, ignoring tone mapping settings");
 	}
@@ -1072,7 +1109,7 @@ ri_stmt: ACCELERATOR STRING paramlist
 	pluginPrefix = "film.imagepipeline." + ToString(pluginNumber++);
 	*renderConfigProps <<
 		Property(pluginPrefix + ".type")("GAMMA_CORRECTION") <<
-		Property(pluginPrefix + ".value")(props.Get(Property("gamma")(2.2f)).Get<float>());
+		Property(pluginPrefix + ".value")(props.Get(Property("gamma")(2.2f)).Get<double>());
 
 	// Halt conditions
 	*renderConfigProps <<
@@ -1092,7 +1129,7 @@ ri_stmt: ACCELERATOR STRING paramlist
 		throw runtime_error("Named volume '" + name + "' unknown");
 
 	currentGraphicsState.interiorVolumeName = name;
-	currentGraphicsState.interiorVolumeProps = namedVolumes[name];
+	currentGraphicsState.interiorVolumeProps = std::move(namedVolumes[name]);
 }
 | LIGHTGROUP STRING paramlist
 {
@@ -1109,7 +1146,7 @@ ri_stmt: ACCELERATOR STRING paramlist
 }
 | LIGHTSOURCE STRING paramlist
 {
-	Properties props;
+	luxrays::Properties props;
 	InitProperties(props, CPS, CP);
 
 	// Define light name
@@ -1126,59 +1163,59 @@ ri_stmt: ACCELERATOR STRING paramlist
 		*sceneProps <<
 				Property(prefix + ".type")("sun") <<
 				Property(prefix + ".dir")(props.Get(Property("sundir")(Vector(0.f, 0.f , 1.f))).Get<Vector>()) <<
-				Property(prefix + ".turbidity")(props.Get(Property("turbidity")(2.f)).Get<float>()) <<
-				Property(prefix + ".relsize")(props.Get(Property("relsize")(1.f)).Get<float>()) <<
-				Property(prefix + ".gain")(Spectrum(props.Get(Property("gain")(1.f)).Get<float>())) <<
+				Property(prefix + ".turbidity")(props.Get(Property("turbidity")(2.f)).Get<double>()) <<
+				Property(prefix + ".relsize")(props.Get(Property("relsize")(1.f)).Get<double>()) <<
+				Property(prefix + ".gain")(Spectrum(props.Get(Property("gain")(1.f)).Get<double>())) <<
 				Property(prefix + ".transformation")(currentTransform.m) <<
 				Property(prefix + ".id")(currentGraphicsState.currentLightGroup);
 	} else if (name == "sky") {
 		*sceneProps <<
 				Property(prefix + ".type")("sky") <<
 				Property(prefix + ".dir")(props.Get(Property("sundir")(Vector(0.f, 0.f , 1.f))).Get<Vector>()) <<
-				Property(prefix + ".turbidity")(props.Get(Property("turbidity")(2.f)).Get<float>()) <<
-				Property(prefix + ".gain")(Spectrum(props.Get(Property("gain")(1.f)).Get<float>())) <<
+				Property(prefix + ".turbidity")(props.Get(Property("turbidity")(2.f)).Get<double>()) <<
+				Property(prefix + ".gain")(Spectrum(props.Get(Property("gain")(1.f)).Get<double>())) <<
 				Property(prefix + ".transformation")(currentTransform.m) <<
 				Property(prefix + ".id")(currentGraphicsState.currentLightGroup);
 	} else if (name == "sky2") {
 		*sceneProps <<
 				Property(prefix + ".type")("sky2") <<
 				Property(prefix + ".dir")(props.Get(Property("sundir")(Vector(0.f, 0.f , 1.f))).Get<Vector>()) <<
-				Property(prefix + ".turbidity")(props.Get(Property("turbidity")(2.f)).Get<float>()) <<
-				Property(prefix + ".gain")(Spectrum(props.Get(Property("gain")(1.f)).Get<float>())) <<
+				Property(prefix + ".turbidity")(props.Get(Property("turbidity")(2.f)).Get<double>()) <<
+				Property(prefix + ".gain")(Spectrum(props.Get(Property("gain")(1.f)).Get<double>())) <<
 				Property(prefix + ".transformation")(currentTransform.m) <<
 				Property(prefix + ".id")(currentGraphicsState.currentLightGroup);
 	} else if (name == "sunsky") {
 		*sceneProps <<
 				Property(prefix + "_SUN.type")("sun") <<
 				Property(prefix + "_SUN.dir")(props.Get(Property("sundir")(Vector(0.f, 0.f , 1.f))).Get<Vector>()) <<
-				Property(prefix + "_SUN.turbidity")(props.Get(Property("turbidity")(2.f)).Get<float>()) <<
-				Property(prefix + "_SUN.relsize")(props.Get(Property("relsize")(1.f)).Get<float>()) <<
-				Property(prefix + "_SUN.gain")(Spectrum(props.Get(Property("gain")(1.f)).Get<float>())) <<
+				Property(prefix + "_SUN.turbidity")(props.Get(Property("turbidity")(2.f)).Get<double>()) <<
+				Property(prefix + "_SUN.relsize")(props.Get(Property("relsize")(1.f)).Get<double>()) <<
+				Property(prefix + "_SUN.gain")(Spectrum(props.Get(Property("gain")(1.f)).Get<double>())) <<
 				Property(prefix + "_SUN.transformation")(currentTransform.m) <<
 				Property(prefix + "_SUN.id")(currentGraphicsState.currentLightGroup);
 
 		*sceneProps <<
 				Property(prefix + "_SKY.type")("sky") <<
 				Property(prefix + "_SKY.dir")(props.Get(Property("sundir")(Vector(0.f, 0.f , 1.f))).Get<Vector>()) <<
-				Property(prefix + "_SKY.turbidity")(props.Get(Property("turbidity")(2.f)).Get<float>()) <<
-				Property(prefix + "_SKY.gain")(Spectrum(props.Get(Property("gain")(1.f)).Get<float>())) <<
+				Property(prefix + "_SKY.turbidity")(props.Get(Property("turbidity")(2.f)).Get<double>()) <<
+				Property(prefix + "_SKY.gain")(Spectrum(props.Get(Property("gain")(1.f)).Get<double>())) <<
 				Property(prefix + "_SKY.transformation")(currentTransform.m) <<
 				Property(prefix + "_SKY.id")(currentGraphicsState.currentLightGroup);
 	} else if (name == "sunsky2") {
 		*sceneProps <<
 				Property(prefix + "_SUN2.type")("sun") <<
 				Property(prefix + "_SUN2.dir")(props.Get(Property("sundir")(Vector(0.f, 0.f , 1.f))).Get<Vector>()) <<
-				Property(prefix + "_SUN2.turbidity")(props.Get(Property("turbidity")(2.f)).Get<float>()) <<
-				Property(prefix + "_SUN2.relsize")(props.Get(Property("relsize")(1.f)).Get<float>()) <<
-				Property(prefix + "_SUN2.gain")(Spectrum(props.Get(Property("gain")(1.f)).Get<float>())) <<
+				Property(prefix + "_SUN2.turbidity")(props.Get(Property("turbidity")(2.f)).Get<double>()) <<
+				Property(prefix + "_SUN2.relsize")(props.Get(Property("relsize")(1.f)).Get<double>()) <<
+				Property(prefix + "_SUN2.gain")(Spectrum(props.Get(Property("gain")(1.f)).Get<double>())) <<
 				Property(prefix + "_SUN2.transformation")(currentTransform.m) <<
 				Property(prefix + "_SUN2.id")(currentGraphicsState.currentLightGroup);
 
 		*sceneProps <<
 				Property(prefix + "_SKY2.type")("sky2") <<
 				Property(prefix + "_SKY2.dir")(props.Get(Property("sundir")(Vector(0.f, 0.f , 1.f))).Get<Vector>()) <<
-				Property(prefix + "_SKY2.turbidity")(props.Get(Property("turbidity")(2.f)).Get<float>()) <<
-				Property(prefix + "_SKY2.gain")(Spectrum(props.Get(Property("gain")(1.f)).Get<float>())) <<
+				Property(prefix + "_SKY2.turbidity")(props.Get(Property("turbidity")(2.f)).Get<double>()) <<
+				Property(prefix + "_SKY2.gain")(Spectrum(props.Get(Property("gain")(1.f)).Get<double>())) <<
 				Property(prefix + "_SKY2.transformation")(currentTransform.m) <<
 				Property(prefix + "_SKY2.id")(currentGraphicsState.currentLightGroup);
 	} else if ((name == "infinite") || (name == "infinitesample")) {
@@ -1186,17 +1223,17 @@ ri_stmt: ACCELERATOR STRING paramlist
 		if (props.Get(Property("mapname")("")).Get<string>() == "") {
 			*sceneProps <<
 					Property(prefix + ".type")("constantinfinite") <<
-					Property(prefix + ".gain")(Spectrum(props.Get(Property("gain")(1.f)).Get<float>())) <<
+					Property(prefix + ".gain")(Spectrum(props.Get(Property("gain")(1.f)).Get<double>())) <<
 					Property(prefix + ".color")(props.Get(Property("L")(Spectrum(1.f))).Get<Spectrum>()) <<
 					Property(prefix + ".id")(currentGraphicsState.currentLightGroup);			
 		} else {
-			const float gain = props.Get(Property("gain")(1.f)).Get<float>();
+			const float gain = props.Get(Property("gain")(1.f)).Get<double>();
 			const Spectrum L = props.Get(Property("L")(Spectrum(1.f))).Get<Spectrum>();
 			const Spectrum combinedGain = gain * L;
 			*sceneProps <<
 					Property(prefix + ".type")("infinite") <<
 					Property(prefix + ".file")(props.Get(Property("mapname")("")).Get<string>()) <<
-					Property(prefix + ".gamma")(props.Get(Property("gamma")(2.2f)).Get<float>()) <<
+					Property(prefix + ".gamma")(props.Get(Property("gamma")(2.2f)).Get<double>()) <<
 					Property(prefix + ".gain")(combinedGain) <<
 					Property(prefix + ".transformation")(currentTransform.m) <<
 					Property(prefix + ".id")(currentGraphicsState.currentLightGroup);
@@ -1220,37 +1257,37 @@ ri_stmt: ACCELERATOR STRING paramlist
 		*sceneProps <<
 				Property(prefix + ".position")(Point(0.f, 0.f, 0.f)) <<
 				Property(prefix + ".color")(props.Get(Property("L")(Spectrum(1.f))).Get<Spectrum>()) <<
-				Property(prefix + ".gain")(Spectrum(props.Get(Property("gain")(1.f)).Get<float>())) <<
-				Property(prefix + ".power")(props.Get(Property("power")(0.f)).Get<float>()) <<
-				Property(prefix + ".efficency")(props.Get(Property("efficency")(0.f)).Get<float>()) <<
+				Property(prefix + ".gain")(Spectrum(props.Get(Property("gain")(1.f)).Get<double>())) <<
+				Property(prefix + ".power")(props.Get(Property("power")(0.f)).Get<double>()) <<
+				Property(prefix + ".efficency")(props.Get(Property("efficency")(0.f)).Get<double>()) <<
 				Property(prefix + ".transformation")((Translate(Vector(from.x, from.y, from.z)) * currentTransform).m) <<
 				Property(prefix + ".id")(currentGraphicsState.currentLightGroup);
 	} else if (name == "spot") {
 		*sceneProps <<
 				Property(prefix + ".type")("spot") <<
-				Property(prefix + ".coneangle")(props.Get(Property("coneangle")(30.f)).Get<float>()) <<
-				Property(prefix + ".conedeltaangle")(props.Get(Property("conedeltaangle")(5.f)).Get<float>()) <<
+				Property(prefix + ".coneangle")(props.Get(Property("coneangle")(30.f)).Get<double>()) <<
+				Property(prefix + ".conedeltaangle")(props.Get(Property("conedeltaangle")(5.f)).Get<double>()) <<
 				Property(prefix + ".position")(props.Get(Property("from")(Point(0.f, 0.f, 0.f))).Get<Point>()) <<
 				Property(prefix + ".target")(props.Get(Property("to")(Point(0.f, 0.f, 1.f))).Get<Point>()) <<
 				Property(prefix + ".color")(props.Get(Property("L")(Spectrum(1.f))).Get<Spectrum>()) <<
-				Property(prefix + ".gain")(Spectrum(props.Get(Property("gain")(1.f)).Get<float>())) <<
-				Property(prefix + ".power")(props.Get(Property("power")(0.f)).Get<float>()) <<
-				Property(prefix + ".efficency")(props.Get(Property("efficency")(0.f)).Get<float>()) <<
+				Property(prefix + ".gain")(Spectrum(props.Get(Property("gain")(1.f)).Get<double>())) <<
+				Property(prefix + ".power")(props.Get(Property("power")(0.f)).Get<double>()) <<
+				Property(prefix + ".efficency")(props.Get(Property("efficency")(0.f)).Get<double>()) <<
 				Property(prefix + ".transformation")(currentTransform.m) <<
 				Property(prefix + ".id")(currentGraphicsState.currentLightGroup);
 	} else if (name == "projection") {
 		*sceneProps <<
 				Property(prefix + ".type")("projection") <<
 				Property(prefix + ".mapfile")(props.Get(Property("mapname")("")).Get<string>()) <<
-				Property(prefix + ".fov")(props.Get(Property("fov")(45.f)).Get<float>()) <<
+				Property(prefix + ".fov")(props.Get(Property("fov")(45.f)).Get<double>()) <<
 				Property(prefix + ".position")(props.Get(Property("from")(Point(0.f, 0.f, 0.f))).Get<Point>()) <<
 				Property(prefix + ".target")(props.Get(Property("to")(Point(0.f, 0.f, 1.f))).Get<Point>()) <<
 				Property(prefix + ".color")(props.Get(Property("L")(Spectrum(1.f))).Get<Spectrum>()) <<
-				Property(prefix + ".gain")(Spectrum(props.Get(Property("gain")(1.f)).Get<float>())) <<
+				Property(prefix + ".gain")(Spectrum(props.Get(Property("gain")(1.f)).Get<double>())) <<
 				Property(prefix + ".transformation")(currentTransform.m) <<
 				Property(prefix + ".id")(currentGraphicsState.currentLightGroup);
 	} else if (name == "distant") {
-		const float theta = props.Get(Property("theta")(0.f)).Get<float>();
+		const float theta = props.Get(Property("theta")(0.f)).Get<double>();
 		if (theta == 0.f) {
 			*sceneProps <<
 					Property(prefix + ".type")("sharpdistant");
@@ -1266,7 +1303,7 @@ ri_stmt: ACCELERATOR STRING paramlist
 		*sceneProps <<
 				Property(prefix + ".direction")(Normalize(to - from)) <<
 				Property(prefix + ".color")(props.Get(Property("L")(Spectrum(1.f))).Get<Spectrum>()) <<
-				Property(prefix + ".gain")(Spectrum(props.Get(Property("gain")(1.f)).Get<float>())) <<
+				Property(prefix + ".gain")(Spectrum(props.Get(Property("gain")(1.f)).Get<double>())) <<
 				Property(prefix + ".transformation")(currentTransform.m) <<
 				Property(prefix + ".id")(currentGraphicsState.currentLightGroup);
 	}
@@ -1276,9 +1313,9 @@ ri_stmt: ACCELERATOR STRING paramlist
 | LOOKAT NUM NUM NUM NUM NUM NUM NUM NUM NUM
 {
 	*sceneProps <<
-			Property("scene.camera.lookat.orig")($2, $3, $4) <<
-			Property("scene.camera.lookat.target")($5, $6, $7) <<
-			Property("scene.camera.up")($8, $9, $10);
+			Property("scene.GetCamera().lookat.orig")($2, $3, $4) <<
+			Property("scene.GetCamera().lookat.target")($5, $6, $7) <<
+			Property("scene.GetCamera().up")($8, $9, $10);
 }
 | MATERIAL STRING paramlist
 {
@@ -1293,10 +1330,10 @@ ri_stmt: ACCELERATOR STRING paramlist
 	if (namedMaterials.count(name))
 		throw runtime_error("Named material '" + name + "' already defined");
 
-	Properties props;
+	luxrays::Properties props;
 	InitProperties(props, CPS, CP);
-	namedMaterials[name] = props;
-	DefineMaterial(name, props, Properties(), "", "");
+	namedMaterials[name] = std::move(props);
+	DefineMaterial(name, props, luxrays::Properties(), "", "");
 
 	FreeArgs();
 }
@@ -1306,13 +1343,13 @@ ri_stmt: ACCELERATOR STRING paramlist
 	if (namedVolumes.count(name))
 		throw runtime_error("Named volume '" + name + "' already defined");
 
-	Properties props;
+	luxrays::Properties props;
 	InitProperties(props, CPS, CP);
 	// The volume type
 	const string type = $3;
 	props << Property("type")(type);
 
-	namedVolumes[name] = props;
+	namedVolumes[name] = std::move(props);
 	DefineVolume(name, props);
 
 	FreeArgs();
@@ -1331,7 +1368,7 @@ ri_stmt: ACCELERATOR STRING paramlist
 		throw runtime_error("Named material '" + name + "' unknown");
 
 	currentGraphicsState.materialName = name;
-	currentGraphicsState.materialProps = namedMaterials[name];
+	currentGraphicsState.materialProps = std::move(namedMaterials[name]);
 }
 | OBJECTBEGIN STRING
 {
@@ -1385,36 +1422,36 @@ ri_stmt: ACCELERATOR STRING paramlist
 }
 | PIXELFILTER STRING paramlist
 {
-	Properties props;
+	luxrays::Properties props;
 	InitProperties(props, CPS, CP);
 
 	const string name($2);
 	if (name == "box") {
 		*renderConfigProps <<
 				Property("film.filter.type")("BOX") <<
-				Property("film.filter.xwidth")(props.Get(Property("xwidth", .5f)).Get<float>() * .5f) <<
-				Property("film.filter.ywidth")(props.Get(Property("ywidth", .5f)).Get<float>() * .5f);
+				Property("film.filter.xwidth")(props.Get(Property("xwidth", .5f)).Get<double>() * .5f) <<
+				Property("film.filter.ywidth")(props.Get(Property("ywidth", .5f)).Get<double>() * .5f);
 	} else if (name == "gaussian") {
 		*renderConfigProps <<
 				Property("film.filter.type")("GAUSSIAN") <<
-				Property("film.filter.xwidth")(props.Get(Property("xwidth", 2.f)).Get<float>() * .5f) <<
-				Property("film.filter.ywidth")(props.Get(Property("ywidth", 2.f)).Get<float>() * .5f) <<
-				Property("film.filter.gaussian.alpha")(props.Get(Property("alpha", 2.f)).Get<float>());
+				Property("film.filter.xwidth")(props.Get(Property("xwidth", 2.f)).Get<double>() * .5f) <<
+				Property("film.filter.ywidth")(props.Get(Property("ywidth", 2.f)).Get<double>() * .5f) <<
+				Property("film.filter.gaussian.alpha")(props.Get(Property("alpha", 2.f)).Get<double>());
 	} else if (name == "mitchell") {
 		const bool supersample = props.Get(Property("supersample")(false)).Get<bool>();
 		const string prefix = supersample ? "mitchell": "mitchellss";
 
 		*renderConfigProps <<
 				Property("film.filter.type")(supersample ? "MITCHELL_SS" : "MITCHELL") <<
-				Property("film.filter.xwidth")(props.Get(Property("xwidth", 2.f)).Get<float>() * .5f) <<
-				Property("film.filter.ywidth")(props.Get(Property("ywidth", 2.f)).Get<float>() * .5f) <<
-				Property("film.filter." + prefix + ".B")(props.Get(Property("B", 1.f / 3.f)).Get<float>()) <<
-				Property("film.filter." + prefix + ".C")(props.Get(Property("C", 1.f / 3.f)).Get<float>());
+				Property("film.filter.xwidth")(props.Get(Property("xwidth", 2.f)).Get<double>() * .5f) <<
+				Property("film.filter.ywidth")(props.Get(Property("ywidth", 2.f)).Get<double>() * .5f) <<
+				Property("film.filter." + prefix + ".B")(props.Get(Property("B", 1.f / 3.f)).Get<double>()) <<
+				Property("film.filter." + prefix + ".C")(props.Get(Property("C", 1.f / 3.f)).Get<double>());
 	} else if (name == "blackmanharris") {
 		*renderConfigProps <<
 				Property("film.filter.type")("BLACKMANHARRIS") <<
-				Property("film.filter.xwidth")(props.Get(Property("xwidth", 4.f)).Get<float>() * .5f) <<
-				Property("film.filter.ywidth")(props.Get(Property("ywidth", 4.f)).Get<float>() * .5f);
+				Property("film.filter.xwidth")(props.Get(Property("xwidth", 4.f)).Get<double>() * .5f) <<
+				Property("film.filter.ywidth")(props.Get(Property("ywidth", 4.f)).Get<double>() * .5f);
 	} else {
 		LC_LOG("LuxCore doesn't support the filter type " + name + ", using BLACKMANHARRIS filter instead");
 		*renderConfigProps <<
@@ -1425,7 +1462,7 @@ ri_stmt: ACCELERATOR STRING paramlist
 }
 | RENDERER STRING paramlist
 {
-	Properties props;
+	luxrays::Properties props;
 	InitProperties(props, CPS, CP);
 
 	// Check the name of the renderer
@@ -1457,7 +1494,7 @@ ri_stmt: ACCELERATOR STRING paramlist
 }
 | SAMPLER STRING paramlist
 {
-	Properties props;
+	luxrays::Properties props;
 	InitProperties(props, CPS, CP);
 
 	const string name($2);
@@ -1465,8 +1502,8 @@ ri_stmt: ACCELERATOR STRING paramlist
 		*renderConfigProps <<
 				Property("sampler.type")("METROPOLIS") <<
 				Property("sampler.metropolis.maxconsecutivereject")(Property("maxconsecrejects")(512).Get<u_int>()) <<
-				Property("sampler.metropolis.largesteprate")(Property("largemutationprob")(.4f).Get<float>()) <<
-				Property("sampler.metropolis.imagemutationrate")(Property("mutationrange")(.1f).Get<float>());
+				Property("sampler.metropolis.largesteprate")(Property("largemutationprob")(.4f).Get<double>()) <<
+				Property("sampler.metropolis.imagemutationrate")(Property("mutationrange")(.1f).Get<double>());
 	} else if ((name == "sobol") || (name == "lowdiscrepancy")) {
 		*renderConfigProps <<
 				Property("sampler.type")("SOBOL");
@@ -1491,7 +1528,7 @@ ri_stmt: ACCELERATOR STRING paramlist
 }
 | SHAPE STRING paramlist
 {
-	Properties props;
+	luxrays::Properties props;
 	InitProperties(props, CPS, CP);
 
 	// Define object name
@@ -1575,7 +1612,7 @@ ri_stmt: ACCELERATOR STRING paramlist
 		if ((pointsProp.GetSize() == 0) || (pointsProp.GetSize() % 3 != 0))
 			throw runtime_error("Wrong trianglemesh/mesh point list length: " + objName);
 		// Copy all vertices
-		Property points = pointsProp.Renamed(prefix + ".vertices");
+		Property points = *pointsProp.Renamed(prefix + ".vertices");
 
 		const string indicesName = (name == "trianglemesh") ? "indices" : "triindices";
 		if (!props.IsDefined(indicesName))
@@ -1584,7 +1621,7 @@ ri_stmt: ACCELERATOR STRING paramlist
 		if ((indicesProp.GetSize() == 0) || (indicesProp.GetSize() % 3 != 0))
 			throw runtime_error("Wrong trianglemesh/mesh indices list length: " + objName);
 		// Copy all indices
-		Property faces = indicesProp.Renamed(prefix + ".faces");
+		Property faces = *indicesProp.Renamed(prefix + ".faces");
 
 		*sceneProps <<
 			points <<
@@ -1597,7 +1634,7 @@ ri_stmt: ACCELERATOR STRING paramlist
 				throw runtime_error("Wrong trianglemesh/mesh normal list length: " + objName);
 			// Copy all normals
 			*sceneProps <<
-					normalsProp.Renamed(prefix + ".normals");
+					*normalsProp.Renamed(prefix + ".normals");
 		}
 
 		if (props.IsDefined("uv")) {
@@ -1607,7 +1644,7 @@ ri_stmt: ACCELERATOR STRING paramlist
 				throw runtime_error("Wrong trianglemesh/mesh uv list length: " + objName);
 			// Copy all uvs
 			*sceneProps <<
-					uvsProps.Renamed(prefix + ".uvs");
+					*uvsProps.Renamed(prefix + ".uvs");
 		}
 	} else {
 		LC_LOG("LuxCore doesn't support the shape type " + name + ", ignoring the shape definition");
@@ -1621,7 +1658,7 @@ ri_stmt: ACCELERATOR STRING paramlist
 }
 | SURFACEINTEGRATOR STRING paramlist
 {
-	Properties props;
+	luxrays::Properties props;
 	InitProperties(props, CPS, CP);
 
 	const string name($2);
@@ -1647,7 +1684,7 @@ ri_stmt: ACCELERATOR STRING paramlist
 }
 | TEXTURE STRING STRING STRING paramlist
 {
-	Properties props;
+	luxrays::Properties props;
 	InitProperties(props, CPS, CP);
 
 	string name = GetLuxCoreValidName($2);
@@ -1664,7 +1701,7 @@ ri_stmt: ACCELERATOR STRING paramlist
 		if (channels == "float") {
 			*sceneProps <<
 				Property(prefix + ".type")("constfloat1") <<
-				Property(prefix + ".value")(props.Get(Property("value")(1.f)).Get<float>());
+				Property(prefix + ".value")(props.Get(Property("value")(1.f)).Get<double>());
 		} else if ((channels == "color") || (channels == "spectrum")) {
 			*sceneProps <<
 				Property(prefix + ".type")("constfloat3") <<
@@ -1682,8 +1719,8 @@ ri_stmt: ACCELERATOR STRING paramlist
 					Property(prefix + ".value")(.1f);
 		}
 	} else if (texType == "imagemap") {
-		const float gamma = props.Get(Property("gamma")(2.2f)).Get<float>();
-		const float gain = props.Get(Property("gain")(1.f)).Get<float>();
+		const float gamma = props.Get(Property("gamma")(2.2f)).Get<double>();
+		const float gain = props.Get(Property("gain")(1.f)).Get<double>();
 		*sceneProps <<
 				Property(prefix + ".type")("imagemap") <<
 				Property(prefix + ".file")(props.Get(Property("filename")("")).Get<string>()) <<
@@ -1691,37 +1728,37 @@ ri_stmt: ACCELERATOR STRING paramlist
 				// LuxRender applies gain before gamma correction
 				Property(prefix + ".gain")(powf(gain, gamma)) <<
 				Property(prefix + ".channel")(props.Get(Property("channel")("default")).Get<string>()) <<
-				GetTextureMapping2D(prefix, props);
+				*GetTextureMapping2D(prefix, props);
 	} else if (texType == "add") {
 		*sceneProps <<
 				Property(prefix + ".type")("add") <<
-				GetTexture(prefix + ".texture1", Property("tex1")(Spectrum(1.f)), props) <<
-				GetTexture(prefix + ".texture2", Property("tex2")(Spectrum(1.f)), props);
+				*GetTexture(prefix + ".texture1", Property("tex1")(Spectrum(1.f)), props) <<
+				*GetTexture(prefix + ".texture2", Property("tex2")(Spectrum(1.f)), props);
 	} else if (texType == "subtract") {
 		*sceneProps <<
 				Property(prefix + ".type")("subtract") <<
-				GetTexture(prefix + ".texture1", Property("tex1")(Spectrum(1.f)), props) <<
-				GetTexture(prefix + ".texture2", Property("tex2")(Spectrum(1.f)), props);
+				*GetTexture(prefix + ".texture1", Property("tex1")(Spectrum(1.f)), props) <<
+				*GetTexture(prefix + ".texture2", Property("tex2")(Spectrum(1.f)), props);
 	} else if (texType == "scale") {
 		*sceneProps <<
 				Property(prefix + ".type")("scale") <<
-				GetTexture(prefix + ".texture1", Property("tex1")(Spectrum(1.f)), props) <<
-				GetTexture(prefix + ".texture2", Property("tex2")(Spectrum(1.f)), props);
+				*GetTexture(prefix + ".texture1", Property("tex1")(Spectrum(1.f)), props) <<
+				*GetTexture(prefix + ".texture2", Property("tex2")(Spectrum(1.f)), props);
 	} else if (texType == "mix") {
 		*sceneProps <<
 				Property(prefix + ".type")("mix") <<
-				GetTexture(prefix + ".amount", Property("amount")(.5f), props) <<
-				GetTexture(prefix + ".texture1", Property("tex1")(Spectrum(0.f)), props) <<
-				GetTexture(prefix + ".texture2", Property("tex2")(Spectrum(1.f)), props);
+				*GetTexture(prefix + ".amount", Property("amount")(.5f), props) <<
+				*GetTexture(prefix + ".texture1", Property("tex1")(Spectrum(0.f)), props) <<
+				*GetTexture(prefix + ".texture2", Property("tex2")(Spectrum(1.f)), props);
 	} else if (texType == "colordepth") {
 		*sceneProps <<
 				Property(prefix + ".type")("colordepth") <<
-				Property(prefix + ".depth")(props.Get(Property("depth")(1.f)).Get<float>()) <<
-				GetTexture(prefix + ".kt", Property("Kt")(Spectrum(0.f)), props);
+				Property(prefix + ".depth")(props.Get(Property("depth")(1.f)).Get<double>()) <<
+				*GetTexture(prefix + ".kt", Property("Kt")(Spectrum(0.f)), props);
 	} else if (texType == "blackbody") {
 		*sceneProps <<
 				Property(prefix + ".type")("blackbody") <<
-				Property(prefix + ".temperature")(props.Get(Property("temperature")(6500.f)).Get<float>());
+				Property(prefix + ".temperature")(props.Get(Property("temperature")(6500.f)).Get<double>());
 	} else if (texType == "irregulardata") {
 		const Property &wl = props.Get(Property("wavelengths"));
 		if (wl.GetSize() < 2)
@@ -1738,8 +1775,8 @@ ri_stmt: ACCELERATOR STRING paramlist
 
 		*sceneProps <<
 				Property(prefix + ".type")("irregulardata") <<
-				wl.Renamed(prefix + ".wavelengths") <<
-				dt.Renamed(prefix + ".data");
+				*wl.Renamed(prefix + ".wavelengths") <<
+				*dt.Renamed(prefix + ".data");
 	} else if (texType == "lampspectrum") {
 		*sceneProps <<
 				Property(prefix + ".type")("lampspectrum") <<
@@ -1747,10 +1784,10 @@ ri_stmt: ACCELERATOR STRING paramlist
 	} else if (texType == "triplanar") {
 		*sceneProps <<
 				Property(prefix + ".type")("triplanar") <<
-				GetTexture(prefix + ".texture1", Property("tex1")(Spectrum(1.f,0.f,0.f)), props) <<
-				GetTexture(prefix + ".texture2", Property("tex2")(Spectrum(0.f,1.f,0.f)), props) <<
-				GetTexture(prefix + ".texture3", Property("tex3")(Spectrum(0.f,0.f,1.f)), props) <<
-				GetTextureMapping3D(prefix, currentTransform, props);
+				*GetTexture(prefix + ".texture1", Property("tex1")(Spectrum(1.f,0.f,0.f)), props) <<
+				*GetTexture(prefix + ".texture2", Property("tex2")(Spectrum(0.f,1.f,0.f)), props) <<
+				*GetTexture(prefix + ".texture3", Property("tex3")(Spectrum(0.f,0.f,1.f)), props) <<
+				*GetTextureMapping3D(prefix, currentTransform, props);
 	} else
 	//--------------------------------------------------------------------------
 	// Procedural textures
@@ -1760,77 +1797,77 @@ ri_stmt: ACCELERATOR STRING paramlist
 
 		*sceneProps <<
 				Property(prefix + ".type")((dimension == 2) ? "checkerboard2d" : "checkerboard3d") <<
-				GetTexture(prefix + ".texture1", Property("tex1")(Spectrum(1.f)), props) <<
-				GetTexture(prefix + ".texture2", Property("tex2")(Spectrum(0.f)), props) <<
+				*GetTexture(prefix + ".texture1", Property("tex1")(Spectrum(1.f)), props) <<
+				*GetTexture(prefix + ".texture2", Property("tex2")(Spectrum(0.f)), props) <<
 				((dimension == 2) ? GetTextureMapping2D(prefix, props) : GetTextureMapping3D(prefix, currentTransform, props));
 	} else if (texType == "fbm") {
 		*sceneProps <<
 				Property(prefix + ".type")("fbm") <<
-				GetTexture(prefix + ".octaves", Property("octaves")(8), props) <<
-				GetTexture(prefix + ".roughness", Property("roughness")(.5f), props) <<
-				GetTextureMapping3D(prefix, currentTransform, props);
+				*GetTexture(prefix + ".octaves", Property("octaves")(8), props) <<
+				*GetTexture(prefix + ".roughness", Property("roughness")(.5f), props) <<
+				*GetTextureMapping3D(prefix, currentTransform, props);
 	} else if (texType == "marble") {
 		*sceneProps <<
 				Property(prefix + ".type")("marble") <<
-				GetTexture(prefix + ".octaves", Property("octaves")(8), props) <<
-				GetTexture(prefix + ".roughness", Property("roughness")(.5f), props) <<
-				GetTexture(prefix + ".scale", Property("scale")(1.f), props) <<
-				GetTexture(prefix + ".variation", Property("variation")(.2f), props) <<
-				GetTextureMapping3D(prefix, currentTransform, props);
+				*GetTexture(prefix + ".octaves", Property("octaves")(8), props) <<
+				*GetTexture(prefix + ".roughness", Property("roughness")(.5f), props) <<
+				*GetTexture(prefix + ".scale", Property("scale")(1.f), props) <<
+				*GetTexture(prefix + ".variation", Property("variation")(.2f), props) <<
+				*GetTextureMapping3D(prefix, currentTransform, props);
 	} else if (texType == "dots") {
 		*sceneProps <<
 				Property(prefix + ".type")("dots") <<
-				GetTexture(prefix + ".inside", Property("inside")(1.f), props) <<
-				GetTexture(prefix + ".outside", Property("outside")(0.f), props) <<
-				GetTextureMapping3D(prefix, currentTransform, props);
+				*GetTexture(prefix + ".inside", Property("inside")(1.f), props) <<
+				*GetTexture(prefix + ".outside", Property("outside")(0.f), props) <<
+				*GetTextureMapping3D(prefix, currentTransform, props);
 	} else if (texType == "brick") {
 		*sceneProps <<
 				Property(prefix + ".type")("brick") <<
-				GetTexture(prefix + ".bricktex", Property("bricktex")(Spectrum(1.f)), props) <<
-				GetTexture(prefix + ".mortartex", Property("mortartex")(Spectrum(.2f)), props) <<
-				GetTexture(prefix + ".brickmodtex", Property("brickmodtex")(Spectrum(1.f)), props) <<
-				Property(prefix + ".brickwidth")(props.Get(Property("brickwidth")(.3f)).Get<float>()) <<
-				Property(prefix + ".brickheight")(props.Get(Property("brickheight")(.1f)).Get<float>()) <<
-				Property(prefix + ".brickdepth")(props.Get(Property("brickdepth")(.15f)).Get<float>()) <<
-				Property(prefix + ".mortarsize")(props.Get(Property("mortarsize")(.01f)).Get<float>()) <<
+				*GetTexture(prefix + ".bricktex", Property("bricktex")(Spectrum(1.f)), props) <<
+				*GetTexture(prefix + ".mortartex", Property("mortartex")(Spectrum(.2f)), props) <<
+				*GetTexture(prefix + ".brickmodtex", Property("brickmodtex")(Spectrum(1.f)), props) <<
+				Property(prefix + ".brickwidth")(props.Get(Property("brickwidth")(.3f)).Get<double>()) <<
+				Property(prefix + ".brickheight")(props.Get(Property("brickheight")(.1f)).Get<double>()) <<
+				Property(prefix + ".brickdepth")(props.Get(Property("brickdepth")(.15f)).Get<double>()) <<
+				Property(prefix + ".mortarsize")(props.Get(Property("mortarsize")(.01f)).Get<double>()) <<
 				Property(prefix + ".brickbond")(props.Get(Property("brickbond")("running")).Get<string>()) <<
-				Property(prefix + ".brickrun")(props.Get(Property("brickrun")(.75f)).Get<float>()) <<
-				Property(prefix + ".brickbevel")(props.Get(Property("brickbevel")(0.f)).Get<float>()) <<
-				GetTexture(prefix + ".brickwidth", Property("brickwidth")(.3f), props) <<
-				GetTextureMapping3D(prefix, currentTransform, props);
+				Property(prefix + ".brickrun")(props.Get(Property("brickrun")(.75f)).Get<double>()) <<
+				Property(prefix + ".brickbevel")(props.Get(Property("brickbevel")(0.f)).Get<double>()) <<
+				*GetTexture(prefix + ".brickwidth", Property("brickwidth")(.3f), props) <<
+				*GetTextureMapping3D(prefix, currentTransform, props);
 	} else if (texType == "windy") {
 		*sceneProps <<
 				Property(prefix + ".type")("windy") <<
-				GetTextureMapping3D(prefix, currentTransform, props);
+				*GetTextureMapping3D(prefix, currentTransform, props);
 	} else if (texType == "wrinkled") {
 		*sceneProps <<
 				Property(prefix + ".type")("wrinkled") <<
-				GetTexture(prefix + ".octaves", Property("octaves")(8), props) <<
-				GetTexture(prefix + ".roughness", Property("roughness")(.5f), props) <<
-				GetTextureMapping3D(prefix, currentTransform, props);
+				*GetTexture(prefix + ".octaves", Property("octaves")(8), props) <<
+				*GetTexture(prefix + ".roughness", Property("roughness")(.5f), props) <<
+				*GetTextureMapping3D(prefix, currentTransform, props);
 	} else if (texType == "uv") {
 		*sceneProps <<
 				Property(prefix + ".type")("uv") <<
-				GetTextureMapping2D(prefix, props);
+				*GetTextureMapping2D(prefix, props);
 	} else if (texType == "band") {
 		*sceneProps <<
 				Property(prefix + ".type")("band") <<
-				GetTexture(prefix + ".amount", Property("amount")(0.f), props);
+				*GetTexture(prefix + ".amount", Property("amount")(0.f), props);
 
 		const Property offsetsProp = props.Get(Property("offsets"));
 		const u_int offsetsSize = offsetsProp.GetSize();
 		for (u_int i = 0; i < offsetsSize; ++i) {
 			*sceneProps <<
-					Property(prefix + ".offset" + ToString(i))(offsetsProp.Get<float>(i));
+					Property(prefix + ".offset" + ToString(i))(offsetsProp.Get<double>(i));
 
 			const Property valueProp = props.Get(Property("value" + ToString(i)));
 			if (valueProp.GetSize() == 1) {
 				*sceneProps <<
-					Property(prefix + ".value" + ToString(i))(valueProp.Get<float>());
+					Property(prefix + ".value" + ToString(i))(valueProp.Get<double>());
 			} else if (valueProp.GetSize() == 3) {
 				*sceneProps <<
-					Property(prefix + ".value" + ToString(i))(Spectrum(valueProp.Get<float>(0),
-						valueProp.Get<float>(1), valueProp.Get<float>(2)));
+					Property(prefix + ".value" + ToString(i))(Spectrum(valueProp.Get<double>(0),
+						valueProp.Get<double>(1), valueProp.Get<double>(2)));
 			} else {
 				LC_LOG("LuxCore supports only Band texture with constant values");
 				
@@ -1841,10 +1878,10 @@ ri_stmt: ACCELERATOR STRING paramlist
 	} else if (texType == "bilerp") {
 		*sceneProps <<
 				Property(prefix + ".type")("bilerp") <<
-				GetTexture(prefix + ".texture00", Property("v00")(0.f), props) <<
-				GetTexture(prefix + ".texture01", Property("v01")(1.f), props) <<
-				GetTexture(prefix + ".texture10", Property("v10")(0.f), props) <<
-				GetTexture(prefix + ".texture11", Property("v11")(1.f), props);
+				*GetTexture(prefix + ".texture00", Property("v00")(0.f), props) <<
+				*GetTexture(prefix + ".texture01", Property("v01")(1.f), props) <<
+				*GetTexture(prefix + ".texture10", Property("v10")(0.f), props) <<
+				*GetTexture(prefix + ".texture11", Property("v11")(1.f), props);
 	}
 	//--------------------------------------------------------------------------
 	// Blender procedural textures
@@ -1853,38 +1890,38 @@ ri_stmt: ACCELERATOR STRING paramlist
 		*sceneProps <<
 				Property(prefix + ".type")("blender_blend") <<
 				Property(prefix + ".progressiontype")(props.Get(Property("progressiontype")("linear")).Get<string>()) <<
-				Property(prefix + ".bright")(props.Get(Property("bright")(1.f)).Get<float>()) <<
-				Property(prefix + ".contrast")(props.Get(Property("contrast")(1.f)).Get<float>()) <<
-				GetTextureMapping3D(prefix, currentTransform, props);
+				Property(prefix + ".bright")(props.Get(Property("bright")(1.f)).Get<double>()) <<
+				Property(prefix + ".contrast")(props.Get(Property("contrast")(1.f)).Get<double>()) <<
+				*GetTextureMapping3D(prefix, currentTransform, props);
 	} else if (texType == "blender_clouds") {
 		*sceneProps <<
 				Property(prefix + ".type")("blender_clouds") <<
 				Property(prefix + ".noisetype")(props.Get(Property("noisetype")("soft_noise")).Get<string>()) <<
 				Property(prefix + ".noisebasis")(props.Get(Property("noisebasis")("blender_original")).Get<string>()) <<
-				Property(prefix + ".noisesize")(props.Get(Property("noisesize")(.25f)).Get<float>()) <<
+				Property(prefix + ".noisesize")(props.Get(Property("noisesize")(.25f)).Get<double>()) <<
 				Property(prefix + ".noisedepth")(props.Get(Property("noisedepth")(2)).Get<int>()) <<
-				Property(prefix + ".bright")(props.Get(Property("bright")(1.f)).Get<float>()) <<
-				Property(prefix + ".contrast")(props.Get(Property("contrast")(1.f)).Get<float>()) <<
-				GetTextureMapping3D(prefix, currentTransform, props);
+				Property(prefix + ".bright")(props.Get(Property("bright")(1.f)).Get<double>()) <<
+				Property(prefix + ".contrast")(props.Get(Property("contrast")(1.f)).Get<double>()) <<
+				*GetTextureMapping3D(prefix, currentTransform, props);
 	} else if (texType == "blender_distortednoise") {
 		*sceneProps <<
 				Property(prefix + ".type")("blender_distortednoise") <<
 				Property(prefix + ".noise_distortion")(props.Get(Property("noise_distortion")("blender_original")).Get<string>()) <<
 				Property(prefix + ".noisebasis")(props.Get(Property("noisebasis")("blender_original")).Get<string>()) <<
-				Property(prefix + ".noisesize")(props.Get(Property("noisesize")(.25f)).Get<float>()) <<
-				Property(prefix + ".distortion")(props.Get(Property("distortion")(1.f)).Get<float>()) <<
-				Property(prefix + ".bright")(props.Get(Property("bright")(1.f)).Get<float>()) <<
-				Property(prefix + ".contrast")(props.Get(Property("contrast")(1.f)).Get<float>()) <<
-				GetTextureMapping3D(prefix, currentTransform, props);
+				Property(prefix + ".noisesize")(props.Get(Property("noisesize")(.25f)).Get<double>()) <<
+				Property(prefix + ".distortion")(props.Get(Property("distortion")(1.f)).Get<double>()) <<
+				Property(prefix + ".bright")(props.Get(Property("bright")(1.f)).Get<double>()) <<
+				Property(prefix + ".contrast")(props.Get(Property("contrast")(1.f)).Get<double>()) <<
+				*GetTextureMapping3D(prefix, currentTransform, props);
 	} else if (texType == "blender_magic") {
 		*sceneProps <<
 				Property(prefix + ".type")("blender_magic") <<
 				Property(prefix + ".noisedepth")(props.Get(Property("noisedepth")(2)).Get<int>()) <<
-				Property(prefix + ".turbulence")(props.Get(Property("turbulence")(5.f)).Get<float>()) <<
-				Property(prefix + ".distortion")(props.Get(Property("distortion")(1.f)).Get<float>()) <<
-				Property(prefix + ".bright")(props.Get(Property("bright")(1.f)).Get<float>()) <<
-				Property(prefix + ".contrast")(props.Get(Property("contrast")(1.f)).Get<float>()) <<
-				GetTextureMapping3D(prefix, currentTransform, props);
+				Property(prefix + ".turbulence")(props.Get(Property("turbulence")(5.f)).Get<double>()) <<
+				Property(prefix + ".distortion")(props.Get(Property("distortion")(1.f)).Get<double>()) <<
+				Property(prefix + ".bright")(props.Get(Property("bright")(1.f)).Get<double>()) <<
+				Property(prefix + ".contrast")(props.Get(Property("contrast")(1.f)).Get<double>()) <<
+				*GetTextureMapping3D(prefix, currentTransform, props);
 	} else if (texType == "blender_marble") {
 		*sceneProps <<
 				Property(prefix + ".type")("blender_marble") <<
@@ -1892,27 +1929,27 @@ ri_stmt: ACCELERATOR STRING paramlist
 				Property(prefix + ".noisebasis")(props.Get(Property("noisebasis")("blender_original")).Get<string>()) <<
 				Property(prefix + ".noisebasis2")(props.Get(Property("noisebasis2")("sin")).Get<string>()) <<
 				Property(prefix + ".noisedepth")(props.Get(Property("noisedepth")(2)).Get<int>()) <<
-				Property(prefix + ".noisesize")(props.Get(Property("noisesize")(.25f)).Get<float>()) <<
+				Property(prefix + ".noisesize")(props.Get(Property("noisesize")(.25f)).Get<double>()) <<
 				Property(prefix + ".noisetype")(props.Get(Property("noisetype")("soft_noise")).Get<string>()) <<
-				Property(prefix + ".turbulence")(props.Get(Property("turbulence")(5.f)).Get<float>()) <<
-				Property(prefix + ".bright")(props.Get(Property("bright")(1.f)).Get<float>()) <<
-				Property(prefix + ".contrast")(props.Get(Property("contrast")(1.f)).Get<float>()) <<
-				GetTextureMapping3D(prefix, currentTransform, props);
+				Property(prefix + ".turbulence")(props.Get(Property("turbulence")(5.f)).Get<double>()) <<
+				Property(prefix + ".bright")(props.Get(Property("bright")(1.f)).Get<double>()) <<
+				Property(prefix + ".contrast")(props.Get(Property("contrast")(1.f)).Get<double>()) <<
+				*GetTextureMapping3D(prefix, currentTransform, props);
 	} else if (texType == "blender_musgrave") {
 		*sceneProps <<
 				Property(prefix + ".type")("blender_musgrave") <<
 				Property(prefix + ".musgravetype")(props.Get(Property("musgravetype")("multifractal")).Get<string>()) <<
 				Property(prefix + ".noisebasis")(props.Get(Property("noisebasis")("blender_original")).Get<string>()) <<
-				Property(prefix + ".dimension")(props.Get(Property("dimension")(1.f)).Get<float>()) <<
-				Property(prefix + ".intensity")(props.Get(Property("intensity")(1.f)).Get<float>()) <<
-				Property(prefix + ".lacunarity")(props.Get(Property("lacunarity")(1.f)).Get<float>()) <<
-				Property(prefix + ".offset")(props.Get(Property("offset")(1.f)).Get<float>()) <<
-				Property(prefix + ".gain")(props.Get(Property("gain")(1.f)).Get<float>()) <<
-				Property(prefix + ".octaves")(props.Get(Property("octaves")(2.f)).Get<float>()) <<
-				Property(prefix + ".noisesize")(props.Get(Property("noisesize")(.25f)).Get<float>()) <<
-				Property(prefix + ".bright")(props.Get(Property("bright")(1.f)).Get<float>()) <<
-				Property(prefix + ".contrast")(props.Get(Property("contrast")(1.f)).Get<float>()) <<
-				GetTextureMapping3D(prefix, currentTransform, props);
+				Property(prefix + ".dimension")(props.Get(Property("dimension")(1.f)).Get<double>()) <<
+				Property(prefix + ".intensity")(props.Get(Property("intensity")(1.f)).Get<double>()) <<
+				Property(prefix + ".lacunarity")(props.Get(Property("lacunarity")(1.f)).Get<double>()) <<
+				Property(prefix + ".offset")(props.Get(Property("offset")(1.f)).Get<double>()) <<
+				Property(prefix + ".gain")(props.Get(Property("gain")(1.f)).Get<double>()) <<
+				Property(prefix + ".octaves")(props.Get(Property("octaves")(2.f)).Get<double>()) <<
+				Property(prefix + ".noisesize")(props.Get(Property("noisesize")(.25f)).Get<double>()) <<
+				Property(prefix + ".bright")(props.Get(Property("bright")(1.f)).Get<double>()) <<
+				Property(prefix + ".contrast")(props.Get(Property("contrast")(1.f)).Get<double>()) <<
+				*GetTextureMapping3D(prefix, currentTransform, props);
 	} else if (texType == "blender_noise") {
 		*sceneProps <<
 				Property(prefix + ".type")("blender_noise") <<
@@ -1923,11 +1960,11 @@ ri_stmt: ACCELERATOR STRING paramlist
 				Property(prefix + ".stuccitype")(props.Get(Property("stuccitype")("plastic")).Get<string>()) <<
 				Property(prefix + ".noisebasis")(props.Get(Property("noisebasis")("blender_original")).Get<string>()) <<
 				Property(prefix + ".noisetype")(props.Get(Property("noisetype")("soft_noise")).Get<string>()) <<
-				Property(prefix + ".noisesize")(props.Get(Property("noisesize")(.25f)).Get<float>()) <<
-				Property(prefix + ".turbulence")(props.Get(Property("turbulence")(5.f)).Get<float>()) <<
-				Property(prefix + ".bright")(props.Get(Property("bright")(1.f)).Get<float>()) <<
-				Property(prefix + ".contrast")(props.Get(Property("contrast")(1.f)).Get<float>()) <<
-				GetTextureMapping3D(prefix, currentTransform, props);
+				Property(prefix + ".noisesize")(props.Get(Property("noisesize")(.25f)).Get<double>()) <<
+				Property(prefix + ".turbulence")(props.Get(Property("turbulence")(5.f)).Get<double>()) <<
+				Property(prefix + ".bright")(props.Get(Property("bright")(1.f)).Get<double>()) <<
+				Property(prefix + ".contrast")(props.Get(Property("contrast")(1.f)).Get<double>()) <<
+				*GetTextureMapping3D(prefix, currentTransform, props);
 	} else if (texType == "blender_wood") {
 		*sceneProps <<
 				Property(prefix + ".type")("blender_wood") <<
@@ -1935,25 +1972,25 @@ ri_stmt: ACCELERATOR STRING paramlist
 				Property(prefix + ".noisebasis")(props.Get(Property("noisebasis")("blender_original")).Get<string>()) <<
 				Property(prefix + ".noisebasis2")(props.Get(Property("noisebasis2")("sin")).Get<string>()) <<
 				Property(prefix + ".noisetype")(props.Get(Property("noisetype")("soft_noise")).Get<string>()) <<
-				Property(prefix + ".noisesize")(props.Get(Property("noisesize")(.25f)).Get<float>()) <<
-				Property(prefix + ".turbulence")(props.Get(Property("turbulence")(5.f)).Get<float>()) <<
-				Property(prefix + ".bright")(props.Get(Property("bright")(1.f)).Get<float>()) <<
-				Property(prefix + ".contrast")(props.Get(Property("contrast")(1.f)).Get<float>()) <<
-				GetTextureMapping3D(prefix, currentTransform, props);
+				Property(prefix + ".noisesize")(props.Get(Property("noisesize")(.25f)).Get<double>()) <<
+				Property(prefix + ".turbulence")(props.Get(Property("turbulence")(5.f)).Get<double>()) <<
+				Property(prefix + ".bright")(props.Get(Property("bright")(1.f)).Get<double>()) <<
+				Property(prefix + ".contrast")(props.Get(Property("contrast")(1.f)).Get<double>()) <<
+				*GetTextureMapping3D(prefix, currentTransform, props);
 	} else if (texType == "blender_voronoi") {
 		*sceneProps <<
 				Property(prefix + ".type")("blender_voronoi") <<
-				Property(prefix + ".intensity")(props.Get(Property("intensity")(1.f)).Get<float>()) <<
-				Property(prefix + ".exponent")(props.Get(Property("exponent")(2.f)).Get<float>()) <<
+				Property(prefix + ".intensity")(props.Get(Property("intensity")(1.f)).Get<double>()) <<
+				Property(prefix + ".exponent")(props.Get(Property("exponent")(2.f)).Get<double>()) <<
 				Property(prefix + ".distmetric")(props.Get(Property("distmetric")("actual_distance")).Get<string>()) <<
-				Property(prefix + ".w1")(props.Get(Property("w1")(1.f)).Get<float>()) <<
-				Property(prefix + ".w2")(props.Get(Property("w2")(0.f)).Get<float>()) <<
-				Property(prefix + ".w3")(props.Get(Property("w3")(0.f)).Get<float>()) <<
-				Property(prefix + ".w4")(props.Get(Property("w4")(0.f)).Get<float>()) <<
-				Property(prefix + ".noisesize")(props.Get(Property("noisesize")(.25f)).Get<float>()) <<
-				Property(prefix + ".bright")(props.Get(Property("bright")(1.f)).Get<float>()) <<
-				Property(prefix + ".contrast")(props.Get(Property("contrast")(1.f)).Get<float>()) <<
-				GetTextureMapping3D(prefix, currentTransform, props);
+				Property(prefix + ".w1")(props.Get(Property("w1")(1.f)).Get<double>()) <<
+				Property(prefix + ".w2")(props.Get(Property("w2")(0.f)).Get<double>()) <<
+				Property(prefix + ".w3")(props.Get(Property("w3")(0.f)).Get<double>()) <<
+				Property(prefix + ".w4")(props.Get(Property("w4")(0.f)).Get<double>()) <<
+				Property(prefix + ".noisesize")(props.Get(Property("noisesize")(.25f)).Get<double>()) <<
+				Property(prefix + ".bright")(props.Get(Property("bright")(1.f)).Get<double>()) <<
+				Property(prefix + ".contrast")(props.Get(Property("contrast")(1.f)).Get<double>()) <<
+				*GetTextureMapping3D(prefix, currentTransform, props);
 	}
 	//--------------------------------------------------------------------------
 	else if (texType == "hitpointcolor") {
@@ -1997,24 +2034,24 @@ ri_stmt: ACCELERATOR STRING paramlist
 				Property(prefix + ".type")("fresnelluxpop") <<
 				Property(prefix + ".file")(props.Get(Property("filename")("")).Get<string>());
 	} else if (texType == "cauchy") {
-		const float index = props.Get(Property("index")(-1.f)).Get<float>();
-		const float b = props.Get(Property("cauchyb")(0.f)).Get<float>();
+		const float index = props.Get(Property("index")(-1.f)).Get<double>();
+		const float b = props.Get(Property("cauchyb")(0.f)).Get<double>();
 		*sceneProps <<
 				Property(prefix + ".type")("fresnelcauchy") <<
-				Property(prefix + ".a")(props.Get(Property("cauchya")(index > 0.f ? (index - b * 1e6f / (720.f * 380.f)) : 1.5f)).Get<float>()) <<
+				Property(prefix + ".a")(props.Get(Property("cauchya")(index > 0.f ? (index - b * 1e6f / (720.f * 380.f)) : 1.5f)).Get<double>()) <<
 				Property(prefix + ".b")(b);
 	} else if (texType == "abbe") {
 		const string mode = props.Get(Property("type")("d")).Get<string>();
 		*sceneProps <<
 				Property(prefix + ".type")("fresnelabbe") <<
 				Property(prefix + ".mode")(props.Get(Property("type")("d")).Get<string>()) <<
-				Property(prefix + ".v")(props.Get(Property("V")(64.17f)).Get<float>()) <<
-				Property(prefix + ".n")(props.Get(Property("n")(1.5168f)).Get<float>());
+				Property(prefix + ".v")(props.Get(Property("V")(64.17f)).Get<double>()) <<
+				Property(prefix + ".n")(props.Get(Property("n")(1.5168f)).Get<double>());
 		if (mode == "custom") {
 			*sceneProps <<
-				Property(prefix + ".d")(props.Get(Property("lambda_D")(587.5618f)).Get<float>()) <<
-				Property(prefix + ".f")(props.Get(Property("lambda_F")(486.13f)).Get<float>()) <<
-				Property(prefix + ".c")(props.Get(Property("lambda_C")(656.28f)).Get<float>());
+				Property(prefix + ".d")(props.Get(Property("lambda_D")(587.5618f)).Get<double>()) <<
+				Property(prefix + ".f")(props.Get(Property("lambda_F")(486.13f)).Get<double>()) <<
+				Property(prefix + ".c")(props.Get(Property("lambda_C")(656.28f)).Get<double>());
 		}
 	} else {
 		LC_LOG("LuxCore doesn't support the texture type: " << texType);
@@ -2073,3 +2110,4 @@ ri_stmt: ACCELERATOR STRING paramlist
 {
 };
 %%
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

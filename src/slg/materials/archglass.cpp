@@ -28,15 +28,26 @@ using namespace slg;
 // Architectural glass material
 //------------------------------------------------------------------------------
 
-ArchGlassMaterial::ArchGlassMaterial(const Texture *frontTransp, const Texture *backTransp,
-		const Texture *emitted, const Texture *bump,
-		const Texture *refl, const Texture *trans,
-		const Texture *exteriorIorFact, const Texture *interiorIorFact,
-		const Texture *filmThickness, const Texture *filmIor) :
-			Material(frontTransp, backTransp, emitted, bump),
-			Kr(refl), Kt(trans), exteriorIor(exteriorIorFact), interiorIor(interiorIorFact),
-			filmThickness(filmThickness), filmIor(filmIor) {
-}
+ArchGlassMaterial::ArchGlassMaterial(
+	TextureConstPtr frontTransp,
+	TextureConstPtr backTransp,
+	TextureConstPtr emitted,
+	TextureConstPtr bump,
+	TextureConstPtr refl,
+	TextureConstPtr trans,
+	TextureConstPtr exteriorIorFact,
+	TextureConstPtr interiorIorFact,
+	TextureConstPtr filmThickness,
+	TextureConstPtr filmIor
+) :
+	Material(frontTransp, backTransp, emitted, bump),
+	Kr(refl),
+	Kt(trans),
+	exteriorIor(exteriorIorFact),
+	interiorIor(interiorIorFact),
+	filmThickness(filmThickness),
+	filmIor(filmIor)
+{}
 
 Spectrum ArchGlassMaterial::Evaluate(const HitPoint &hitPoint,
 	const Vector &localLightDir, const Vector &localEyeDir, BSDFEvent *event,
@@ -148,7 +159,7 @@ Spectrum ArchGlassMaterial::Sample(const HitPoint &hitPoint,
 
 		*event = SPECULAR | TRANSMIT;
 		*pdfW = threshold;
-		
+
 		result = trans;
 	} else {
 		// Reflect
@@ -171,10 +182,10 @@ Spectrum ArchGlassMaterial::GetPassThroughTransparency(const HitPoint &hitPoint,
 	const float nc = ExtractExteriorIors(hitPoint, exteriorIor);
 	const float nt = ExtractInteriorIors(hitPoint, interiorIor);
 
-	Vector transLocalSampledDir; 
+	Vector transLocalSampledDir;
 	const Spectrum trans = EvalSpecularTransmission(hitPoint, localFixedDir,
 			kt, nc, nt, &transLocalSampledDir);
-	
+
 	const float localFilmThickness = filmThickness ? filmThickness->GetFloatValue(hitPoint) : 0.f;
 	const float localFilmIor = (localFilmThickness > 0.f && filmIor) ? filmIor->GetFloatValue(hitPoint) : 1.f;
 	Vector reflLocalSampledDir;
@@ -188,11 +199,11 @@ Spectrum ArchGlassMaterial::GetPassThroughTransparency(const HitPoint &hitPoint,
 			const float reflFilter = refl.Filter();
 			const float transFilter = trans.Filter();
 			float threshold = transFilter / (reflFilter + transFilter);
-			
+
 			// A place an upper and lower limit to not under sample
 			// reflection or transmission
 			threshold = Clamp(threshold, .25f, .75f);
-			
+
 			if (passThroughEvent < threshold) {
 				// Transmit
 				return trans / threshold;
@@ -213,7 +224,9 @@ Spectrum ArchGlassMaterial::GetPassThroughTransparency(const HitPoint &hitPoint,
 	}
 }
 
-void ArchGlassMaterial::AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+void ArchGlassMaterial::AddReferencedTextures(
+	std::unordered_set<const Texture *> &referencedTexs
+) const {
 	Material::AddReferencedTextures(referencedTexs);
 
 	Kr->AddReferencedTextures(referencedTexs);
@@ -228,39 +241,36 @@ void ArchGlassMaterial::AddReferencedTextures(boost::unordered_set<const Texture
 		filmIor->AddReferencedTextures(referencedTexs);
 }
 
-void ArchGlassMaterial::UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
+void ArchGlassMaterial::UpdateTextureReferences(
+	TextureConstRef oldTex, TextureRef newTex
+) {
 	Material::UpdateTextureReferences(oldTex, newTex);
 
-	if (Kr == oldTex)
-		Kr = newTex;
-	if (Kt == oldTex)
-		Kt = newTex;
-	if (exteriorIor == oldTex)
-		exteriorIor = newTex;
-	if (interiorIor == oldTex)
-		interiorIor = newTex;
-	if (filmThickness == oldTex)
-		filmThickness = newTex;
-	if (filmIor == oldTex)
-		filmIor = newTex;
+	if (Kr == &oldTex) Kr = &newTex;
+	if (Kt == &oldTex) Kt = &newTex;
+	if (exteriorIor == &oldTex) exteriorIor = &newTex;
+	if (interiorIor == &oldTex) interiorIor = &newTex;
+	if (filmThickness == &oldTex) filmThickness = &newTex;
+	if (filmIor == &oldTex) filmIor = &newTex;
 }
 
-Properties ArchGlassMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
-	Properties props;
+PropertiesUPtr ArchGlassMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.materials." + name + ".type")("archglass"));
-	props.Set(Property("scene.materials." + name + ".kr")(Kr->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".kt")(Kt->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".type")("archglass"));
+	props->Set(Property("scene.materials." + name + ".kr")(Kr->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".kt")(Kt->GetSDLValue()));
 	if (exteriorIor)
-		props.Set(Property("scene.materials." + name + ".exteriorior")(exteriorIor->GetSDLValue()));
+		props->Set(Property("scene.materials." + name + ".exteriorior")(exteriorIor->GetSDLValue()));
 	if (interiorIor)
-		props.Set(Property("scene.materials." + name + ".interiorior")(interiorIor->GetSDLValue()));
+		props->Set(Property("scene.materials." + name + ".interiorior")(interiorIor->GetSDLValue()));
 	if (filmThickness)
-		props.Set(Property("scene.materials." + name + ".filmthickness")(filmThickness->GetSDLValue()));
+		props->Set(Property("scene.materials." + name + ".filmthickness")(filmThickness->GetSDLValue()));
 	if (filmIor)
-		props.Set(Property("scene.materials." + name + ".filmior")(filmIor->GetSDLValue()));
-	props.Set(Material::ToProperties(imgMapCache, useRealFileName));
+		props->Set(Property("scene.materials." + name + ".filmior")(filmIor->GetSDLValue()));
+	props->Set(Material::ToProperties(imgMapCache, useRealFileName));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

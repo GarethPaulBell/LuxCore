@@ -21,23 +21,24 @@
 
 #include <string>
 
+#include "luxrays/usings.h"
 #include "slg/shapes/shape.h"
 
 namespace slg {
 
 class HarlequinShape : public Shape {
 public:
-	HarlequinShape(luxrays::ExtTriangleMesh *srcMesh);
+	HarlequinShape(luxrays::ExtTriangleMeshRef srcMesh);
 	virtual ~HarlequinShape();
 
-	virtual ShapeType GetType() const { return HARLEQUIN; }
+	virtual ShapeType GetType() const override { return HARLEQUIN; }
 
 protected:
-	virtual luxrays::ExtTriangleMesh *RefineImpl(const Scene *scene);
+	virtual luxrays::ExtTriangleMeshUPtr RefineImpl(SceneConstRef scene) override;
 
-	luxrays::ExtTriangleMesh *mesh;
 };
 
 }
 
 #endif	/* _SLG_HARLEQUINSHAPE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

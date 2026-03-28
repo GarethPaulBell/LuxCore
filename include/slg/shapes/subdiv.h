@@ -21,30 +21,41 @@
 
 #include <string>
 
+#include "slg/usings.h"
 #include "slg/shapes/shape.h"
 
 namespace slg {
 
-class Camera;
-
 class SubdivShape : public Shape {
 public:
-	SubdivShape(const Camera *camera, luxrays::ExtTriangleMesh *srcMesh,
-			const u_int maxLevel, const float maxEdgeScreenSize);
+	SubdivShape(
+		CameraConstPtr camera,
+		luxrays::ExtTriangleMeshRef srcMesh,
+		const u_int maxLevel,
+		const float maxEdgeScreenSize,
+		const bool enhanced,
+		const float sharpnessThresholdRadians,
+		const float creaseWeight
+	);
 	virtual ~SubdivShape();
 
-	virtual ShapeType GetType() const { return SUBDIV; }
+	virtual ShapeType GetType() const override { return SUBDIV; }
 
-	static float MaxEdgeScreenSize(const Camera *camera, luxrays::ExtTriangleMesh *srcMesh);
-	static luxrays::ExtTriangleMesh *ApplySubdiv(luxrays::ExtTriangleMesh *srcMesh,
-			const u_int maxLevel);
+	static float MaxEdgeScreenSize(CameraConstRef camera, luxrays::ExtTriangleMeshRef srcMesh);
+	static luxrays::ExtTriangleMeshUPtr ApplySubdiv(
+		luxrays::ExtTriangleMeshRef srcMesh,
+		const u_int maxLevel,
+		const bool enhanced,
+		const float sharpnessThresholdRadians,
+		const float creaseWeight
+	);
 
 protected:
-	virtual luxrays::ExtTriangleMesh *RefineImpl(const Scene *scene);
+	virtual luxrays::ExtTriangleMeshUPtr RefineImpl(SceneConstRef scene) override;
 
-	luxrays::ExtTriangleMesh *mesh;
 };
 
 }
 
 #endif	/* _SLG_SUBDIVSHAPE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

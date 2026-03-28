@@ -29,8 +29,9 @@ namespace slg {
 // Fresnel Sopra texture
 //------------------------------------------------------------------------------
 
-extern FresnelTexture *AllocFresnelSopraTex(const luxrays::Properties &props, const std::string &propName);
+extern std::unique_ptr<FresnelTexture> AllocFresnelSopraTex(const luxrays::Properties &props, const std::string &propName);
 
 }
 
 #endif	/* _SLG_FRESNELSOPRATEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

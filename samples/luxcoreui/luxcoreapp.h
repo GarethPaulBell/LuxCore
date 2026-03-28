@@ -43,20 +43,29 @@
 
 #define LA_ARRAYSIZE(_ARR)	((int)(sizeof(_ARR) / sizeof(*_ARR)))
 
+using luxcore::RenderConfigRPtr;
+using luxcore::RenderSessionRPtr;
+
+
 class LuxCoreApp {
 public:
-	LuxCoreApp(luxcore::RenderConfig *renderConfig);
+	LuxCoreApp(RenderConfigRPtr & renderConfig);
 	~LuxCoreApp();
 
-	void RunApp(luxcore::RenderState *startState = NULL, luxcore::Film *startFilm = NULL);
+	void RunApp(
+            std::shared_ptr<luxcore::RenderState> startState = nullptr,
+            const std::unique_ptr<luxcore::Film> & startFilm = nullptr
+          );
 
 	bool isGPURenderingAvailable() const { return isOpenCLAvailable || isCUDAAvailable; }
+
+	void SetRefreshInterval(int interval);
 
 	static void LogHandler(const char *msg);
 	static void ColoredLabelText(const ImVec4 &col, const char *label, const char *fmt, ...);
 	static void ColoredLabelText(const char *label, const char *fmt, ...);
 	static void HelpMarker(const char *desc);
-	
+
 	static ImVec4 colLabel;
 
 	// Mouse "grab" mode. This is the natural way cameras are usually manipulated
@@ -98,8 +107,8 @@ private:
 	void DrawBackgroundLogo();
 	void UpdateMoveStep();
 	void SetRenderingEngineType(const std::string &engineType);
-	void RenderConfigParse(const luxrays::Properties &samplerProps);
-	void RenderSessionParse(const luxrays::Properties &samplerProps);
+	void RenderConfigParse(const std::unique_ptr<luxrays::Properties> & samplerProps);
+	void RenderSessionParse(const std::unique_ptr<luxrays::Properties> & samplerProps);
 	void AdjustFilmResolutionToWindowSize(unsigned int *filmWidth, unsigned int *filmHeight);
 	void SetFilmResolution(const unsigned int filmWidth, const unsigned int filmHeight);
 	void IncScreenRefreshInterval();
@@ -107,7 +116,10 @@ private:
 	void CloseAllRenderConfigEditors();
 
 	void LoadRenderConfig(const std::string &configFileName, const std::string &configFilePath);
-	void StartRendering(luxcore::RenderState *startState = NULL, luxcore::Film *startFilm = NULL);
+	void StartRendering(
+            std::shared_ptr<luxcore::RenderState> startState = nullptr,
+            const std::unique_ptr<luxcore::Film> & startFilm = nullptr
+        );
 	void DeleteRendering();
 
 	void RefreshRenderingTexture();
@@ -134,7 +146,7 @@ private:
 	void MainMenuBar();
 
 	void BakeAllSceneObjects();
-	
+
 	static LogWindow *currentLogWindow;
 
 	bool isOpenCLAvailable, isCUDAAvailable;
@@ -155,9 +167,9 @@ private:
 	HelpWindow helpWindow;
 	UserImportancePaintWindow userImportancePaintWindow;
 
-	luxcore::RenderConfig *config;
+	RenderConfigRPtr & config;
 
-	luxcore::RenderSession *session;
+	RenderSessionRPtr session;
 
 	GLuint renderFrameBufferTexID;
 	GLenum renderFrameBufferTexMinFilter, renderFrameBufferTexMagFilter;
@@ -165,7 +177,7 @@ private:
 
 	unsigned int renderImageWidth, renderImageHeight;
 	float *renderImageBuffer;
-	
+
 	GLFWwindow *window;
 
 	AppToolType currentTool;
@@ -177,7 +189,7 @@ private:
 
 	// ImGui inputs
 	int menuFilmWidth, menuFilmHeight;
-	
+
 	int targetFilmWidth, targetFilmHeight;
 
 	bool optRealTimeMode;
@@ -208,13 +220,13 @@ template <class T> inline std::string ToString(const T &t) {
 	std::ostringstream ss;
 
 	ss << t;
-	
+
 	return ss.str();
 }
 
 inline std::string ToString(const float t) {
 	std::ostringstream ss;
-	
+
 	ss << std::setprecision(std::numeric_limits<float>::digits10 + 1) << t;
 
 	return ss.str();
@@ -222,3 +234,4 @@ inline std::string ToString(const float t) {
 
 #endif	/* _LUXCOREAPP_H */
 
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

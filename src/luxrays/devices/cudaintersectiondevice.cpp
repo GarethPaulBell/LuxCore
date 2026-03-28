@@ -29,7 +29,7 @@ namespace luxrays {
 //------------------------------------------------------------------------------
 
 CUDAIntersectionDevice::CUDAIntersectionDevice(
-		const Context *context,
+		const Context & context,
 		CUDADeviceDescription *desc,
 		const size_t devIndex) :
 		Device(context, devIndex), CUDADevice(context, desc, devIndex),
@@ -39,7 +39,7 @@ CUDAIntersectionDevice::CUDAIntersectionDevice(
 CUDAIntersectionDevice::~CUDAIntersectionDevice() {
 }
 
-void CUDAIntersectionDevice::SetDataSet(DataSet *newDataSet) {
+void CUDAIntersectionDevice::SetDataSet(DataSetSPtr newDataSet) {
 	IntersectionDevice::SetDataSet(newDataSet);
 
 	if (dataSet) {
@@ -88,3 +88,4 @@ void CUDAIntersectionDevice::EnqueueTraceRayBuffer(HardwareDeviceBuffer *rayBuff
 }
 
 #endif
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

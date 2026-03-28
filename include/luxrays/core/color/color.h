@@ -503,3 +503,4 @@ BOOST_CLASS_IMPLEMENTATION(luxrays::Spectrum, boost::serialization::object_seria
 BOOST_CLASS_EXPORT_KEY(luxrays::Spectrum)
 
 #endif // _LUXRAYS_COLOR_H
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

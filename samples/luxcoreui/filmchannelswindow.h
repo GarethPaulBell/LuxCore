@@ -20,7 +20,6 @@
 #define	_LUXCOREAPP_FILMCHANNELSWINDOW_H
 
 #include <string>
-#include <boost/unordered_map.hpp>
 
 #include <imgui.h>
 
@@ -67,10 +66,10 @@ private:
 	
 	bool HasDenoiser(const u_int index, std::string &denoiserPrefix) const;
 
-	typedef boost::unordered_map<std::string, FilmChannelWindow *> FilmChannelWindowMap;
+	typedef std::unordered_map<std::string, FilmChannelWindow *> FilmChannelWindowMap;
 	FilmChannelWindowMap filmChannelWindows;
 	
-	std::vector<luxrays::Properties> denoiserProps;
+	std::vector<std::unique_ptr<luxrays::Properties>> denoiserProps;
 };
 
 #endif	/* _LUXCOREAPP_FILMCHANNELSWINDOW_H */

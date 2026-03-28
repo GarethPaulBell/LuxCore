@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "luxrays/core/randomgen.h"
+#include "luxrays/usings.h"
 #include "slg/slg.h"
 #include "slg/film/film.h"
 #include "slg/film/filmsamplesplatter.h"
@@ -53,8 +54,11 @@ public:
 
 	virtual void Reset() = 0;
 
-	static SamplerSharedData *FromProperties(const luxrays::Properties &cfg,
-			luxrays::RandomGenerator *rndGen, Film *film);
+	static std::unique_ptr<SamplerSharedData> FromProperties(
+		const luxrays::Properties &cfg,
+		const luxrays::RandomGeneratorUPtr & rndGen,
+		FilmPtr film
+	);
 };
 
 //------------------------------------------------------------------------------
@@ -73,11 +77,20 @@ typedef enum {
 
 class Sampler : public luxrays::NamedObject {
 public:
-	Sampler(luxrays::RandomGenerator *rnd, Film *flm,
-			const FilmSampleSplatter *flmSplatter,
-			const bool imgSamplesEnable) : NamedObject("sampler"), 
-			threadIndex(0), rndGen(rnd), film(flm), filmSplatter(flmSplatter),
-			imageSamplesEnable(imgSamplesEnable) { }
+	Sampler(
+		const luxrays::RandomGeneratorUPtr & rnd,
+		FilmPtr flm,
+		const FilmSampleSplatterUPtr& flmSplatter,
+		const bool imgSamplesEnable
+	) :
+		NamedObject("sampler"),
+		threadIndex(0),
+		rndGen(rnd),
+		film(flm),
+		filmSplatter(flmSplatter),
+		imageSamplesEnable(imgSamplesEnable)
+	{}
+
 	virtual ~Sampler() { }
 
 	virtual void SetThreadIndex(const u_int index) { threadIndex = index; }
@@ -91,7 +104,7 @@ public:
 	virtual void NextSample(const std::vector<SampleResult> &sampleResults) = 0;
 
 	// Transform the current object in Properties
-	virtual luxrays::Properties ToProperties() const;
+	virtual luxrays::PropertiesUPtr ToProperties() const;
 
 	//--------------------------------------------------------------------------
 	// Static methods used by SamplerRegistry
@@ -99,38 +112,54 @@ public:
 
 	// Transform the current configuration Properties in a complete list of
 	// object Properties (including all defaults values)
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
 	// Allocate a Object based on the cfg definition
-	static Sampler *FromProperties(const luxrays::Properties &cfg, luxrays::RandomGenerator *rndGen,
-		Film *film, const FilmSampleSplatter *flmSplatter, SamplerSharedData *sharedData);
+	static SamplerUPtr FromProperties(
+		const luxrays::Properties &cfg,
+		const luxrays::RandomGeneratorUPtr & rndGen,
+		FilmPtr film,
+		const FilmSampleSplatterUPtr& flmSplatter,
+		SamplerSharedDataSPtr sharedData
+	);
 	static slg::ocl::Sampler *FromPropertiesOCL(const luxrays::Properties &cfg);
 
-	static void AddRequiredChannels(Film::FilmChannels &channels, const luxrays::Properties &cfg);
+	static void AddRequiredChannels(
+		Film::FilmChannels &channels, const luxrays::Properties &cfg
+	);
 
 	static SamplerType String2SamplerType(const std::string &type);
 	static std::string SamplerType2String(const SamplerType type);
 
-protected:
-	static const luxrays::Properties &GetDefaultProps();
+	FilmRef GetFilm() { return *film; }
+	FilmConstRef GetFilm() const { return *film; }
 
-	
-	void AtomicAddSampleToFilm(const SampleResult &sampleResult, const float weight = 1.f) const {
+protected:
+	static luxrays::PropertiesUPtr GetDefaultProps();
+
+
+	void AtomicAddSampleToFilm(
+		const SampleResult &sampleResult, const float weight = 1.f
+	) const {
 		if (sampleResult.useFilmSplat && filmSplatter)
-			filmSplatter->AtomicSplatSample(*film, sampleResult, weight);
+			filmSplatter->AtomicSplatSample(GetFilm(), sampleResult, weight);
 		else
-			film->AtomicAddSample(sampleResult.pixelX, sampleResult.pixelY, sampleResult, weight);
+			GetFilm().AtomicAddSample(
+				sampleResult.pixelX, sampleResult.pixelY, sampleResult, weight
+			);
 	}
 
-	void AtomicAddSamplesToFilm(const std::vector<SampleResult> &sampleResults, const float weight = 1.f) const {
+	void AtomicAddSamplesToFilm(
+		const std::vector<SampleResult> &sampleResults, const float weight = 1.f
+	) const {
 		for (auto const &sr : sampleResults)
 			AtomicAddSampleToFilm(sr, weight);
 	}
 
 	u_int threadIndex;
-	luxrays::RandomGenerator *rndGen;
-	Film *film;
-	const FilmSampleSplatter *filmSplatter;
-	
+	const luxrays::RandomGeneratorUPtr & rndGen;
+	FilmPtr film;
+	const FilmSampleSplatterUPtr& filmSplatter;
+
 	SampleType sampleType;
 	u_int requestedSamples;
 	// If samples 0 and 1 should be expressed in pixels
@@ -140,3 +169,4 @@ protected:
 }
 
 #endif	/* _SLG_SAMPLER_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

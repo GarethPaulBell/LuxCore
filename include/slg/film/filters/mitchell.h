@@ -48,7 +48,7 @@ public:
 	}
 
 	// Transform the current object in Properties
-	virtual luxrays::Properties ToProperties() const;
+	virtual luxrays::PropertiesUPtr ToProperties() const;
 
 	//--------------------------------------------------------------------------
 	// Static methods used by FilterRegistry
@@ -56,8 +56,8 @@ public:
 
 	static FilterType GetObjectType() { return FILTER_MITCHELL; }
 	static std::string GetObjectTag() { return "MITCHELL"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static Filter *FromProperties(const luxrays::Properties &cfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static FilterUPtr FromProperties(const luxrays::Properties &cfg);
 	static slg::ocl::Filter *FromPropertiesOCL(const luxrays::Properties &cfg);
 
 	float B, C;
@@ -65,7 +65,7 @@ public:
 	friend class boost::serialization::access;
 
 private:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	// Used by serialization
 	MitchellFilter() { }
@@ -97,3 +97,4 @@ BOOST_CLASS_VERSION(slg::MitchellFilter, 2)
 BOOST_CLASS_EXPORT_KEY(slg::MitchellFilter)
 
 #endif	/* _SLG_MITCHELL_FILTER_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

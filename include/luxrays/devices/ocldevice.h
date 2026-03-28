@@ -274,7 +274,7 @@ protected:
 
 class OpenCLDevice : virtual public HardwareDevice {
 public:
-	OpenCLDevice(const Context *context,
+	OpenCLDevice(const Context & context,
 		OpenCLDeviceDescription *desc, const size_t devIndex);
 	virtual ~OpenCLDevice();
 
@@ -334,7 +334,7 @@ protected:
 	cl_context oclContext;
 	cl_command_queue oclQueue;
 
-	luxrays::oclKernelCache *kernelCache;
+	std::unique_ptr<luxrays::oclKernelCache> kernelCache;
 };
 
 }
@@ -342,3 +342,4 @@ protected:
 #endif
 
 #endif	/* _LUXRAYS_OCLDEVICE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

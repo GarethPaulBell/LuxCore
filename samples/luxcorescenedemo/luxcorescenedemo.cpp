@@ -19,8 +19,6 @@
 #include <limits>
 #include <iostream>
 
-#include <boost/thread.hpp>
-#include <boost/filesystem/operations.hpp>
 
 #include <luxcore/luxcore.h>
 
@@ -252,7 +250,7 @@ static void DoRendering(RenderSession *session) {
 	char buf[512];
 	const Properties &stats = session->GetStats();
 	while (!session->HasDone()) {
-		boost::this_thread::sleep(boost::posix_time::millisec(1000));
+		std::this_thread::sleep(boost::posix_time::millisec(1000));
 
 		session->UpdateStats();
 		const double elapsedTime = stats.Get("stats.renderengine.time").Get<double>();
@@ -387,7 +385,7 @@ int main(int argc, char *argv[]) {
 		session->Start();
 
 		DoRendering(session);
-		boost::filesystem::rename("image.png", "image0.png");
+		std::filesystem::rename("image.png", "image0.png");
 
 		//----------------------------------------------------------------------
 		// Edit a texture
@@ -402,7 +400,7 @@ int main(int argc, char *argv[]) {
 
 		// And redo the rendering
 		DoRendering(session);
-		boost::filesystem::rename("image.png", "image1.png");
+		std::filesystem::rename("image.png", "image1.png");
 
 		//----------------------------------------------------------------------
 		// Edit a material
@@ -417,7 +415,7 @@ int main(int argc, char *argv[]) {
 
 		// And redo the rendering
 		DoRendering(session);
-		boost::filesystem::rename("image.png", "image2.png");
+		std::filesystem::rename("image.png", "image2.png");
 
 		//----------------------------------------------------------------------
 		// Edit an object
@@ -444,7 +442,7 @@ int main(int argc, char *argv[]) {
 
 		// And redo the rendering
 		DoRendering(session);
-		boost::filesystem::rename("image.png", "image3.png");
+		std::filesystem::rename("image.png", "image3.png");
 
 		//----------------------------------------------------------------------
 		// Add a strands object
@@ -477,7 +475,7 @@ int main(int argc, char *argv[]) {
 
 		// And redo the rendering
 		DoRendering(session);
-		boost::filesystem::rename("image.png", "image4.png");
+		std::filesystem::rename("image.png", "image4.png");
 
 		//----------------------------------------------------------------------
 		// Add a box with multiple UV sets
@@ -499,7 +497,7 @@ int main(int argc, char *argv[]) {
 
 		// And redo the rendering
 		DoRendering(session);
-		boost::filesystem::rename("image.png", "image5.png");
+		std::filesystem::rename("image.png", "image5.png");
 
 		//----------------------------------------------------------------------
 

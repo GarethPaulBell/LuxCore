@@ -20,10 +20,11 @@
 #include <cassert>
 #include <deque>
 #include <sstream>
-#include <boost/foreach.hpp>
+#include <mutex>
 
 #include "luxrays/core/dataset.h"
 #include "luxrays/core/context.h"
+#include "luxrays/usings.h"
 #include "luxrays/core/trianglemesh.h"
 #include "luxrays/accelerators/bvhaccel.h"
 #include "luxrays/accelerators/mbvhaccel.h"
@@ -35,14 +36,13 @@ using namespace luxrays;
 using namespace std;
 
 static u_int DataSetID = 0;
-static boost::mutex DataSetIDMutex;
+static std::mutex DataSetIDMutex;
 
-DataSet::DataSet(const Context *luxRaysContext) {
+DataSet::DataSet(const Context& luxRaysContext): context(luxRaysContext) {
 	{
-		boost::unique_lock<boost::mutex> lock(DataSetIDMutex);
+		std::unique_lock<std::mutex> lock(DataSetIDMutex);
 		dataSetID = DataSetID++;
 	}
-	context = luxRaysContext;
 
 	totalVertexCount = 0;
 	totalTriangleCount = 0;
@@ -52,29 +52,29 @@ DataSet::DataSet(const Context *luxRaysContext) {
 	hasMotionBlur = false;
 
 	// Configure
-	const Properties &cfg = luxRaysContext->GetConfig();
+	const Properties &cfg = luxRaysContext.GetConfig();
 	accelType = Accelerator::String2AcceleratorType(cfg.Get(Property("accelerator.type")("AUTO")).Get<string>());
 	enableInstanceSupport = cfg.Get(Property("accelerator.instances.enable")(true)).Get<bool>();
 	enableMotionBlurSupport = cfg.Get(Property("accelerator.motionblur.enable")(true)).Get<bool>();
 }
 
 DataSet::~DataSet() {
-	for (boost::unordered_map<AcceleratorType, Accelerator *>::const_iterator it = accels.begin(); it != accels.end(); ++it)
-		delete it->second;
+	for (auto it = accels.begin(); it != accels.end(); ++it)
+		it->second.reset();
 }
 
-TriangleMeshID DataSet::Add(const Mesh *mesh) {
+TriangleMeshID DataSet::Add(MeshConstRef mesh) {
 	assert (!preprocessed);
 
 	const TriangleMeshID id = meshes.size();
-	meshes.push_back(mesh);
+	meshes.push_back(&mesh);
 
-	totalVertexCount += mesh->GetTotalVertexCount();
-	totalTriangleCount += mesh->GetTotalTriangleCount();
+	totalVertexCount += mesh.GetTotalVertexCount();
+	totalTriangleCount += mesh.GetTotalTriangleCount();
 
-	if ((mesh->GetType() == TYPE_TRIANGLE_INSTANCE) || (mesh->GetType() == TYPE_EXT_TRIANGLE_INSTANCE))
+	if ((mesh.GetType() == TYPE_TRIANGLE_INSTANCE) || (mesh.GetType() == TYPE_EXT_TRIANGLE_INSTANCE))
 		hasInstances = true;
-	else if ((mesh->GetType() == TYPE_TRIANGLE_MOTION) || (mesh->GetType() == TYPE_EXT_TRIANGLE_MOTION))
+	else if ((mesh.GetType() == TYPE_TRIANGLE_MOTION) || (mesh.GetType() == TYPE_EXT_TRIANGLE_MOTION))
 		hasMotionBlur = true;
 
 	return id;
@@ -98,22 +98,22 @@ void DataSet::UpdateBBoxes() {
 		// Just initialize with some default value to avoid problems
 		bbox = Union(Union(bbox, Point(-1.f, -1.f, -1.f)), Point(1.f, 1.f, 1.f));
 	} else {
-		BOOST_FOREACH(const Mesh *m, meshes)
+		for(const Mesh * m: meshes)
 			bbox = Union(bbox, m->GetBBox());
 	}
 	bsphere = bbox.BoundingSphere();
 }
 
 bool DataSet::HasAccelerator(const AcceleratorType accelType) const {
-	boost::unordered_map<AcceleratorType, Accelerator *>::const_iterator it = accels.find(accelType);
-	
+	auto it = accels.find(accelType);
+
 	return !(it == accels.end());
 }
 
-const Accelerator *DataSet::GetAccelerator(const AcceleratorType accelType) {
-	boost::unordered_map<AcceleratorType, Accelerator *>::const_iterator it = accels.find(accelType);
+AcceleratorConstSPtr DataSet::GetAccelerator(const AcceleratorType accelType) const {
+	auto it = accels.find(accelType);
 	if (it == accels.end()) {
-		boost::unique_lock<boost::mutex> lock(accelsMutex);
+		std::unique_lock<std::mutex> lock(accelsMutex);
 
 		// Try again under mutex
 		it = accels.find(accelType);
@@ -124,20 +124,20 @@ const Accelerator *DataSet::GetAccelerator(const AcceleratorType accelType) {
 			LR_LOG(context, "Total triangle count: " << totalTriangleCount);
 
 			// Build the Accelerator
-			Accelerator *accel;
+			AcceleratorSPtr accel;
 			switch (accelType) {
 				case ACCEL_BVH:
-					accel = new BVHAccel(context);
+					accel = std::make_shared<BVHAccel>(context);
 					break;
 				case ACCEL_MBVH:
-					accel = new MBVHAccel(context);
+					accel = std::make_shared<MBVHAccel>(context);
 					break;
 				case ACCEL_EMBREE:
-					accel = new EmbreeAccel(context);
+					accel = std::make_shared<EmbreeAccel>(context);
 					break;
 #if !defined(LUXRAYS_DISABLE_CUDA)
 				case ACCEL_OPTIX:
-					accel = new OptixAccel(context);
+					accel = std::make_shared<OptixAccel>(context);
 					break;
 #endif
 				default:
@@ -156,7 +156,7 @@ const Accelerator *DataSet::GetAccelerator(const AcceleratorType accelType) {
 }
 
 bool DataSet::DoesAllAcceleratorsSupportUpdate() const {
-	for (boost::unordered_map<AcceleratorType, Accelerator *>::const_iterator it = accels.begin(); it != accels.end(); ++it) {
+	for (auto it = accels.begin(); it != accels.end(); ++it) {
 		if (!it->second->DoesSupportUpdate())
 			return false;
 	}
@@ -165,12 +165,13 @@ bool DataSet::DoesAllAcceleratorsSupportUpdate() const {
 }
 
 void DataSet::UpdateAccelerators() {
-	for (boost::unordered_map<AcceleratorType, Accelerator *>::const_iterator it = accels.begin(); it != accels.end(); ++it) {
+	for (auto it = accels.begin(); it != accels.end(); ++it) {
 		assert(it->second->DoesSupportUpdate());
 		it->second->Update();
 	}
 }
 
-bool DataSet::IsEqual(const DataSet *dataSet) const {
+bool DataSet::IsEqual(DataSetConstRPtr dataSet) const {
 	return (dataSet != NULL) && (dataSetID == dataSet->dataSetID);
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -25,24 +25,24 @@ using namespace luxrays;
 using namespace slg;
 
 DisneyMaterial::DisneyMaterial(
-	const Texture *frontTransp,
-	const Texture *backTransp,
-	const Texture *emitted,
-	const Texture *bump,
-	const Texture *baseColor,
-	const Texture *subsurface,
-	const Texture *roughness,
-	const Texture *metallic,
-	const Texture *specular,
-	const Texture *specularTint,
-	const Texture *clearcoat,
-	const Texture *clearcoatGloss,
-	const Texture *anisotropic,
-	const Texture *sheen,
-	const Texture *sheenTint,
-	const Texture *filmAmount,
-	const Texture *filmThickness,
-	const Texture *filmIor
+	TextureConstPtr frontTransp,
+	TextureConstPtr backTransp,
+	TextureConstPtr emitted,
+	TextureConstPtr bump,
+	TextureConstPtr baseColor,
+	TextureConstPtr subsurface,
+	TextureConstPtr roughness,
+	TextureConstPtr metallic,
+	TextureConstPtr specular,
+	TextureConstPtr specularTint,
+	TextureConstPtr clearcoat,
+	TextureConstPtr clearcoatGloss,
+	TextureConstPtr anisotropic,
+	TextureConstPtr sheen,
+	TextureConstPtr sheenTint,
+	TextureConstPtr filmAmount,
+	TextureConstPtr filmThickness,
+	TextureConstPtr filmIor
 ) : Material(frontTransp, backTransp, emitted, bump), 
 	BaseColor(baseColor), 
 	Subsurface(subsurface),
@@ -532,60 +532,61 @@ void DisneyMaterial::ComputeRatio(const float metallic, const float clearcoat,
 	ratioClearcoat = clearcoatWeight * norm;
 }
 
-Properties DisneyMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
-	Properties props;
+PropertiesUPtr DisneyMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.materials." + name + ".type")("disney"));
-	props.Set(Property("scene.materials." + name + ".basecolor")(BaseColor->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".subsurface")(Subsurface->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".roughness")(Roughness->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".metallic")(Metallic->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".specular")(Specular->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".speculartint")(SpecularTint->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".clearcoat")(Clearcoat->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".clearcoatgloss")(ClearcoatGloss->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".anisotropic")(Anisotropic->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".sheen")(Sheen->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".sheentint")(SheenTint->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".type")("disney"));
+	props->Set(Property("scene.materials." + name + ".basecolor")(BaseColor->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".subsurface")(Subsurface->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".roughness")(Roughness->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".metallic")(Metallic->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".specular")(Specular->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".speculartint")(SpecularTint->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".clearcoat")(Clearcoat->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".clearcoatgloss")(ClearcoatGloss->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".anisotropic")(Anisotropic->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".sheen")(Sheen->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".sheentint")(SheenTint->GetSDLValue()));
 	if (filmAmount)
-		props.Set(Property("scene.materials." + name + ".filmamount")(filmAmount->GetSDLValue()));
+		props->Set(Property("scene.materials." + name + ".filmamount")(filmAmount->GetSDLValue()));
 	if (filmThickness)
-		props.Set(Property("scene.materials." + name + ".filmthickness")(filmThickness->GetSDLValue()));
+		props->Set(Property("scene.materials." + name + ".filmthickness")(filmThickness->GetSDLValue()));
 	if (filmIor)
-		props.Set(Property("scene.materials." + name + ".filmior")(filmIor->GetSDLValue()));
-	props.Set(Material::ToProperties(imgMapCache, useRealFileName));
+		props->Set(Property("scene.materials." + name + ".filmior")(filmIor->GetSDLValue()));
+	props->Set(Material::ToProperties(imgMapCache, useRealFileName));
 
 	return props;
 }
 
-void DisneyMaterial::UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
+void DisneyMaterial::UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
 	Material::UpdateTextureReferences(oldTex, newTex);
 
 	bool updateGlossiness = false;
-	if (BaseColor == oldTex) BaseColor = newTex;
-	if (Subsurface == oldTex) Subsurface = newTex;
-	if (Roughness == oldTex) {
-		Roughness = newTex;
+
+	if (BaseColor == &oldTex) BaseColor = &newTex;
+	if (Subsurface == &oldTex) Subsurface = &newTex;
+	if (Roughness == &oldTex) {
+		Roughness = &newTex;
 		updateGlossiness = true;
 	}
-	if (Metallic == oldTex) Metallic = newTex;
-	if (Specular == oldTex) Specular = newTex;
-	if (SpecularTint == oldTex) SpecularTint = newTex;
-	if (Clearcoat == oldTex) Clearcoat = newTex;
-	if (ClearcoatGloss == oldTex) ClearcoatGloss = newTex;
-	if (Anisotropic == oldTex) Anisotropic = newTex;
-	if (Sheen == oldTex) Sheen = newTex;
-	if (SheenTint == oldTex) SheenTint = newTex;
-	if (filmAmount == oldTex) filmAmount = newTex;
-	if (filmThickness == oldTex) filmThickness = newTex;
-	if (filmIor == oldTex) filmIor = newTex;
+	if (Metallic == &oldTex) Metallic = &newTex;
+	if (Specular == &oldTex) Specular = &newTex;
+	if (SpecularTint == &oldTex) SpecularTint = &newTex;
+	if (Clearcoat == &oldTex) Clearcoat = &newTex;
+	if (ClearcoatGloss == &oldTex) ClearcoatGloss = &newTex;
+	if (Anisotropic == &oldTex) Anisotropic = &newTex;
+	if (Sheen == &oldTex) Sheen = &newTex;
+	if (SheenTint == &oldTex) SheenTint = &newTex;
+	if (filmAmount == &oldTex) filmAmount = &newTex;
+	if (filmThickness == &oldTex) filmThickness = &newTex;
+	if (filmIor == &oldTex) filmIor = &newTex;
 
 	if (updateGlossiness)
 		UpdateGlossiness();
 }
 
-void DisneyMaterial::AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+void DisneyMaterial::AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 	Material::AddReferencedTextures(referencedTexs);
 
 	BaseColor->AddReferencedTextures(referencedTexs);
@@ -606,3 +607,4 @@ void DisneyMaterial::AddReferencedTextures(boost::unordered_set<const Texture *>
 	if (filmIor)
 		filmIor->AddReferencedTextures(referencedTexs);
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

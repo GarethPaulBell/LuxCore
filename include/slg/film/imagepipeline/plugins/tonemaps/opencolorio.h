@@ -111,3 +111,4 @@ BOOST_CLASS_VERSION(slg::OpenColorIOToneMap, 2)
 BOOST_CLASS_EXPORT_KEY(slg::OpenColorIOToneMap)
 
 #endif	/* _SLG_LINEAR_TONEMAP_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -18,7 +18,6 @@
 
 #include <iostream>
 #include <boost/format.hpp>
-#include <boost/foreach.hpp>
 
 #include "luxcoreapp.h"
 
@@ -39,10 +38,10 @@ void StatsWindow::Draw() {
 	if (ImGui::Begin(windowTitle.c_str(), &opened)) {
 		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.f);
 
-		RenderSession *session = app->session;
-		RenderConfig *config = app->config;
+		const auto& session = app->session;
+		const auto& config = app->config;
 
-		const Properties &stats = session->GetStats();
+		const auto& stats = session->GetStats();
 
 		// GUI information
 		if (ImGui::CollapsingHeader("GUI information", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -56,63 +55,63 @@ void StatsWindow::Draw() {
 
 		// Rendering information
 		if (ImGui::CollapsingHeader("Rendering information", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
-			const string engineType = config->ToProperties().Get("renderengine.type").Get<string>();
+			const string engineType = config->ToProperties()->Get("renderengine.type").Get<string>();
 			LuxCoreApp::ColoredLabelText("Render engine:", "%s", engineType.c_str());
 
 			const string samplerName = ((engineType == "TILEPATHCPU") || (engineType == "TILEPATHOCL") ||
 				(engineType == "RTPATHOCL")) ?
-					"N/A" : config->ToProperties().Get("sampler.type").Get<string>();
+					"N/A" : config->ToProperties()->Get("sampler.type").Get<string>();
 			LuxCoreApp::ColoredLabelText("Sampler:", "%s", samplerName.c_str());
 
-			LuxCoreApp::ColoredLabelText("Rendering time:", "%dsecs", int(stats.Get("stats.renderengine.time").Get<double>()));
+			LuxCoreApp::ColoredLabelText("Rendering time:", "%dsecs", int(stats->Get("stats.renderengine.time").Get<double>()));
 			LuxCoreApp::ColoredLabelText("Film resolution:", "%d x %d", session->GetFilm().GetWidth(), session->GetFilm().GetHeight());
 			int frameBufferWidth, frameBufferHeight;
 			glfwGetFramebufferSize(app->window, &frameBufferWidth, &frameBufferHeight);
 			LuxCoreApp::ColoredLabelText("Screen resolution:", "%d x %d", frameBufferWidth, frameBufferHeight);
-			
+
 #if defined(LUXRAYS_ENABLE_OPENCL)
 			if (engineType == "RTPATHOCL") {
 				static float fps = 0.f;
 				// This is a simple trick to smooth the fps counter
-				const double frameTime = stats.Get("stats.rtpathocl.frame.time").Get<double>();
+				const double frameTime = stats->Get("stats.rtpathocl.frame.time").Get<double>();
 				const double adjustFactor = (frameTime > 0.1) ? 0.25 : .025;
 				fps = Lerp<float>(adjustFactor, fps, (frameTime > 0.0) ? (1.0 / frameTime) : 0.0);
 
 				LuxCoreApp::ColoredLabelText("Screen refresh:", "%d/%dms (%.1ffps)",
 						int((fps > 0.f) ? (1000.0 / fps) : 0.0),
-						config->ToProperties().Get("screen.refresh.interval").Get<unsigned int>(),
+						config->ToProperties()->Get("screen.refresh.interval").Get<unsigned int>(),
 						fps);
 			} else if (engineType == "RTPATHOCL") {
 				static float fps = 0.f;
 				// This is a simple trick to smooth the fps counter
-				const double frameTime = stats.Get("stats.rtpathocl.frame.time").Get<double>();
+				const double frameTime = stats->Get("stats.rtpathocl.frame.time").Get<double>();
 				const double adjustFactor = (frameTime > 0.1) ? 0.25 : .025;
 				fps = Lerp<float>(adjustFactor, fps, (frameTime > 0.0) ? (1.0 / frameTime) : 0.0);
 
 				LuxCoreApp::ColoredLabelText("Screen refresh:", "%d/%dms (%.1ffps)",
 						int((fps > 0.f) ? (1000.0 / fps) : 0.0),
-						config->ToProperties().Get("screen.refresh.interval").Get<unsigned int>(),
+						config->ToProperties()->Get("screen.refresh.interval").Get<unsigned int>(),
 						fps);
 			} else
 #endif
 			{
-				LuxCoreApp::ColoredLabelText("Screen refresh:", "%dms", config->ToProperties().Get("screen.refresh.interval").Get<unsigned int>());
+				LuxCoreApp::ColoredLabelText("Screen refresh:", "%dms", config->ToProperties()->Get("screen.refresh.interval").Get<unsigned int>());
 			}
 			
-			const float convergence = stats.Get("stats.renderengine.convergence").Get<float>();
+			const float convergence = stats->Get("stats.renderengine.convergence").Get<float>();
 			LuxCoreApp::ColoredLabelText("Convergence:", "%f%%", 100.f * convergence);
 		}
 
 		if (ImGui::CollapsingHeader("Intersection devices used", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
 			// Intersection devices
-			const Property &deviceNames = stats.Get("stats.renderengine.devices");
+			const Property &deviceNames = stats->Get("stats.renderengine.devices");
 
 			double minPerf = numeric_limits<double>::infinity();
 			double totalPerf = 0.0;
 			for (unsigned int i = 0; i < deviceNames.GetSize(); ++i) {
 				const string deviceName = deviceNames.Get<string>(i);
 
-				const double perf = stats.Get("stats.renderengine.devices." + deviceName + ".performance.total").Get<double>();
+				const double perf = stats->Get("stats.renderengine.devices." + deviceName + ".performance.total").Get<double>();
 				minPerf = Min(minPerf, perf);
 				totalPerf += perf;
 			}
@@ -121,24 +120,24 @@ void StatsWindow::Draw() {
 				const string deviceName = deviceNames.Get<string>(i);
 
 				LuxCoreApp::ColoredLabelText((deviceName + ":").c_str(), "[Rays/sec %dK (%dK + %dK)][Prf Idx %.2f][Wrkld %.1f%%][Mem %dM/%dM]",
-					int(stats.Get("stats.renderengine.devices." + deviceName + ".performance.total").Get<double>() / 1000.0),
-					int(stats.Get("stats.renderengine.devices." + deviceName + ".performance.serial").Get<double>() / 1000.0),
-					int(stats.Get("stats.renderengine.devices." + deviceName + ".performance.dataparallel").Get<double>() / 1000.0),
-					stats.Get("stats.renderengine.devices." + deviceName + ".performance.total").Get<double>() / minPerf,
-					100.0 * stats.Get("stats.renderengine.devices." + deviceName + ".performance.total").Get<double>() / totalPerf,
-					int(stats.Get("stats.renderengine.devices." + deviceName + ".memory.used").Get<double>() / (1024 * 1024)),
-					int(stats.Get("stats.renderengine.devices." + deviceName + ".memory.total").Get<double>() / (1024 * 1024)));
+					int(stats->Get("stats.renderengine.devices." + deviceName + ".performance.total").Get<double>() / 1000.0),
+					int(stats->Get("stats.renderengine.devices." + deviceName + ".performance.serial").Get<double>() / 1000.0),
+					int(stats->Get("stats.renderengine.devices." + deviceName + ".performance.dataparallel").Get<double>() / 1000.0),
+					stats->Get("stats.renderengine.devices." + deviceName + ".performance.total").Get<double>() / minPerf,
+					100.0 * stats->Get("stats.renderengine.devices." + deviceName + ".performance.total").Get<double>() / totalPerf,
+					int(stats->Get("stats.renderengine.devices." + deviceName + ".memory.used").Get<double>() / (1024 * 1024)),
+					int(stats->Get("stats.renderengine.devices." + deviceName + ".memory.total").Get<double>() / (1024 * 1024)));
 
 			}
 		}
 
 		if (ImGui::CollapsingHeader("Intersection devices available", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
-			const Properties props = GetOpenCLDeviceDescs();
+			const auto& props = *GetOpenCLDeviceDescs();
 			const vector<string>  prefixs = props.GetAllUniqueSubNames("opencl.device");
 
 			// Print device info
 			unsigned int i = 0;
-			BOOST_FOREACH(const string &prefix, prefixs) {
+			for(const string &prefix: prefixs) {
 				if (ImGui::TreeNode(("#" + ToString(i) + " => " + props.Get(prefix + ".name").Get<string>()).c_str())) {
 					LuxCoreApp::ColoredLabelText("Name:", "%s", props.Get(prefix + ".name").Get<string>().c_str());
 					LuxCoreApp::ColoredLabelText("Type:", "%s", props.Get(prefix + ".type").Get<string>().c_str());

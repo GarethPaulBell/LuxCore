@@ -47,7 +47,7 @@ public:
 			// Check the max. number of vertices I can store in a single page
 			size_t maxMemAlloc = device.GetDeviceDesc()->GetMaxMemoryAllocSize();
 
-			const BufferType memTypeFlags = device.GetContext()->GetUseOutOfCoreBuffers() ?
+			const BufferType memTypeFlags = device.GetContext().GetUseOutOfCoreBuffers() ?
 				((BufferType)(BUFFER_TYPE_READ_ONLY | BUFFER_TYPE_OUT_OF_CORE)) :
 				BUFFER_TYPE_READ_ONLY;
 			
@@ -61,7 +61,7 @@ public:
 
 			// Allocate the temporary vertex buffer
 			Point *tmpVerts = new Point[Min<size_t>(totalVertCount, maxVertCount)];
-			deque<const Mesh *>::const_iterator mesh = bvh.meshes.begin();
+			deque<const Mesh * >::const_iterator mesh = bvh.meshes.begin();
 
 			u_int vertsCopied = 0;
 			u_int meshVertIndex = 0;
@@ -244,7 +244,7 @@ public:
 			device.FreeBuffer(&nodeBuffs[i]);
 	}
 
-	virtual void Update(const DataSet *newDataSet) { assert(false); }
+	virtual void Update(DataSetConstSPtr newDataSet) override { assert(false); }
 	virtual void EnqueueTraceRayBuffer(HardwareDeviceBuffer *rayBuff,
 			HardwareDeviceBuffer *rayHitBuff, const unsigned int rayCount);
 
@@ -281,3 +281,4 @@ HardwareIntersectionKernel *BVHAccel::NewHardwareIntersectionKernel(HardwareInte
 }
 
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

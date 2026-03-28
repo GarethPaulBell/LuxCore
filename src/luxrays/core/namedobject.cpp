@@ -38,12 +38,16 @@ NamedObject::NamedObject(const string &nm) : name(nm) {
 }
 
 NamedObject::~NamedObject() {
+#ifndef NDEBUG
+	std::cerr << "Deleting object:" << name << '\n';
+#endif
 }
 
-Properties NamedObject::ToProperties() const {
+PropertiesUPtr NamedObject::ToProperties() const {
 	throw runtime_error("Named object \"" + name + "\" doesn't implement ToProperties() method");
 }
 
 string NamedObject::GetUniqueName(const string &prefix) {
 	return prefix + "-" + ToString(boost::uuids::random_generator()());
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

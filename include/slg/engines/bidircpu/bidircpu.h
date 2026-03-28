@@ -19,6 +19,7 @@
 #ifndef _SLG_BIDIRCPU_H
 #define	_SLG_BIDIRCPU_H
 
+#include "luxrays/utils/thread.h"
 #include "slg/slg.h"
 #include "slg/engines/cpurenderengine.h"
 #include "slg/engines/caches/photongi/photongicache.h"
@@ -72,12 +73,18 @@ protected:
 		return a * a; // Power heuristic
 	}
 
-	virtual boost::thread *AllocRenderThread() { return new boost::thread(&BiDirCPURenderThread::RenderFunc, this); }
+	virtual luxrays::JThreadUPtr AllocRenderThread() {
+		auto t = std::make_unique<luxrays::JThread>(
+			std::bind_front(&BiDirCPURenderThread::RenderFunc, this)
+		);
+		luxrays::SetThreadName(t, "LxBiDirCPU");
+		return std::move(t);
+	}
 
-	void AOVWarmUp(luxrays::RandomGenerator *rndGen);
-	
+	void AOVWarmUp(std::stop_token stop_token, const luxrays::RandomGeneratorUPtr & rndGen);
+
 	SampleResult &AddResult(std::vector<SampleResult> &sampleResults, const bool fromLight) const;
-	void RenderFunc();
+	void RenderFunc(std::stop_token stop_token);
 
 	void DirectLightSampling(const float time,
 		const float u0, const float u1, const float u2,
@@ -85,7 +92,7 @@ protected:
 		const PathVertexVM &eyeVertex, SampleResult &eyeSampleResult) const;
 	void DirectHitLight(const bool finiteLightSource, const PathVertexVM &eyeVertex,
 		SampleResult &eyeSampleResult) const;
-	void DirectHitLight(const LightSource *light, const luxrays::Spectrum &lightRadiance,
+	void DirectHitLight(LightSourceConstRef light, const luxrays::Spectrum &lightRadiance,
 		const float directPdfA, const float emissionPdfW,
 		const PathVertexVM &eyeVertex, luxrays::Spectrum *radiance) const;
 
@@ -97,10 +104,11 @@ protected:
 		const luxrays::Point &lensPoint, std::vector<SampleResult> &sampleResults) const;
 
 	bool TraceLightPath(const float time,
-		Sampler *sampler, const luxrays::Point &lensPoint,
+		const SamplerUPtr& sampler,
+		CameraConstRef camera,
 		std::vector<PathVertexVM> &lightPathVertices,
 		std::vector<SampleResult> &sampleResults) const;
-	bool Bounce(const float time, Sampler *sampler, const u_int sampleOffset,
+	bool Bounce(const float time, const SamplerUPtr& sampler, const u_int sampleOffset,
 		PathVertexVM *pathVertex, luxrays::Ray *nextEventRay) const;
 
 	float misVmWeightFactor; // Weight of vertex merging (used in VC)
@@ -115,13 +123,13 @@ class SobolSamplerSharedData;
 
 class BiDirCPURenderEngine : public CPUNoTileRenderEngine {
 public:
-	BiDirCPURenderEngine(const RenderConfig *cfg);
+	BiDirCPURenderEngine(RenderConfigRef cfg);
 	virtual ~BiDirCPURenderEngine();
 
 	virtual RenderEngineType GetType() const { return GetObjectType(); }
 	virtual std::string GetTag() const { return GetObjectTag(); }
 
-	virtual RenderState *GetRenderState();
+	virtual RenderStateSPtr GetRenderState();
 
 	//--------------------------------------------------------------------------
 	// Static methods used by RenderEngineRegistry
@@ -129,8 +137,8 @@ public:
 
 	static RenderEngineType GetObjectType() { return BIDIRCPU; }
 	static std::string GetObjectTag() { return "BIDIRCPU"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static RenderEngine *FromProperties(const RenderConfig *rcfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static RenderEngine *FromProperties(RenderConfigRef rcfg);
 
 	// Signed because of the delta parameter
 	u_int maxEyePathDepth, maxLightPathDepth;
@@ -155,24 +163,26 @@ public:
 	friend class BiDirCPURenderThread;
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	virtual void InitFilm();
 	virtual void StartLockLess();
 	virtual void StopLockLess();
 
-	FilmSampleSplatter *sampleSplatter;
 	PhotonGICache *photonGICache;
 
 	u_int aovWarmupSPP;
-	SobolSamplerSharedData *aovWarmupSamplerSharedData;
+	// We'll use a shared_ptr for shared data since, by design, the
+	// ownership is shared among several objects...
+	SobolSamplerSharedDataSPtr aovWarmupSamplerSharedData;
 
 private:
-	CPURenderThread *NewRenderThread(const u_int index, luxrays::IntersectionDevice *device) {
-		return new BiDirCPURenderThread(this, index, device);
+	CPURenderThreadUPtr NewRenderThread(const u_int index, luxrays::IntersectionDevice *device) {
+		return std::make_unique<BiDirCPURenderThread>(this, index, device);
 	}
 };
 
 }
 
 #endif	/* _SLG_BIDIRCPU_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

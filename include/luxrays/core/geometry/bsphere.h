@@ -49,3 +49,4 @@ inline std::ostream &operator<<(std::ostream &os, const BSphere &s) {
 }
 
 #endif	/* _LUXRAYS_BSPHERE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -57,9 +57,10 @@ string RandomMappingSeedType2String(const RandomMappingSeedType type) {
 // TextureMapping2D
 //------------------------------------------------------------------------------
 
-Properties TextureMapping2D::ToProperties(const string &name) const {
-	return Properties() <<
-			Property(name + ".uvindex")(dataIndex);
+PropertiesUPtr TextureMapping2D::ToProperties(const string &name) const {
+	PropertiesUPtr props = std::make_unique<Properties>();
+	*props << Property(name + ".uvindex")(dataIndex);
+	return props;
 }
 
 //------------------------------------------------------------------------------
@@ -67,10 +68,10 @@ Properties TextureMapping2D::ToProperties(const string &name) const {
 //------------------------------------------------------------------------------
 
 UVMapping2D::UVMapping2D(const u_int index,
-		const float rot, const float uscale, const float vscale,
+		const float rot, const bool centerrot, const float uscale, const float vscale,
 		const float udelta, const float vdelta) :
 		TextureMapping2D(index),
-		uvRotation(rot), uScale(uscale),
+		uvRotation(rot), centerrotation(centerrot), uScale(uscale),
 		vScale(vscale), uDelta(udelta), vDelta(vdelta),
 		sinTheta(sinf(Radians(-uvRotation))), cosTheta(cosf(Radians(-uvRotation))) {
 }
@@ -78,13 +79,17 @@ UVMapping2D::UVMapping2D(const u_int index,
 UV UVMapping2D::Map(const HitPoint &hitPoint) const {
 	const UV uv = hitPoint.GetUV(dataIndex);
 
+	// Centered rotation
+	const float uOffset = 0.5 * centerrotation*uScale;
+	const float vOffset = 0.5 * centerrotation*vScale;
+
 	// Scale
-	const float uScaled = uv.u * uScale;
-	const float vScaled = uv.v * vScale;
+	const float uScaled = uv.u * uScale - uOffset;
+	const float vScaled = uv.v * vScale - vOffset;
 
 	// Rotate
-	const float uRotated = uScaled * cosTheta - vScaled * sinTheta;
-	const float vRotated = vScaled * cosTheta + uScaled * sinTheta;
+	const float uRotated = uOffset + uScaled * cosTheta - vScaled * sinTheta;
+	const float vRotated = vOffset + vScaled * cosTheta + uScaled * sinTheta;
 
 	// Translate
 	const float uTranslated = uRotated + uDelta;
@@ -103,13 +108,16 @@ UV UVMapping2D::MapDuv(const HitPoint &hitPoint, UV *ds, UV *dt) const {
 	return Map(hitPoint);
 }
 
-Properties UVMapping2D::ToProperties(const string &name) const {
-	return Properties() <<
-			Property(name + ".type")("uvmapping2d") <<
+PropertiesUPtr UVMapping2D::ToProperties(const string &name) const {
+	PropertiesUPtr props = std::make_unique<Properties>();
+	*props <<
+				Property(name + ".type")("uvmapping2d") <<
 			TextureMapping2D::ToProperties(name) <<
 			Property(name + ".rotation")(uvRotation) <<
+			Property(name + ".centerrotation")(centerrotation) <<
 			Property(name + ".uvscale")(uScale, vScale) <<
 			Property(name + ".uvdelta")(uDelta, vDelta);
+	return props;
 }
 
 //------------------------------------------------------------------------------
@@ -196,9 +204,10 @@ UV UVRandomMapping2D::MapDuv(const HitPoint &hitPoint, UV *ds, UV *dt) const {
 	return Map(hitPoint, ds, dt);
 }
 
-Properties UVRandomMapping2D::ToProperties(const string &name) const {
-	return Properties() <<
-			Property(name + ".type")("uvrandommapping2d") <<
+PropertiesUPtr UVRandomMapping2D::ToProperties(const string &name) const {
+	PropertiesUPtr props = std::make_unique<Properties>();
+	*props <<
+				Property(name + ".type")("uvrandommapping2d") <<
 			TextureMapping2D::ToProperties(name) <<
 			Property(name + ".seed.type")(RandomMappingSeedType2String(seedType)) <<
 			Property(name + ".triangleaov.index")(triAOVIndex) <<
@@ -207,6 +216,7 @@ Properties UVRandomMapping2D::ToProperties(const string &name) const {
 			Property(name + ".uvscale")(uScaleMin, uScaleMax, vScaleMin, uScaleMax) <<
 			Property(name + ".uvscale.uniform")(uniformScale) <<
 			Property(name + ".uvdelta")(uDeltaMin, uDeltaMax, vDeltaMin, vDeltaMax);
+	return props;
 }
 
 //------------------------------------------------------------------------------
@@ -221,11 +231,11 @@ Point UVMapping3D::Map(const HitPoint &hitPoint, Normal *shadeN) const {
 	return worldToLocal * Point(uv.u, uv.v, 0.f);
 }
 
-Properties UVMapping3D::ToProperties(const string &name) const {
-	Properties props;
-	props.Set(Property(name + ".type")("uvmapping3d"));
-	props.Set(Property(name + ".index")(dataIndex));
-	props.Set(Property(name + ".transformation")(worldToLocal.m));
+PropertiesUPtr UVMapping3D::ToProperties(const string &name) const {
+	auto props = std::make_unique<Properties>();
+	props->Set(Property(name + ".type")("uvmapping3d"));
+	props->Set(Property(name + ".index")(dataIndex));
+	props->Set(Property(name + ".transformation")(worldToLocal.m));
 
 	return props;
 }
@@ -241,10 +251,10 @@ Point GlobalMapping3D::Map(const HitPoint &hitPoint, Normal *shadeN) const {
 	return worldToLocal * hitPoint.p;
 }
 
-Properties GlobalMapping3D::ToProperties(const string &name) const {
-	Properties props;
-	props.Set(Property(name + ".type")("globalmapping3d"));
-	props.Set(Property(name + ".transformation")(worldToLocal.m));
+PropertiesUPtr GlobalMapping3D::ToProperties(const string &name) const {
+	auto props = std::make_unique<Properties>();
+	props->Set(Property(name + ".type")("globalmapping3d"));
+	props->Set(Property(name + ".transformation")(worldToLocal.m));
 
 	return props;
 }
@@ -262,10 +272,10 @@ Point LocalMapping3D::Map(const HitPoint &hitPoint, Normal *shadeN) const {
 	return w2t * hitPoint.p;
 }
 
-Properties LocalMapping3D::ToProperties(const string &name) const {
-	Properties props;
-	props.Set(Property(name + ".type")("localmapping3d"));
-	props.Set(Property(name + ".transformation")(worldToLocal.m));
+PropertiesUPtr LocalMapping3D::ToProperties(const string &name) const {
+	auto props = std::make_unique<Properties>();
+	props->Set(Property(name + ".type")("localmapping3d"));
+	props->Set(Property(name + ".transformation")(worldToLocal.m));
 
 	return props;
 }
@@ -306,9 +316,6 @@ LocalRandomMapping3D::LocalRandomMapping3D(const luxrays::Transform &w2l, const 
 Point LocalRandomMapping3D::Map(const HitPoint &hitPoint, Normal *shadeN) const {
 	Transform w2t = worldToLocal / hitPoint.localToWorld;
 
-	if (shadeN)
-		*shadeN = Normalize(w2t * hitPoint.shadeN);
-
 	// Select random parameters
 	u_int seed;
 	switch (seedType) {
@@ -340,17 +347,21 @@ Point LocalRandomMapping3D::Map(const HitPoint &hitPoint, Normal *shadeN) const 
 	const float zTranslate = Lerp(rndGen.floatValue(), zTranslateMin, zTranslateMax);
 
 	w2t =
-			Scale(xScale, yScale, zScale) *
-			RotateX(xRotation) * RotateY(yRotation) * RotateZ(zRotation) *
 			Translate(Vector(xTranslate, yTranslate, zTranslate)) *
+			RotateX(xRotation) * RotateY(yRotation) * RotateZ(zRotation) *
+			Scale(xScale, yScale, zScale) *
 			w2t;
+
+	if (shadeN)
+		*shadeN = Normalize(w2t * hitPoint.shadeN);
 
 	return w2t * hitPoint.p;
 }
 
-Properties LocalRandomMapping3D::ToProperties(const string &name) const {
-	return Properties() <<
-			Property(name + ".type")("localrandommapping3d") <<
+PropertiesUPtr LocalRandomMapping3D::ToProperties(const string &name) const {
+	PropertiesUPtr props = std::make_unique<Properties>();
+	*props <<
+				Property(name + ".type")("localrandommapping3d") <<
 			Property(name + ".transformation")(worldToLocal.m) <<
 			Property(name + ".seed.type")(RandomMappingSeedType2String(seedType)) <<
 			Property(name + ".triangleaov.index")(triAOVIndex) <<
@@ -365,4 +376,6 @@ Properties LocalRandomMapping3D::ToProperties(const string &name) const {
 			Property(name + ".xtranslate")(xTranslateMin, xTranslateMax) <<
 			Property(name + ".ytranslate")(yTranslateMin, yTranslateMax) <<
 			Property(name + ".ztranslate")(zTranslateMin, zTranslateMax);
+	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

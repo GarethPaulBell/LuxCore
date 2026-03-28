@@ -29,10 +29,10 @@ namespace slg {
 
 class MarbleTexture : public Texture {
 public:
-	MarbleTexture(const TextureMapping3D *mp, const int octs, const float omg,
+	MarbleTexture(TextureMapping3DUPtr&& mp, const int octs, const float omg,
 			float sc, float var) :
-			mapping(mp), octaves(octs), omega(omg), scale(sc), variation(var) { }
-	virtual ~MarbleTexture() { delete mapping; }
+			mapping(std::move(mp)), octaves(octs), omega(omg), scale(sc), variation(var) { }
+	virtual ~MarbleTexture() {  }
 
 	virtual TextureType GetType() const { return MARBLE; }
 	virtual float GetFloatValue(const HitPoint &hitPoint) const;
@@ -40,16 +40,16 @@ public:
 	virtual float Y() const;
 	virtual float Filter() const;
 
-	const TextureMapping3D *GetTextureMapping() const { return mapping; }
+	TextureMapping3DConstRef GetTextureMapping() const { return *mapping; }
 	int GetOctaves() const { return octaves; }
 	float GetOmega() const { return omega; }
 	float GetScale() const { return scale; }
 	float GetVariation() const { return variation; }
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
-	const TextureMapping3D *mapping;
+	TextureMapping3DUPtr mapping;
 	const int octaves;
 	const float omega, scale, variation;
 };
@@ -57,3 +57,4 @@ private:
 }
 
 #endif	/* _SLG_MARBLETEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

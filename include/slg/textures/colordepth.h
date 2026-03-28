@@ -20,6 +20,7 @@
 #define	_SLG_COLORDEPTHTEX_H
 
 #include "luxrays/utils/utils.h"
+#include "slg/imagemap/imagemap.h"
 #include "slg/textures/texture.h"
 
 namespace slg {
@@ -30,7 +31,7 @@ namespace slg {
 
 class ColorDepthTexture : public Texture {
 public:
-	ColorDepthTexture(const float depth, const Texture *t) :
+	ColorDepthTexture(const float depth, TextureRef t) :
 		d(-luxrays::Max(1e-3f, depth)), kt(t) { }
 	virtual ~ColorDepthTexture() { }
 
@@ -39,31 +40,33 @@ public:
 	virtual luxrays::Spectrum GetSpectrumValue(const HitPoint &hitPoint) const;
 	virtual float Y() const;
 	virtual float Filter() const;
-	
-	virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 		Texture::AddReferencedTextures(referencedTexs);
 
-		kt->AddReferencedTextures(referencedTexs);
+		GetKt().AddReferencedTextures(referencedTexs);
 	}
-	virtual void AddReferencedImageMaps(boost::unordered_set<const ImageMap *> &referencedImgMaps) const {
-		kt->AddReferencedImageMaps(referencedImgMaps);
+	virtual void AddReferencedImageMaps(std::unordered_set<const ImageMap * > &referencedImgMaps) const {
+		GetKt().AddReferencedImageMaps(referencedImgMaps);
 	}
 
-	virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
-		if (kt == oldTex)
+	virtual void UpdateTextureReferences(TextureRef oldTex, TextureRef newTex) {
+		if (&GetKt() == &oldTex)
 			kt = newTex;
+
 	}
 
 	float GetD() const { return d; }
-	const Texture *GetKt() const { return kt; }
+	TextureConstRef GetKt() const { return kt; }
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
 	float d;
-	const Texture *kt;
+	std::reference_wrapper<const Texture> kt;
 };
 
 }
 
 #endif	/* _SLG_COLORDEPTHTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

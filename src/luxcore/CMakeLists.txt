@@ -74,8 +74,8 @@ SOURCE_GROUP(
 
 include_directories(${PROJECT_SOURCE_DIR}/deps/bcd-1.1/include)
 
-add_library(luxcore SHARED ${LUXCORE_SRC})
-add_library(luxcore_static STATIC ${LUXCORE_SRC})
+add_library(luxcore SHARED ${LUXCORE_SRC} "${generated_header_dir}/cfg.h")
+add_library(luxcore_static STATIC ${LUXCORE_SRC} "${generated_header_dir}/cfg.h")
 
 target_link_libraries(luxcore PRIVATE
     slg-core
@@ -86,9 +86,10 @@ target_link_libraries(luxcore PRIVATE
     robin_hood::robin_hood
     boost::boost
     spdlog::spdlog_header_only
-    fmt::fmt
+    openjph::openjph
     openimageio::openimageio
-    embree
+    openjp2
+    embree::embree
     luxparser
 )
 target_link_libraries(luxcore_static PRIVATE
@@ -100,13 +101,11 @@ target_link_libraries(luxcore_static PRIVATE
     robin_hood::robin_hood
     boost::boost
     spdlog::spdlog_header_only
-    fmt::fmt
+    openjph::openjph
     openimageio::openimageio
-    embree
+    embree::embree
     luxparser
 )
-
-
 
 add_definitions(-DCPP_API_EXPORTS ${VISIBILITY_FLAGS}) # for controlling visibility
 link_directories (${SLG_LIB_DIR} ${LuxRays_LIB_DIR})
@@ -118,29 +117,83 @@ message(status ${INSTALL_EXCLUDE_REGEXES})
 install(
     TARGETS luxcore
     RUNTIME_DEPENDENCIES
-    PRE_EXCLUDE_REGEXES "api-ms-" "ext-ms-"
+    PRE_EXCLUDE_REGEXES "api-ms-" "ext-ms-" "clang_rt"
     POST_EXCLUDE_REGEXES ${INSTALL_EXCLUDE_REGEXES}
     DIRECTORIES ${CONAN_RUNTIME_LIB_DIRS}
     COMPONENT luxcore
     FRAMEWORK
       DESTINATION luxcore
     OPTIONAL
+    PERMISSIONS
+      OWNER_WRITE OWNER_READ OWNER_EXECUTE
+      GROUP_READ GROUP_EXECUTE
+      WORLD_READ WORLD_EXECUTE
 )
+
+# Windows: install asan, if required
+IF(DEFINED ENV{LUX_SANITIZE} AND MSVC)
+    include(ImplibUtils)
+    find_library(ASAN_IMPLIB "clang_rt.asan_dynamic-x86_64")
+    implib_to_dll(ASAN_IMPLIB)
+    #set(CMAKE_LIBRARY_PATH "${CMAKE_LIBRARY_PATH};${ASAN_LIBRARY_PATH}")
+    add_library(ASAN SHARED IMPORTED)
+    set_target_properties(ASAN PROPERTIES
+        IMPORTED_LOCATION ${ASAN_LIBRARY}
+        IMPORTED_IMPLIB ${ASAN_IMPLIB}
+    )
+    cmake_path(GET ASAN_LIBRARY STEM LAST_ONLY ASAN_STEM)
+    cmake_path(GET ASAN_LIBRARY PARENT_PATH ASAN_PATH)
+    cmake_path(APPEND ASAN_PDB "${ASAN_PATH}" "${ASAN_STEM}.pdb")
+    MESSAGE(STATUS "Installing ${ASAN_LIBRARY} ${ASAN_STEM}.pdb")
+    install(
+        FILES "${ASAN_LIBRARY}" "${ASAN_PDB}"
+        COMPONENT luxcore
+        DESTINATION bin
+    )
+    #install(
+        #FILES "$<TARGET_PDB_FILE:ASAN>"
+        #COMPONENT luxcore
+        #DESTINATION bin
+    #)
+ENDIF()
+
+# Windows: Install pdb file (if msvc and debug)
+if(MSVC)
+  install(FILES "$<$<CONFIG:Debug>:$<TARGET_PDB_FILE:luxcore>>"
+    COMPONENT luxcore
+    DESTINATION bin
+    OPTIONAL
+  )
+endif()
 
 # Install oidn_denoise_cpu
 if(WIN32)
     install(
-        PROGRAMS "${LUX_OIDN_DENOISE_CPU}"
+        PROGRAMS "${LUX_OIDN_DEVICE_CPU}"
         TYPE BIN
         COMPONENT luxcore
     )
 endif()
 if(LINUX)
     install(
-        PROGRAMS "${LUX_OIDN_DENOISE_CPU}"
+        PROGRAMS "${LUX_OIDN_DEVICE_CPU}"
         TYPE LIB
         COMPONENT luxcore
+        PERMISSIONS
+          OWNER_WRITE OWNER_READ OWNER_EXECUTE
+          GROUP_READ GROUP_EXECUTE
+          WORLD_READ WORLD_EXECUTE
     )
+    ## This step seems necessary for some distros (including Ubuntu...)
+    #install(
+      #PROGRAMS "${LUX_OIDN_CORE}"
+        #TYPE LIB
+        #COMPONENT luxcore
+        #PERMISSIONS
+          #OWNER_WRITE OWNER_READ OWNER_EXECUTE
+          #GROUP_READ GROUP_EXECUTE
+          #WORLD_READ WORLD_EXECUTE
+    #)
 endif()
 # For MacOS, DENOISE_CPU is declared as dep and directly installed by
 # luxcore's runtime_dependencies
@@ -153,6 +206,10 @@ if(WIN32)
       PROGRAMS ${LUX_NVRTC_LIST}
       TYPE BIN
       COMPONENT luxcore
+      PERMISSIONS
+        OWNER_WRITE OWNER_READ OWNER_EXECUTE
+        GROUP_READ GROUP_EXECUTE
+        WORLD_READ WORLD_EXECUTE
   )
 endif()
 if(LINUX)
@@ -161,6 +218,10 @@ if(LINUX)
       PROGRAMS ${LUX_NVRTC_LIST}
       TYPE LIB
       COMPONENT luxcore
+      PERMISSIONS
+        OWNER_WRITE OWNER_READ OWNER_EXECUTE
+        GROUP_READ GROUP_EXECUTE
+        WORLD_READ WORLD_EXECUTE
   )
 endif()
 # No nvrtc for MacOS (no Nvidia card?)

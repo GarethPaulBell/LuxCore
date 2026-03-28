@@ -16,6 +16,7 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include <memory>
 #if !defined(LUXRAYS_DISABLE_OPENCL)
 
 #include <boost/lexical_cast.hpp>
@@ -39,35 +40,32 @@
 using namespace std;
 using namespace luxrays;
 using namespace slg;
+using namespace std::literals::chrono_literals;
 
 //------------------------------------------------------------------------------
 // PathOCLNativeRenderThread
 //------------------------------------------------------------------------------
 
 PathOCLNativeRenderThread::PathOCLNativeRenderThread(const u_int index,
-		NativeIntersectionDevice *device, PathOCLRenderEngine *re) :
-		PathOCLBaseNativeRenderThread(index, device, re) {
-	threadFilm = NULL;
-}
+	NativeIntersectionDevice *device, PathOCLRenderEngine *re) :
+	PathOCLBaseNativeRenderThread(index, device, re)
+{}
 
 PathOCLNativeRenderThread::~PathOCLNativeRenderThread() {
-	delete threadFilm; 
 }
 
 void PathOCLNativeRenderThread::Start() {
 	if (threadIndex == 0) {
-		// Only the first thread allocate a film. It is than used by all
+		// Only the first thread allocate a film. It is then used by all
 		// other threads too.
 		PathOCLRenderEngine *engine = (PathOCLRenderEngine *)renderEngine;
 
-		const u_int filmWidth = engine->film->GetWidth();
-		const u_int filmHeight = engine->film->GetHeight();
-		const u_int *filmSubRegion = engine->film->GetSubRegion();
+		const u_int filmWidth = engine->GetFilm().GetWidth();
+		const u_int filmHeight = engine->GetFilm().GetHeight();
+		const u_int *filmSubRegion = engine->GetFilm().GetSubRegion();
 
-		delete threadFilm;
-
-		threadFilm = new Film(filmWidth, filmHeight, filmSubRegion);
-		threadFilm->CopyDynamicSettings(*(engine->film));
+		threadFilm = Film::Create(filmWidth, filmHeight, filmSubRegion);
+		threadFilm->CopyDynamicSettings(engine->GetFilm());
 		// I'm not removing the pipeline and disabling the film denoiser
 		// in order to support BCD denoiser.
 		threadFilm->SetThreadCount(engine->renderNativeThreads.size());
@@ -86,7 +84,19 @@ void PathOCLNativeRenderThread::StartRenderThread() {
 	PathOCLBaseNativeRenderThread::StartRenderThread();
 }
 
-void PathOCLNativeRenderThread::RenderThreadImpl() {
+FilmPtr PathOCLNativeRenderThread::GetThreadFilmPtr() {
+	PathOCLRenderEngine * engine = static_cast<PathOCLRenderEngine *>(renderEngine);
+	auto * thread0 = static_cast<PathOCLNativeRenderThread *>(
+		engine->renderNativeThreads[0]
+	);
+	return FilmPtr(thread0->threadFilm.get());
+}
+
+FilmRef PathOCLNativeRenderThread::GetThreadFilm() {
+	return *GetThreadFilmPtr();
+}
+
+void PathOCLNativeRenderThread::RenderThreadImpl(std::stop_token stop_token) {
 	//SLG_LOG("[PathOCLRenderEngine::" << threadIndex << "] Rendering thread started");
 
 	//--------------------------------------------------------------------------
@@ -100,18 +110,21 @@ void PathOCLNativeRenderThread::RenderThreadImpl() {
 	SetThreadGroupAffinity(threadIndex);
 
 	// (engine->seedBase + 1) seed is used for sharedRndGen
-	RandomGenerator *rndGen = new RandomGenerator(engine->seedBase + 1 + threadIndex);
+	auto rndGen = std::make_unique<RandomGenerator>(engine->seedBase + 1 + threadIndex);
 
 	// All threads use the film allocated by the first thread
-	Film *film = ((PathOCLNativeRenderThread *)(engine->renderNativeThreads[0]))->threadFilm;
+	FilmPtr film = GetThreadFilmPtr();
+	//FilmRef film = ((PathOCLNativeRenderThread *)(engine->renderNativeThreads[0]))->threadFilm;
 	
 	// Setup the sampler(s)
 
-	Sampler *eyeSampler = nullptr;
-	Sampler *lightSampler = nullptr;
+	SamplerUPtr lightSampler;
 
-	eyeSampler = engine->renderConfig->AllocSampler(rndGen, film,
-			nullptr, engine->eyeSamplerSharedData, Properties());
+	auto eyeSampler = engine->renderConfig.AllocSampler(
+		rndGen, film,
+		engine->GetSampleSplatter(),
+		engine->eyeSamplerSharedData, Properties()
+	);
 	eyeSampler->SetThreadIndex(threadIndex);
 	eyeSampler->RequestSamples(PIXEL_NORMALIZED_ONLY, pathTracer.eyeSampleSize);
 
@@ -135,21 +148,21 @@ void PathOCLNativeRenderThread::RenderThreadImpl() {
 	// Setup PathTracer thread state
 	PathTracerThreadState pathTracerThreadState(intersectionDevice,
 			eyeSampler, lightSampler,
-			engine->renderConfig->scene, film,
+			engine->renderConfig.GetScene(), *film,
 			&varianceClamping);
 
 	//--------------------------------------------------------------------------
 	// Trace paths
 	//--------------------------------------------------------------------------
 
-	for (u_int steps = 0; !boost::this_thread::interruption_requested(); ++steps) {
+	for (u_int steps = 0; !stop_token.stop_requested(); ++steps) {
 		// Check if we are in pause mode
 		if (engine->pauseMode) {
 			// Check every 100ms if I have to continue the rendering
-			while (!boost::this_thread::interruption_requested() && engine->pauseMode)
-				boost::this_thread::sleep(boost::posix_time::millisec(100));
+			while (!stop_token.stop_requested() && engine->pauseMode)
+				std::this_thread::sleep_for(100ms);
 
-			if (boost::this_thread::interruption_requested())
+			if (stop_token.stop_requested())
 				break;
 		}
 
@@ -157,26 +170,20 @@ void PathOCLNativeRenderThread::RenderThreadImpl() {
 
 #ifdef WIN32
 		// Work around Windows bad scheduling
-		renderThread->yield();
+        std::this_thread::yield();
 #endif
 
 		// Check halt conditions
-		if (engine->film->GetConvergence() == 1.f)
+		if (engine->GetFilm().GetConvergence() == 1.f)
 			break;
+                if (stop_token.stop_requested())
+                        break;
 
 		if (engine->photonGICache) {
-			try {
-				engine->photonGICache->Update(engine->renderOCLThreads.size() + threadIndex, engine->GetTotalEyeSPP());
-			} catch (boost::thread_interrupted &ti) {
-				// I have been interrupted, I must stop
-				break;
-			}
+			engine->photonGICache->Update(engine->renderOCLThreads.size() + threadIndex, engine->GetTotalEyeSPP());
 		}
 	}
 
-	delete eyeSampler;
-	delete lightSampler;
-	delete rndGen;
 
 	threadDone = true;
 
@@ -190,3 +197,4 @@ void PathOCLNativeRenderThread::RenderThreadImpl() {
 }
 
 #endif
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

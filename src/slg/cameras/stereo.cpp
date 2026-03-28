@@ -18,6 +18,8 @@
 
 #include "slg/cameras/stereo.h"
 #include "slg/cameras/environment.h"
+#include <algorithm>
+#include <utility>
 
 using namespace std;
 using namespace luxrays;
@@ -29,11 +31,6 @@ StereoCamera::StereoCamera(const StereoCameraType sType,
 		stereoType(sType), leftEye(nullptr), rightEye(nullptr) {
 	horizStereoEyesDistance = .0626f;
 	horizStereoLensDistance = .2779f;
-}
-
-StereoCamera::~StereoCamera() {
-	delete leftEye;
-	delete rightEye;
 }
 
 const Transform &StereoCamera::GetRasterToCamera(const u_int index) const {
@@ -83,14 +80,13 @@ void StereoCamera::Update(const u_int width, const u_int height,
 	switch(stereoType) {
 		case STEREO_PERSPECTIVE: {
 			// Create left eye camera
-			delete leftEye;
-			PerspectiveCamera *left = new PerspectiveCamera(orig - .5f * horizStereoEyesDistance * x, target, up);
+			auto left = std::make_unique<PerspectiveCamera>(orig - .5f * horizStereoEyesDistance * x, target, up);
 			left->clipHither = clipHither;
 			left->clipYon = clipYon;
 			left->shutterOpen = shutterOpen;
 			left->shutterClose = shutterClose;
 			left->autoVolume = autoVolume;
-			left->volume = volume;
+			left->SetVolume(*volume);
 
 			left->clippingPlaneCenter = clippingPlaneCenter;
 			left->clippingPlaneNormal = clippingPlaneNormal;
@@ -105,18 +101,17 @@ void StereoCamera::Update(const u_int width, const u_int height,
 			left->enableOculusRiftBarrel = enableOculusRiftBarrel;
 
 			left->Update(filmWidth / 2, filmHeight, nullptr);
-			leftEye = left;
+			leftEye = std::move(left);
 
 			// Create right eye camera
-			delete rightEye;
-			PerspectiveCamera *right = new PerspectiveCamera(orig + .5f * horizStereoEyesDistance * x, target, up);
+			auto right = std::make_unique<PerspectiveCamera>(orig + .5f * horizStereoEyesDistance * x, target, up);
 
 			right->clipHither = clipHither;
 			right->clipYon = clipYon;
 			right->shutterOpen = shutterOpen;
 			right->shutterClose = shutterClose;
 			right->autoVolume = autoVolume;
-			right->volume = volume;
+			right->SetVolume(*volume);
 
 			right->clippingPlaneCenter = clippingPlaneCenter;
 			right->clippingPlaneNormal = clippingPlaneNormal;
@@ -131,47 +126,43 @@ void StereoCamera::Update(const u_int width, const u_int height,
 			right->enableOculusRiftBarrel = enableOculusRiftBarrel;
 
 			right->Update(filmWidth / 2, filmHeight, nullptr);
-			rightEye = right;
+			rightEye = std::move(right);
 			break;
 		}
 		case STEREO_ENVIRONMENT_180: {
 			// Create left eye camera
-			delete leftEye;
-			EnvironmentCamera *left = new EnvironmentCamera(orig - .5f * horizStereoEyesDistance * x, target, up);
+			auto left = std::make_unique<EnvironmentCamera>(orig - .5f * horizStereoEyesDistance * x, target, up);
 			left->screenOffsetX = -horizStereoLensDistance * .5f;
 			left->degrees = 180.f;
 
 			left->Update(filmWidth / 2, filmHeight, nullptr);
-			leftEye = left;
+			leftEye = std::move(left);
 
 			// Create right eye camera
-			delete rightEye;
-			EnvironmentCamera *right = new EnvironmentCamera(orig + .5f * horizStereoEyesDistance * x, target, up);
+			auto right = std::make_unique<EnvironmentCamera>(orig + .5f * horizStereoEyesDistance * x, target, up);
 			right->screenOffsetX = horizStereoLensDistance * .5f;
 			right->degrees = 180.f;
 
 			right->Update(filmWidth / 2, filmHeight, nullptr);
-			rightEye = right;
+			rightEye = std::move(right);
 			break;
 		}
 		case STEREO_ENVIRONMENT_360: {
 			// Create left eye camera
-			delete leftEye;
-			EnvironmentCamera *left = new EnvironmentCamera(orig - .5f * horizStereoEyesDistance * x, target, up);
+			auto left = std::make_unique<EnvironmentCamera>(orig - .5f * horizStereoEyesDistance * x, target, up);
 			left->screenOffsetX = -horizStereoLensDistance * .5f;
 			left->degrees = 360.f;
 
 			left->Update(filmWidth, filmHeight / 2, nullptr);
-			leftEye = left;
+			leftEye = std::move(left);
 
 			// Create right eye camera
-			delete rightEye;
-			EnvironmentCamera *right = new EnvironmentCamera(orig + .5f * horizStereoEyesDistance * x, target, up);
+			auto right = std::make_unique<EnvironmentCamera>(orig + .5f * horizStereoEyesDistance * x, target, up);
 			right->screenOffsetX = horizStereoLensDistance * .5f;
 			right->degrees = 360.f;
 
 			right->Update(filmWidth, filmHeight / 2, nullptr);
-			rightEye = right;
+			rightEye = std::move(right);
 			break;
 		}
 		default:
@@ -220,27 +211,28 @@ void StereoCamera::GetPDF(const Ray &eyeRay, const float eyeDistance,
 	leftEye->GetPDF(eyeRay, eyeDistance, filmX, filmY, pdfW, fluxToRadianceFactor);
 }
 
-Properties StereoCamera::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
-	Properties props = PerspectiveCamera::ToProperties(imgMapCache, useRealFileName);
+PropertiesUPtr StereoCamera::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+	PropertiesUPtr props = PerspectiveCamera::ToProperties(imgMapCache, useRealFileName);
 
-	props.Set(Property("scene.camera.type")("stereo"));
+	props->Set(Property("scene.camera.type")("stereo"));
 
 	switch(stereoType) {
 		case STEREO_PERSPECTIVE:
-			props.Set(Property("scene.camera.stereo.type")("perspective"));
+			props->Set(Property("scene.camera.stereo.type")("perspective"));
 			break;
 		case STEREO_ENVIRONMENT_180:
-			props.Set(Property("scene.camera.stereo.type")("environment_180"));
+			props->Set(Property("scene.camera.stereo.type")("environment_180"));
 			break;
 		case STEREO_ENVIRONMENT_360:
-			props.Set(Property("scene.camera.stereo.type")("environment_360"));
+			props->Set(Property("scene.camera.stereo.type")("environment_360"));
 			break;
 		default:
 			throw runtime_error("Unknown StereoCamera type in StereoCamera::ToProperties(): " + ToString(stereoType));
 	}
 	
-	props.Set(Property("scene.camera.eyesdistance")(horizStereoEyesDistance));
-	props.Set(Property("scene.camera.lensdistance")(horizStereoLensDistance));
+	props->Set(Property("scene.camera.eyesdistance")(horizStereoEyesDistance));
+	props->Set(Property("scene.camera.lensdistance")(horizStereoLensDistance));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

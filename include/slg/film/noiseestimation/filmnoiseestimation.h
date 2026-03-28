@@ -36,8 +36,13 @@ class Film;
 
 class FilmNoiseEstimation {
 public:
-	FilmNoiseEstimation(const Film *film, const u_int warmup,
-			const u_int testStep, const u_int filterScale, const u_int index);
+	FilmNoiseEstimation(
+		FilmConstRef film,
+		const u_int warmup,
+		const u_int testStep,
+		const u_int filterScale,
+		const u_int index
+	);
 	~FilmNoiseEstimation();
 
 	bool IsTestUpdateRequired() const;
@@ -47,7 +52,9 @@ public:
 
 	u_int todoPixelsCount;
 	float maxDiff;
-	
+
+	FilmConstRef GetFilm() const { return *film; }
+
 	friend class boost::serialization::access;
 
 private:
@@ -61,7 +68,7 @@ private:
 	u_int filterScale;
 	u_int imagePipelineIndex;
 
-	const Film *film;
+	FilmConstPtr film;  // It should be a const ref (but serialization...)
 
 	GenericFrameBuffer<3, 0, float> *referenceImage;
 	std::vector<float> errorVector;
@@ -77,3 +84,4 @@ BOOST_CLASS_VERSION(slg::FilmNoiseEstimation, 2)
 BOOST_CLASS_EXPORT_KEY(slg::FilmNoiseEstimation)
 
 #endif	/* _SLG_FILM_NOISE_ESTIMATION_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

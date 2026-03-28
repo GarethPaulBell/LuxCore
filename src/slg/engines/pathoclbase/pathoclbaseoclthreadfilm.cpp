@@ -101,23 +101,19 @@ PathOCLBaseOCLRenderThread::ThreadFilm::ThreadFilm(PathOCLBaseOCLRenderThread *t
 }
 
 PathOCLBaseOCLRenderThread::ThreadFilm::~ThreadFilm() {
-	delete film;
 
 	FreeAllOCLBuffers();
 }
 
-void PathOCLBaseOCLRenderThread::ThreadFilm::Init(Film *engineFlm,
+void PathOCLBaseOCLRenderThread::ThreadFilm::Init(FilmRef engineFlm,
 		const u_int threadFilmWidth, const u_int threadFilmHeight,
 		const u_int *threadFilmSubRegion) {
-	engineFilm = engineFlm;
+	engineFilm = &engineFlm;
 
 	const u_int filmPixelCount = threadFilmWidth * threadFilmHeight;
 
-	// Delete previous allocated Film
-	delete film;
-
 	// Allocate the new Film
-	film = new Film(threadFilmWidth, threadFilmHeight, threadFilmSubRegion);
+	film = Film::Create(threadFilmWidth, threadFilmHeight, threadFilmSubRegion);
 	film->CopyDynamicSettings(*engineFilm);
 	// Engine film may have RADIANCE_PER_SCREEN_NORMALIZED channel because of
 	// hybrid back/forward path tracing
@@ -134,7 +130,7 @@ void PathOCLBaseOCLRenderThread::ThreadFilm::Init(Film *engineFlm,
 	if (film->GetRadianceGroupCount() > 8)
 		throw runtime_error("PathOCL supports only up to 8 Radiance Groups");
 
-	const BufferType memTypeFlags = (renderThread->intersectionDevice->GetContext()->GetUseOutOfCoreBuffers() ||
+	const BufferType memTypeFlags = (renderThread->intersectionDevice->GetContext().GetUseOutOfCoreBuffers() ||
 				renderThread->renderEngine->useFilmOutOfCoreMemory) ?
 		((BufferType)(BUFFER_TYPE_READ_WRITE | BUFFER_TYPE_OUT_OF_CORE)) :
 		BUFFER_TYPE_READ_WRITE;
@@ -1225,3 +1221,4 @@ void PathOCLBaseOCLRenderThread::ThreadFilm::ClearFilm(HardwareIntersectionDevic
 }
 
 #endif
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -24,6 +24,7 @@
 #include <deque>
 
 #include "luxrays/luxrays.h"
+#include "luxrays/usings.h"
 #include "luxrays/core/geometry/triangle.h"
 #include "luxrays/core/geometry/transform.h"
 #include "luxrays/core/geometry/motionsystem.h"
@@ -49,6 +50,14 @@ class Mesh {
 public:
 	Mesh() { }
 	virtual ~Mesh() { }
+
+	// Delete copy operations (if you don't want copying)
+	Mesh(const Mesh&) = delete;
+	Mesh& operator=(const Mesh&) = delete;
+
+	// Declare default move operations
+	Mesh(Mesh&&) = default;
+	Mesh& operator=(Mesh&&) = default;
 
 	virtual MeshType GetType() const = 0;
 
@@ -136,7 +145,7 @@ public:
 		return new Triangle[meshTriCount];
 	}
 
-	static TriangleMesh *Merge(
+	static TriangleMeshUPtr Merge(
 		const std::deque<const Mesh *> &meshes,
 		TriangleMeshID **preprocessedMeshIDs = NULL,
 		TriangleID **preprocessedMeshTriangleIDs = NULL);
@@ -202,7 +211,7 @@ private:
 
 class InstanceTriangleMesh : virtual public Mesh {
 public:
-	InstanceTriangleMesh(TriangleMesh *m, const Transform &t);
+	InstanceTriangleMesh(TriangleMeshRef m, const Transform &t);
 	virtual ~InstanceTriangleMesh() { }
 
 	virtual MeshType GetType() const { return TYPE_TRIANGLE_INSTANCE; }
@@ -267,7 +276,7 @@ public:
 		cachedArea = -1.f;
 	}
 
-	TriangleMesh *GetTriangleMesh() const { return mesh; };
+	TriangleMeshConstRef GetTriangleMesh() const { return *mesh; };
 	
 	friend class boost::serialization::access;
 
@@ -278,7 +287,7 @@ protected:
 
 	Transform trans;
 	bool transSwapsHandedness;
-	TriangleMesh *mesh;
+	TriangleMeshPtr mesh;
 
 	mutable float cachedArea;
 	mutable BBox cachedBBox;
@@ -306,7 +315,7 @@ private:
 
 class MotionTriangleMesh : virtual public Mesh {
 public:
-	MotionTriangleMesh(TriangleMesh *m, const MotionSystem &ms);
+	MotionTriangleMesh(TriangleMeshRef m, const MotionSystem &ms);
 	virtual ~MotionTriangleMesh() { }
 
 	virtual MeshType GetType() const { return TYPE_TRIANGLE_MOTION; }
@@ -355,7 +364,7 @@ public:
 
 	virtual void ApplyTransform(const Transform &t);
 
-	TriangleMesh *GetTriangleMesh() const { return mesh; };
+	TriangleMeshConstRef GetTriangleMesh() const { return *mesh; };
 	const MotionSystem &GetMotionSystem() const { return motionSystem; }
 
 	friend class boost::serialization::access;
@@ -366,7 +375,7 @@ protected:
 	}
 
 	MotionSystem motionSystem;
-	TriangleMesh *mesh;
+	TriangleMeshPtr mesh;
 
 	mutable float cachedArea;
 	mutable BBox cachedBBox;
@@ -405,3 +414,4 @@ BOOST_CLASS_EXPORT_KEY(luxrays::InstanceTriangleMesh)
 BOOST_CLASS_EXPORT_KEY(luxrays::MotionTriangleMesh)
 
 #endif	/* _LUXRAYS_TRIANGLEMESH_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

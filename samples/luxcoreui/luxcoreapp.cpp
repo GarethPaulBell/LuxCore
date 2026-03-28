@@ -19,7 +19,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/filesystem.hpp>
+#include <filesystem>
 
 #include "luxrays/utils/oclerror.h"
 
@@ -38,11 +38,11 @@ ImVec4 LuxCoreApp::colLabel = ImVec4(1.f, .5f, 0.f, 1.f);
 // LuxCoreApp
 //------------------------------------------------------------------------------
 
-LuxCoreApp::LuxCoreApp(luxcore::RenderConfig *renderConfig) :
+LuxCoreApp::LuxCoreApp(RenderConfigRPtr & renderConfig) :
 		// Note: isOpenCLAvailable and isCUDAAvailable have to be initialized before
 		// ObjectEditorWindow constructors call (it is used by RenderEngineWindow).
-		isOpenCLAvailable(GetPlatformDesc().Get(Property("compile.LUXRAYS_ENABLE_OPENCL")(false)).Get<bool>()),
-		isCUDAAvailable(GetPlatformDesc().Get(Property("compile.LUXRAYS_ENABLE_CUDA")(false)).Get<bool>()),
+		isOpenCLAvailable(GetPlatformDesc()->Get(Property("compile.LUXRAYS_ENABLE_OPENCL")(false)).Get<bool>()),
+		isCUDAAvailable(GetPlatformDesc()->Get(Property("compile.LUXRAYS_ENABLE_CUDA")(false)).Get<bool>()),
 		acceleratorWindow(this), epsilonWindow(this),
 		filmChannelsWindow(this), filmOutputsWindow(this),
 		filmRadianceGroupsWindow(this), lightStrategyWindow(this),
@@ -50,8 +50,9 @@ LuxCoreApp::LuxCoreApp(luxcore::RenderConfig *renderConfig) :
 		pixelFilterWindow(this), renderEngineWindow(this),
 		samplerWindow(this), haltConditionsWindow(this),
 		statsWindow(this), logWindow(this), helpWindow(this),
-		userImportancePaintWindow(this) {
-	config = renderConfig;
+		userImportancePaintWindow(this),
+		config(renderConfig)
+		{
 
 	session = NULL;
 	window = NULL;
@@ -59,7 +60,7 @@ LuxCoreApp::LuxCoreApp(luxcore::RenderConfig *renderConfig) :
 	renderImageBuffer = NULL;
 	renderImageWidth = 0xffffffffu;
 	renderImageHeight = 0xffffffffu;
-			
+
 	currentTool = TOOL_CAMERA_EDIT;
 
 	menuBarHeight = 0;
@@ -99,9 +100,6 @@ LuxCoreApp::LuxCoreApp(luxcore::RenderConfig *renderConfig) :
 LuxCoreApp::~LuxCoreApp() {
 	currentLogWindow = NULL;
 	delete[] renderImageBuffer;
-
-	delete session;
-	delete config;
 }
 
 static int MaximumExtent(const float pMin[3], const float pMax[3]) {
@@ -124,24 +122,32 @@ void LuxCoreApp::UpdateMoveStep() {
 	optMoveStep = optMoveScale * worldSize / 50.f;
 }
 
+void LuxCoreApp::SetRefreshInterval(int interval) {
+    auto props = std::make_unique<Properties>();
+    props->Set(Property("screen.refresh.interval")(interval));
+    config->Parse(props);
+}
+
 void LuxCoreApp::IncScreenRefreshInterval() {
-	const unsigned int screenRefreshInterval = config->ToProperties().Get("screen.refresh.interval").Get<unsigned int>();
-	if (screenRefreshInterval >= 1000)
-		config->Parse(Properties().Set(Property("screen.refresh.interval")(screenRefreshInterval + 1000)));
+
+
+	const unsigned int screenRefreshInterval = config->ToProperties()->Get("screen.refresh.interval").Get<unsigned int>();
+
+	if (screenRefreshInterval >= 1000) SetRefreshInterval(screenRefreshInterval + 1000);
 	else if (screenRefreshInterval >= 100)
-		config->Parse(Properties().Set(Property("screen.refresh.interval")(screenRefreshInterval + 50)));
+		SetRefreshInterval(screenRefreshInterval +50);
 	else
-		config->Parse(Properties().Set(Property("screen.refresh.interval")(screenRefreshInterval + 5)));
+		SetRefreshInterval(screenRefreshInterval + 5);
 }
 
 void LuxCoreApp::DecScreenRefreshInterval() {
-	const unsigned int screenRefreshInterval = config->ToProperties().Get("screen.refresh.interval").Get<unsigned int>();
+	const unsigned int screenRefreshInterval = config->ToProperties()->Get("screen.refresh.interval").Get<unsigned int>();
 	if (screenRefreshInterval > 1000)
-		config->Parse(Properties().Set(Property("screen.refresh.interval")(Max(1000u, screenRefreshInterval - 1000))));
+		SetRefreshInterval(Max(1000u, screenRefreshInterval - 1000));
 	else if (screenRefreshInterval > 100)
-		config->Parse(Properties().Set(Property("screen.refresh.interval")(Max(50u, screenRefreshInterval - 50))));
+		SetRefreshInterval(Max(50u, screenRefreshInterval - 50));
 	else
-		config->Parse(Properties().Set(Property("screen.refresh.interval")(Max(10u, screenRefreshInterval - 5))));
+		SetRefreshInterval(Max(10u, screenRefreshInterval - 5));
 }
 
 void LuxCoreApp::CloseAllRenderConfigEditors() {
@@ -160,7 +166,7 @@ void LuxCoreApp::CloseAllRenderConfigEditors() {
 }
 
 void LuxCoreApp::SetRenderingEngineType(const string &engineType) {
-	if (engineType != config->ToProperties().Get("renderengine.type").Get<string>()) {
+	if (engineType != config->ToProperties()->Get("renderengine.type").Get<string>()) {
 		Properties props;
 		if (engineType == "RTPATHCPU") {
 			props <<
@@ -184,18 +190,18 @@ void LuxCoreApp::SetRenderingEngineType(const string &engineType) {
 					Property("sampler.type")("SOBOL");
 		}
 
-		RenderConfigParse(props);
+		auto pprops = std::make_unique<Properties>(std::move(props));
+		RenderConfigParse(pprops);
 	}
 }
 
-void LuxCoreApp::RenderConfigParse(const Properties &props) {
+void LuxCoreApp::RenderConfigParse(PropertiesRPtr props) {
 	if (session) {
-		// Delete the session
-		delete session;
-		session = NULL;
+		// Reset the session
+		session.reset();
 	}
 
-	// Change the configuration	
+	// Change the configuration
 	try {
 		config->Parse(props);
 	} catch(exception &ex) {
@@ -208,14 +214,14 @@ void LuxCoreApp::RenderConfigParse(const Properties &props) {
 	StartRendering();
 }
 
-void LuxCoreApp::RenderSessionParse(const Properties &props) {
+void LuxCoreApp::RenderSessionParse(const std::unique_ptr<Properties> & props) {
 	try {
 		session->Parse(props);
 	} catch(exception &ex) {
 		LA_LOG("RenderSession parse error: " << endl << ex.what());
 
-		delete session;
-		session = NULL;
+		session.reset();
+		session = nullptr;
 	}
 }
 
@@ -247,14 +253,14 @@ void LuxCoreApp::LoadRenderConfig(const std::string &fileName, const std::string
 	DeleteRendering();
 
 	// Set the current directory to place where the configuration file is
-	boost::filesystem::current_path(boost::filesystem::path(filePath));
+	std::filesystem::current_path(std::filesystem::path(filePath));
 
 	// Clear the file name resolver list
 	luxcore::ClearFileNameResolverPaths();
 	// Add the current directory to the list of place where to look for files
 	luxcore::AddFileNameResolverPath(".");
 	// Add the .cfg directory to the list of place where to look for files
-	boost::filesystem::path path(fileName);
+	std::filesystem::path path(fileName);
 	luxcore::AddFileNameResolverPath(path.parent_path().generic_string());
 
 	try {
@@ -262,34 +268,36 @@ void LuxCoreApp::LoadRenderConfig(const std::string &fileName, const std::string
 		if (ext == ".lxs") {
 			// It is a LuxRender SDL file
 			LA_LOG("Parsing LuxRender SDL file...");
-			Properties renderConfigProps, sceneProps;
+			auto renderConfigProps = std::make_unique<Properties>();
+			auto sceneProps = std::make_unique<Properties>();
 			luxcore::ParseLXS(fileName, renderConfigProps, sceneProps);
 
 			// For debugging
 			//LA_LOG("RenderConfig: \n" << renderConfigProps);
 			//LA_LOG("Scene: \n" << sceneProps);
 
-			Scene *scene = Scene::Create();
+			auto scene = ScenePtr(Scene::Create());
 			scene->Parse(sceneProps);
-			config = RenderConfig::Create(renderConfigProps, scene);
+			PropertiesRPtr ptr = renderConfigProps;
+			config = RenderConfigRPtr(RenderConfig::Create(std::move(renderConfigProps), scene));
 			config->DeleteSceneOnExit();
 
 			StartRendering();
 		} else if (ext == ".cfg") {
 			// It is a LuxCore SDL file
-			config = RenderConfig::Create(Properties(fileName));
+			config = RenderConfigRPtr(RenderConfig::Create(std::make_unique<Properties>(fileName)));
 
 			StartRendering();
 		} else if (ext == ".bcf") {
 			// It is a LuxCore RenderConfig binary archive
-			config = RenderConfig::Create(fileName);
+			config = RenderConfigRPtr(RenderConfig::Create(fileName));
 
 			StartRendering();
 		} else if (ext == ".rsm") {
 			// It is a LuxCore resume file
-			RenderState *startState;
-			Film *startFilm;
-			config = RenderConfig::Create(fileName, &startState, &startFilm);
+			std::shared_ptr<RenderState> startState;
+			std::unique_ptr<Film> startFilm;
+			config = RenderConfigRPtr(RenderConfig::Create(fileName, startState, startFilm));
 
 			StartRendering(startState, startFilm);
 		} else
@@ -297,26 +305,28 @@ void LuxCoreApp::LoadRenderConfig(const std::string &fileName, const std::string
 	} catch(exception &ex) {
 		LA_LOG("RenderConfig loading error: " << endl << ex.what());
 
-		delete session;
-		session = NULL;
-		delete config;
-		config = NULL;
+		session.reset();
+		session = nullptr;
+		config.reset();
+		config = std::unique_ptr<RenderConfig>();
 	}
-	
+
 	popupMenuBar = true;
 }
 
-void LuxCoreApp::StartRendering(RenderState *startState, Film *startFilm) {
+void LuxCoreApp::StartRendering(
+    std::shared_ptr<RenderState> startState, const std::unique_ptr<Film> & startFilm
+) {
 	CloseAllRenderConfigEditors();
 
-	if (session)
-		delete session;
-	session = NULL;
-	
-	const string engineType = config->ToProperties().Get("renderengine.type").Get<string>();
-	if (boost::starts_with(engineType, "RT")) {
-		if (config->ToProperties().Get("screen.refresh.interval").Get<unsigned int>() > 25)
-			config->Parse(Properties().Set(Property("screen.refresh.interval")(25)));
+	if (session) {
+		session.reset();
+	}
+
+	const string engineType = config->ToProperties()->Get("renderengine.type").Get<string>();
+	if (engineType.starts_with("RT")) {
+		if (config->ToProperties()->Get("screen.refresh.interval").Get<unsigned int>() > 25)
+			SetRefreshInterval(25);
 		optRealTimeMode = true;
 		// Reset the dropped frames counter
 		droppedFramesCount = 0;
@@ -324,7 +334,7 @@ void LuxCoreApp::StartRendering(RenderState *startState, Film *startFilm) {
 	} else
 		optRealTimeMode = false;
 
-	const string toolTypeStr = config->ToProperties().Get("screen.tool.type").Get<string>();
+	const string toolTypeStr = config->ToProperties()->Get("screen.tool.type").Get<string>();
 	if (toolTypeStr == "OBJECT_SELECTION")
 		currentTool = TOOL_OBJECT_SELECTION;
 	else if (toolTypeStr == "IMAGE_VIEW")
@@ -339,9 +349,10 @@ void LuxCoreApp::StartRendering(RenderState *startState, Film *startFilm) {
 	if (currentTool != TOOL_IMAGE_VIEW) {
 		// Delete scene.camera.screenwindow so frame buffer resize will
 		// automatically adjust the ratio
-		Properties cameraProps = config->GetScene().ToProperties().GetAllProperties("scene.camera");
+		Properties cameraProps = std::move(Properties() << *config->GetScene().ToProperties()->GetAllProperties("scene.camera"));
 		cameraProps.DeleteAll(cameraProps.GetAllNames("scene.camera.screenwindow"));
-		config->GetScene().Parse(cameraProps);
+		auto pprops = std::make_unique<Properties>(std::move(cameraProps));
+		config->GetScene().Parse(pprops);
 
 		// Adjust the width and height to match the window width and height ratio
 		AdjustFilmResolutionToWindowSize(&filmWidth, &filmHeight);
@@ -351,35 +362,37 @@ void LuxCoreApp::StartRendering(RenderState *startState, Film *startFilm) {
 	cfgProps <<
 			Property("film.width")(filmWidth) <<
 			Property("film.height")(filmHeight);
-	config->Parse(cfgProps);
+	auto pcfgProps = std::make_unique<Properties>(std::move(cfgProps));
+	config->Parse(pcfgProps);
 
 	LA_LOG("RenderConfig has cached kernels: " << (config->HasCachedKernels() ? "True" : "False"));
 
-	try {
-		session = RenderSession::Create(config, startState, startFilm);
+	// TODO
+	//try {
+		session = (startState and startFilm) ?
+			RenderSession::Create(config, startState, *startFilm) :
+			RenderSession::Create(config);
 
 		// Re-start the rendering
 		session->Start();
 
 		UpdateMoveStep();
-		
+
 		if (currentTool == TOOL_USER_IMPORTANCE_PAINT)
 			userImportancePaintWindow.Init();
-	} catch(exception &ex) {
-		LA_LOG("RenderSession starting error: " << endl << ex.what());
+	//} catch(exception &ex) {
+		//LA_LOG("RenderSession starting error: " << endl << ex.what());
 
-		delete session;
-		session = NULL;
-	}
+		//session.reset();
+		//session = NULL;
+	//}
 }
 
 void LuxCoreApp::DeleteRendering() {
 	CloseAllRenderConfigEditors();
 
-	delete session;
-	session = NULL;
-	delete config;
-	config = NULL;
+	session.reset();
+	config.reset();
 }
 
 //------------------------------------------------------------------------------
@@ -423,3 +436,4 @@ void LuxCoreApp::HelpMarker(const char *desc) {
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("%s", desc);
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

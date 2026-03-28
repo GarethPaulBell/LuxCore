@@ -27,19 +27,20 @@ using namespace slg;
 //------------------------------------------------------------------------------
 
 float AbsTexture::GetFloatValue(const HitPoint &hitPoint) const {
-	return fabsf(tex->GetFloatValue(hitPoint));
+	return fabsf(GetTexture().GetFloatValue(hitPoint));
 }
 
 Spectrum AbsTexture::GetSpectrumValue(const HitPoint &hitPoint) const {
-	return tex->GetSpectrumValue(hitPoint).Abs();
+	return GetTexture().GetSpectrumValue(hitPoint).Abs();
 }
 
-Properties AbsTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
-	Properties props;
+PropertiesUPtr AbsTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.textures." + name + ".type")("abs"));
-	props.Set(Property("scene.textures." + name + ".texture")(tex->GetSDLValue()));
+	props->Set(Property("scene.textures." + name + ".type")("abs"));
+	props->Set(Property("scene.textures." + name + ".texture")(GetTexture().GetSDLValue()));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

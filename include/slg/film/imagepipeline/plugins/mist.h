@@ -68,3 +68,4 @@ BOOST_CLASS_VERSION(slg::MistPlugin, 1)
 BOOST_CLASS_EXPORT_KEY(slg::MistPlugin)
 
 #endif	/*  _SLG_MIST_PLUGIN_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -21,12 +21,25 @@
 
 #include <string>
 #include <sstream>
-#include <boost/unordered_map.hpp>
-#include <boost/foreach.hpp>
+#include <unordered_map>
 #include <boost/lexical_cast.hpp>
 
 #include "luxrays/luxrays.h"
 #include "luxrays/utils/utils.h"
+
+// Nota: there are 3 root files to consider, when debugging objects below:
+// - include/slg/core/statictable.h (this file)
+//
+// - include/slg/core/objectstaticregistry.h
+// - include/slg/engines/renderengineregistry.h
+// - include/slg/lights/strategies/lightstrategyregistry.h
+// - include/slg/film/filters/filterregistry.h
+// - include/slg/samplers/samplerregistry.h
+//
+// - src/slg/engines/renderengine.cpp
+//
+// ...and also all src/slg/engines/*.cpp and include/slg/engines/*.h
+
 
 namespace slg {
 
@@ -38,9 +51,9 @@ public:
 	~StaticTable() { }
 
 	bool Get(const K &key, T &val) const {
-		const boost::unordered_map<K, T> &table = GetTable();
+		const std::unordered_map<K, T> &table = GetTable();
 
-		typename boost::unordered_map<K, T>::const_iterator it = table.find(key);
+		typename std::unordered_map<K, T>::const_iterator it = table.find(key);
 		if (it == table.end())
 			return false;
 		else {
@@ -55,9 +68,9 @@ public:
 		std::stringstream ss;
 
 		ss << "StaticTable[";
-		boost::unordered_map<K, T> &table = GetTable();
+		std::unordered_map<K, T> &table = GetTable();
 		bool first = true;
-		for (typename boost::unordered_map<K, T>::const_iterator it = table.begin(); it != table.end(); ++it) {
+		for (typename std::unordered_map<K, T>::const_iterator it = table.begin(); it != table.end(); ++it) {
 			if (first)
 				first = false;
 			else
@@ -69,32 +82,32 @@ public:
 
 		return ss.str();
 	}
-	
+
 	class RegisterTableValue {
 	public:
 		RegisterTableValue(const K &key, const T &val) {
-			boost::unordered_map<K, T> &table = GetTable();
+			std::unordered_map<K, T> &table = GetTable();
 
 			/* This safety check is triggered when importing LuxCore module in
 			 * Blender Python on Linux like if static fields were initialized 2
 			 * times. Something wrong with the compiler and/or Blender.
-			typename boost::unordered_map<K, T>::const_iterator it = table.find(key);
+			typename std::unordered_map<K, T>::const_iterator it = table.find(key);
 			if (it == table.end())
 				table[key] = val;
 			else
 				throw std::runtime_error("Already registered key in StaticTable::RegisterTableValue::RegisterTableValue(): " +
 						boost::lexical_cast<std::string>(key));
 			 */
-			
+
 			table[key] = val;
 		}
 		virtual ~RegisterTableValue() { }
 	};
 
 private:
-	static boost::unordered_map<K, T> &GetTable() {
-		static boost::unordered_map<K, T> table;
-		
+	static std::unordered_map<K, T> &GetTable() {
+		static std::unordered_map<K, T> table;
+
 		return table;
 	}
 };
@@ -117,3 +130,4 @@ private:
 }
 
 #endif	/* _SLG_STATICTABLE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

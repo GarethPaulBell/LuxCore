@@ -33,3 +33,4 @@ extern void (*SLG_SDLDebugHandler)(const char *msg);
 }
 
 #endif	/* _SLG_SDL_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

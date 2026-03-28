@@ -9,6 +9,7 @@ doc/
 generated/
 lib/
 nbproject/
+.cache/
 deps/perceptualdiff-master/libpdiff.a
 samples/(benchsimple|smallluxgpu)/(Debug|Release)/
 samples/luxcoreui/deps/glfw-3.1.1/src/glfw_config.h
@@ -36,7 +37,7 @@ compile_commands.json
 dist
 samples/pyluxcoretool/__pycache__
 release_OSX/
-build-helpers/make/__pycache__
+build-system/make/__pycache__
 *.pyc
 
 ###########################
@@ -99,3 +100,4 @@ CMakeUserPresets.json
 # Visual Studio (Code)
 .vs/
 .vscode/
+tags

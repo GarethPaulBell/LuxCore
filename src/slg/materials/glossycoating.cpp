@@ -27,16 +27,21 @@ using namespace slg;
 // GlossyCoating material
 //------------------------------------------------------------------------------
 
-GlossyCoatingMaterial::GlossyCoatingMaterial(const Texture *frontTransp, const Texture *backTransp,
-		const Texture *emitted, const Texture *bump,
-		const Material *mB, const Texture *ks, const Texture *u, const Texture *v,
-		const Texture *ka, const Texture *d, const Texture *i, const bool mbounce) :
+GlossyCoatingMaterial::GlossyCoatingMaterial(
+	TextureConstPtr frontTransp, TextureConstPtr backTransp,
+	TextureConstPtr emitted, TextureConstPtr bump,
+	MaterialConstPtr mB,
+	TextureConstPtr ks, TextureConstPtr u,
+	TextureConstPtr v,
+	TextureConstPtr ka, TextureConstPtr d,
+	TextureConstPtr i,
+const bool mbounce) :
 			Material(frontTransp, backTransp, emitted, bump), matBase(mB), Ks(ks), nu(u), nv(v),
 			Ka(ka), depth(d), index(i), multibounce(mbounce) {
 	glossiness = Min(ComputeGlossiness(nu, nv), matBase->GetGlossiness());
 }
 
-const Volume *GlossyCoatingMaterial::GetInteriorVolume(const HitPoint &hitPoint,
+VolumeConstPtr GlossyCoatingMaterial::GetInteriorVolume(const HitPoint &hitPoint,
 		const float passThroughEvent) const {
 	if (interiorVolume)
 		return interiorVolume;
@@ -44,7 +49,7 @@ const Volume *GlossyCoatingMaterial::GetInteriorVolume(const HitPoint &hitPoint,
 		return matBase->GetInteriorVolume(hitPoint, passThroughEvent);
 }
 
-const Volume *GlossyCoatingMaterial::GetExteriorVolume(const HitPoint &hitPoint,
+VolumeConstPtr GlossyCoatingMaterial::GetExteriorVolume(const HitPoint &hitPoint,
 		const float passThroughEvent) const {
 	if (exteriorVolume)
 		return exteriorVolume;
@@ -421,28 +426,30 @@ void GlossyCoatingMaterial::Pdf(const HitPoint &hitPoint,
 	}
 }
 
-void GlossyCoatingMaterial::UpdateMaterialReferences(const Material *oldMat, const Material *newMat) {
-	if (matBase == oldMat)
-		matBase = newMat;
-	
+void GlossyCoatingMaterial::UpdateMaterialReferences(MaterialConstRef oldMat, MaterialRef newMat) {
+	if (matBase == &oldMat)
+		matBase = &newMat;
+
 	// Update volumes too
 	Material::UpdateMaterialReferences(oldMat, newMat);
 }
 
-bool GlossyCoatingMaterial::IsReferencing(const Material *mat) const {
-	if (mat == this)
+bool GlossyCoatingMaterial::IsReferencing(MaterialConstRef mat) const {
+	if (&mat == this)
 		return true;
 
 	return matBase->IsReferencing(mat);
 }
 
-void GlossyCoatingMaterial::AddReferencedMaterials(boost::unordered_set<const Material *> &referencedMats) const {
+void GlossyCoatingMaterial::AddReferencedMaterials(
+	std::unordered_set<const Material *> &referencedMats
+) const {
 	Material::AddReferencedMaterials(referencedMats);
 
 	matBase->AddReferencedMaterials(referencedMats);
 }
 
-void GlossyCoatingMaterial::AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+void GlossyCoatingMaterial::AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 	Material::AddReferencedTextures(referencedTexs);
 
 	matBase->AddReferencedTextures(referencedTexs);
@@ -454,21 +461,21 @@ void GlossyCoatingMaterial::AddReferencedTextures(boost::unordered_set<const Tex
 	index->AddReferencedTextures(referencedTexs);
 }
 
-void GlossyCoatingMaterial::UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
+void GlossyCoatingMaterial::UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
 	Material::UpdateTextureReferences(oldTex, newTex);
 
-	if (Ks == oldTex)
-		Ks = newTex;
-	if (nu == oldTex)
-		nu = newTex;
-	if (nv == oldTex)
-		nv = newTex;
-	if (Ka == oldTex)
-		Ka = newTex;
-	if (depth == oldTex)
-		depth = newTex;
-	if (index == oldTex)
-		index = newTex;
+	if (Ks == &oldTex)
+		Ks = &newTex;
+	if (nu == &oldTex)
+		nu = &newTex;
+	if (nv == &oldTex)
+		nv = &newTex;
+	if (Ka == &oldTex)
+		Ka = &newTex;
+	if (depth == &oldTex)
+		depth = &newTex;
+	if (index == &oldTex)
+		index = &newTex;
 
 	// Always update glossiness just in case matBase->GetGlossiness() has changed
 	const float coatGlossiness = ComputeGlossiness(nu, nv);
@@ -478,20 +485,21 @@ void GlossyCoatingMaterial::UpdateTextureReferences(const Texture *oldTex, const
 		glossiness = coatGlossiness;
 }
 
-Properties GlossyCoatingMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
-	Properties props;
+PropertiesUPtr GlossyCoatingMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.materials." + name + ".type")("glossycoating"));
-	props.Set(Property("scene.materials." + name + ".base")(matBase->GetName()));
-	props.Set(Property("scene.materials." + name + ".ks")(Ks->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".uroughness")(nu->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".vroughness")(nv->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".ka")(Ka->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".d")(depth->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".index")(index->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".multibounce")(multibounce));
-	props.Set(Material::ToProperties(imgMapCache, useRealFileName));
+	props->Set(Property("scene.materials." + name + ".type")("glossycoating"));
+	props->Set(Property("scene.materials." + name + ".base")(matBase->GetName()));
+	props->Set(Property("scene.materials." + name + ".ks")(Ks->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".uroughness")(nu->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".vroughness")(nv->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".ka")(Ka->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".d")(depth->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".index")(index->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".multibounce")(multibounce));
+	props->Set(Material::ToProperties(imgMapCache, useRealFileName));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -23,36 +23,45 @@
 #include <iostream>
 #include <fstream>
 
-#include "luxrays/core/intersectiondevice.h"
-#include "luxrays/core/accelerator.h"
-#include "luxrays/core/geometry/transform.h"
-#include "luxrays/core/geometry/motionsystem.h"
-#include "luxrays/utils/mc.h"
-#include "luxrays/utils/mcdistribution.h"
-#include "luxrays/utils/properties.h"
-#include "luxrays/utils/serializationutils.h"
-#include "slg/core/sdl.h"
-#include "slg/cameras/camera.h"
+#include "luxrays/core/exttrianglemesh.h"
+#include "luxrays/core/geometry/bsphere.h"
+#include "luxrays/core/namedobjectvector.h"
+#include "luxrays/usings.h"
+#include "slg/imagemap/imagemap.h"
+#include "slg/usings.h"
+#include "slg/utils/pathinfo.h"
 #include "slg/editaction.h"
-#include "slg/lights/light.h"
 #include "slg/lights/lightsourcedefs.h"
 #include "slg/shapes/strands.h"
-#include "slg/textures/texture.h"
 #include "slg/textures/texturedefs.h"
-#include "slg/textures/mapping/mapping.h"
 #include "slg/materials/materialdefs.h"
-#include "slg/bsdf/bsdf.h"
-#include "slg/volumes/volume.h"
 #include "slg/scene/sceneobjectdefs.h"
-#include "slg/scene/extmeshcache.h"
 #include "slg/scene/colorspaceconverters.h"
 
+namespace luxrays {
+	class cyHairFile;
+}
+
 namespace slg {
+
+// Forward declarations
+class PathVolumeInfo;
+class BSDF;
+class ImageMapConfig;
 
 	// OpenCL data types
 namespace ocl {
 #include "slg/scene/scene_types.cl"
 }
+
+using luxrays::ExtTriangleMesh;
+using luxrays::ExtTriangleMeshRef;
+using luxrays::ExtTriangleMeshUPtr;
+using luxrays::ExtInstanceTriangleMesh;
+using luxrays::ExtInstanceTriangleMeshUPtr;
+using luxrays::ExtMotionTriangleMesh;
+using luxrays::ExtMotionTriangleMeshUPtr;
+using luxrays::cyHairFile;
 
 // Note: keep aligned with the copy in scene_types.cl
 typedef enum {
@@ -75,12 +84,25 @@ typedef int SceneRayType;
 
 class SampleResult;
 
+// Scene is the root container for all components of the scene. It owns:
+// - Camera
+// - Default volume
+// - Textures
+// - Materials
+// - SceneObjects (meshes)
+// - Light sources
+// - Data set
+// - Image maps
+//
 class Scene {
 public:
 	// Constructor used to create a scene by calling methods
-	Scene(const luxrays::Properties *resizePolicyProps = nullptr);
+	Scene(luxrays::PropertiesRPtr resizePolicyProps = nullptr);
 	// Constructor used to create a scene from properties
-	Scene(const luxrays::Properties &scnProps, const luxrays::Properties *resizePolicyProps = nullptr);
+	Scene(
+		luxrays::PropertiesRPtr&& scnProps,
+		luxrays::PropertiesRPtr resizePolicyProps
+	);
 	~Scene();
 
 	bool Intersect(luxrays::IntersectionDevice *device, const SceneRayType rayType, PathVolumeInfo *volInfo,
@@ -89,40 +111,72 @@ public:
 		SampleResult *sampleResult = nullptr, const bool backTracing = false) const;
 
 	void PreprocessCamera(const u_int filmWidth, const u_int filmHeight, const u_int *filmSubRegion);
-	void Preprocess(luxrays::Context *ctx,
+	void Preprocess(luxrays::Context & ctx,
 		const u_int filmWidth, const u_int filmHeight, const u_int *filmSubRegion,
 		const bool useRTMode);
 
-	luxrays::Properties ToProperties(const bool useRealFileName) const;
+	luxrays::PropertiesUPtr ToProperties(const bool useRealFileName) const;
 
 	//--------------------------------------------------------------------------
 	// Methods to build and edit scene
 	//--------------------------------------------------------------------------
 
-	void DefineImageMap(ImageMap *im);
-	void DefineImageMap(const std::string &name, void *pixels,
+	ImageMapRef DefineImageMap(ImageMapUPtr&& im);
+	ImageMapRef DefineImageMap(const std::string &name, void *pixels,
 		const u_int channels, const u_int width, const u_int height,
 		const ImageMapConfig &cfg);
 
 	bool IsImageMapDefined(const std::string &imgMapName) const;
 
+	// Return type for DefineMesh
+	template<typename T>
+	using ReturnType = std::tuple<T&, std::unique_ptr<T>>;
+
 	// Mesh shape
 	// Use one of the following methods, do not directly call extMeshCache.DefineExtMesh()
-	void DefineMesh(luxrays::ExtMesh *mesh);
-	void DefineMesh(const std::string &shapeName,
-		const long plyNbVerts, const long plyNbTris,
-		luxrays::Point *p, luxrays::Triangle *vi, luxrays::Normal *n,
-		luxrays::UV *uv, luxrays::Spectrum *cols, float *alphas);
-	void DefineMeshExt(const std::string &shapeName,
-		const long plyNbVerts, const long plyNbTris,
-		luxrays::Point *p, luxrays::Triangle *vi, luxrays::Normal *n,
+	ReturnType<ExtMesh> DefineMesh(ExtMeshUPtr&& mesh);
+
+	ReturnType<ExtTriangleMesh> DefineMesh(ExtTriangleMeshUPtr&& mesh);
+
+	ReturnType<ExtInstanceTriangleMesh> DefineMesh(ExtInstanceTriangleMeshUPtr&& mesh);
+
+	ReturnType<ExtMotionTriangleMesh> DefineMesh(ExtMotionTriangleMeshUPtr&& mesh);
+
+	ReturnType<ExtTriangleMesh> DefineMesh(
+		const std::string &shapeName,
+		const long plyNbVerts,
+		const long plyNbTris,
+		luxrays::Point *p,
+		luxrays::Triangle *vi,
+		luxrays::Normal *n,
+		luxrays::UV *uv,
+		luxrays::Spectrum *cols,
+		float *alphas
+	);
+
+	ReturnType<ExtTriangleMesh> DefineMeshExt(
+		const std::string &shapeName,
+		const long plyNbVerts,
+		const long plyNbTris,
+		luxrays::Point *p,
+		luxrays::Triangle *vi,
+		luxrays::Normal *n,
 		std::array<luxrays::UV *, EXTMESH_MAX_DATA_COUNT> *uvs,
 		std::array<luxrays::Spectrum *, EXTMESH_MAX_DATA_COUNT> *cols,
-		std::array<float *, EXTMESH_MAX_DATA_COUNT> *alphas);
-	void DefineMesh(const std::string &instMeshName, const std::string &meshName,
-		const luxrays::Transform &trans);
-	void DefineMesh(const std::string &motMeshName, const std::string &meshName,
-		const luxrays::MotionSystem &ms);
+		std::array<float *, EXTMESH_MAX_DATA_COUNT> *alphas
+	);
+
+	ReturnType<ExtInstanceTriangleMesh> DefineMesh(
+		const std::string &instMeshName,
+		const std::string &meshName,
+		const luxrays::Transform &trans
+	);
+
+	ReturnType<ExtMotionTriangleMesh> DefineMesh(
+		const std::string &motMeshName,
+		const std::string &meshName,
+		const luxrays::MotionSystem &ms
+	);
 
 	void SetMeshVertexAOV(const std::string &meshName,
 		const unsigned int index, float *data);
@@ -130,7 +184,8 @@ public:
 		const unsigned int index, float *data);
 
 	// Strands shape
-	void DefineStrands(const std::string &shapeName, const luxrays::cyHairFile &strandsFile,
+	Scene::ReturnType<ExtTriangleMesh> DefineStrands(
+		const std::string &shapeName, const luxrays::cyHairFile &strandsFile,
 		const StrendsShape::TessellationType tesselType,
 		const u_int adaptiveMaxDepth, const float adaptiveError,
 		const u_int solidSideCount, const bool solidCapBottom, const bool solidCapTop,
@@ -140,7 +195,8 @@ public:
 	bool IsMaterialDefined(const std::string &matName) const;
 	bool IsMeshDefined(const std::string &meshName) const;
 
-	void Parse(const luxrays::Properties &props);
+	void Parse(luxrays::PropertiesRPtr props);
+
 	void DeleteObject(const std::string &objName);
 	void DeleteObjects(std::vector<std::string> &objNames);
 	void DeleteLight(const std::string &lightName);
@@ -158,17 +214,70 @@ public:
 	void RemoveUnusedMaterials();
 	void RemoveUnusedMeshes();
 
-	static Scene *LoadSerialized(const std::string &fileName);
-	static void SaveSerialized(const std::string &fileName, const Scene *scene);
-	
+	// Accessors
+	// (Accessor role is:
+	// - to allow to change underlying object types without modifying all code
+	//	 base
+	// - to clarify some constness aspects
+	// )
+	bool HasCamera() const { return bool(camera); }
+	CameraConstRef GetCamera() const {
+		if (not HasCamera()) throw std::runtime_error("No camera in scene");
+		return *camera;
+	}
+	CameraRef GetCamera() {
+		if (not HasCamera()) throw std::runtime_error("No camera in scene");
+		return *camera;
+	}
+
+	auto& GetTextures() { return texDefs; }
+	const auto& GetTextures() const { return texDefs; }
+
+	auto& GetMaterials() { return matDefs; }
+	const auto& GetMaterials() const { return matDefs; }
+
+	auto& GetObjects() { return objDefs; }
+	const auto& GetObjects() const { return objDefs; }
+
+	auto& GetLightSources() { return lightDefs; }
+	const auto& GetLightSources() const { return lightDefs; }
+
+	auto& GetDataSet() { return *dataSet; }
+	const auto& GetDataSet() const { return *dataSet; }
+
+	auto& GetDefaultWorldVolume() const { return *defaultWorldVolume; }
+	bool HasDefaultWorldVolume() const { return bool(defaultWorldVolume); }
+
+	auto& GetImageMaps() { return imgMapCache; }
+	const auto& GetImageMaps() const { return imgMapCache; }
+
+	auto& GetExtMeshes() { return extMeshCache; }
+	const auto& GetExtMeshes() const { return extMeshCache; }
+
+	auto& GetEditActions() { return editActions; }
+	const auto& GetEditActions() const { return editActions; }
+
+	const auto& GetSceneBSphere() const { return sceneBSphere; }
+
+	void SetEnableParsePrint(bool status) { enableParsePrint = status; }
+
+	void moveToTrash(luxrays::NamedObjectUPtr&&);
+	void emptyTrash();
+
+	// Serialization
+	static SceneUPtr LoadSerialized(const std::string &fileName);
+	static void SaveSerialized(const std::string &fileName, SceneUPtr&& scene);
+
 	static std::string EncodeTriangleLightNamePrefix(const std::string &objectName);
 
+	// 
+
+protected:
 	//--------------------------------------------------------------------------
 
-	// This volume is applied to rays hitting nothing
-	const Volume *defaultWorldVolume;
+	// This volume is (optionally) applied to rays hitting nothing
+	VolumeConstPtr defaultWorldVolume;
 
-	Camera *camera;
 
 	ExtMeshCache extMeshCache; // Mesh objects cache
 	ImageMapCache imgMapCache; // Image maps cache
@@ -178,20 +287,31 @@ public:
 	SceneObjectDefinitions objDefs; // SceneObject definitions
 	LightSourceDefinitions lightDefs; // LightSource definitions
 
-	luxrays::DataSet *dataSet;
+	// The trash bin container collects items that are pending deletion, in
+	// order to avoid dangling references in real time rendering when the scene
+	// is updated while the render engine is running. Trash bin allows to keep
+	// the deleted objects alive while they are still in use in rendering. It
+	// is up to the rendering engine to empty trash bin.
+	std::vector<luxrays::NamedObjectUPtr> trashBin;
+	mutable std::mutex trashMtx;
+
+	// DataSet ownership is not very clear, we keep it shared
+	luxrays::DataSetSPtr dataSet;
+
 	// The bounding sphere of the scene (including the camera)
 	luxrays::BSphere sceneBSphere;
 
 	EditActionList editActions;
 
 	bool enableParsePrint;
-
 	friend class boost::serialization::access;
 
 private:
+	CameraUPtr camera;  // The scene owns the camera
+						//
 	ColorSpaceConverters colorSpaceConv;
 
-	void Init(const luxrays::Properties *resizePolicyProps);
+	void Init(luxrays::PropertiesRPtr resizePolicyProps);
 
 	void ParseCamera(const luxrays::Properties &props);
 	void ParseTextures(const luxrays::Properties &props);
@@ -202,20 +322,29 @@ private:
 	void ParseLights(const luxrays::Properties &props);
 
 	luxrays::Spectrum GetColor(const luxrays::Property &prop);
-	const Texture *GetTexture(const luxrays::Property &prop);
+	TextureRef GetTexture(const luxrays::Property &prop);
+	TextureConstRef GetTexture(const luxrays::Property &prop) const;
 
-	Camera *CreateCamera(const luxrays::Properties &props);
-	TextureMapping2D *CreateTextureMapping2D(const std::string &prefixName, const luxrays::Properties &props);
-	TextureMapping3D *CreateTextureMapping3D(const std::string &prefixName, const luxrays::Properties &props);
-	Texture *CreateTexture(const std::string &texName, const luxrays::Properties &props);
-	Volume *CreateVolume(const u_int defaultVolID, const std::string &volName, const luxrays::Properties &props);
-	Material *CreateMaterial(const u_int defaultMatID, const std::string &matName, const luxrays::Properties &props);
-	luxrays::ExtTriangleMesh *CreateShape(const std::string &shapeName, const luxrays::Properties &props);
-	SceneObject *CreateObject(const u_int defaultObjID, const std::string &objName, const luxrays::Properties &props);
-	ImageMap *CreateEmissionMap(const std::string &propName, const luxrays::Properties &props);
-	LightSource *CreateLightSource(const std::string &lightName, const luxrays::Properties &props);
+	CameraUPtr CreateCamera(const luxrays::Properties &props);
+	TextureMapping2DUPtr CreateTextureMapping2D (
+		const std::string &prefixName,
+		const luxrays::Properties &props
+	);
 
-	luxrays::ExtTriangleMesh *CreateInlinedMesh(const std::string &shapeName,
+
+	TextureMapping3DUPtr CreateTextureMapping3D(const std::string &prefixName, const luxrays::Properties &props);
+	TextureUPtr CreateTexture(const std::string &texName, const luxrays::Properties &props);
+	VolumeUPtr CreateVolume(const u_int defaultVolID, const std::string &volName, const luxrays::Properties &props);
+	MaterialUPtr CreateMaterial(const u_int defaultMatID, const std::string &matName, const luxrays::Properties &props);
+
+	luxrays::ExtTriangleMeshUPtr CreateShape(const std::string &shapeName, const luxrays::Properties &props);
+	SceneObjectUPtr CreateObject(const u_int defaultObjID, const std::string &objName, const luxrays::Properties &props);
+	LightSourceUPtr CreateLightSource(const std::string &lightName, const luxrays::Properties &props);
+
+	// Create directly in cache, so result is just a reference
+	ImageMapPtr CreateEmissionMap(const std::string &propName, const luxrays::Properties &props);
+
+	luxrays::ExtTriangleMeshUPtr CreateInlinedMesh(const std::string &shapeName,
 			const std::string &propName, const luxrays::Properties &props);
 
 	template<class Archive> void save(Archive &ar, const u_int version) const;
@@ -223,10 +352,13 @@ private:
 	BOOST_SERIALIZATION_SPLIT_MEMBER()
 };
 
-}
+extern slg::Scene NullScene;
+
+}  // namespace slg
 
 BOOST_CLASS_VERSION(slg::Scene, 1)
 
 BOOST_CLASS_EXPORT_KEY(slg::Scene)
 
 #endif	/* _SLG_SCENE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

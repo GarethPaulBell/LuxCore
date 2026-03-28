@@ -17,8 +17,6 @@
  ***************************************************************************/
 
 #include <stdexcept>
-#include <boost/foreach.hpp>
-#include <boost/regex.hpp>
 #include <boost/lexical_cast.hpp>
 
 #include "slg/film/film.h"
@@ -85,3 +83,4 @@ void ColorLUTPlugin::Apply(Film &film, const u_int index) {
 		}
 	}
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

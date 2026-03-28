@@ -33,7 +33,7 @@ namespace slg {
 
 class FileSaverRenderEngine : public RenderEngine {
 public:
-	FileSaverRenderEngine(const RenderConfig *cfg);
+	FileSaverRenderEngine(RenderConfigRef cfg);
 
 	virtual RenderEngineType GetType() const { return GetObjectType(); }
 	virtual std::string GetTag() const { return GetObjectTag(); }
@@ -41,9 +41,9 @@ public:
 	virtual bool HasDone() const { return true; }
 	virtual void WaitForDone() const { }
 
-	static void ExportScene(const RenderConfig *renderConfig, const std::string &directoryName,
+	static void ExportScene(RenderConfigRef renderConfig, const std::string &directoryName,
 		const std::string &renderEngineType);
-	static void ExportSceneGLTF(const RenderConfig *renderConfig, const std::string &fileName);
+	static void ExportSceneGLTF(RenderConfigRef renderConfig, const std::string &fileName);
 
 	//--------------------------------------------------------------------------
 	// Static methods used by RenderEngineRegistry
@@ -51,11 +51,11 @@ public:
 
 	static RenderEngineType GetObjectType() { return FILESAVER; }
 	static std::string GetObjectTag() { return "FILESAVER"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static RenderEngine *FromProperties(const RenderConfig *rcfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static RenderEngine *FromProperties(RenderConfigRef rcfg);
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	virtual void InitFilm();
 	virtual void StartLockLess();
@@ -76,3 +76,4 @@ private:
 }
 
 #endif	/* _SLG_FILESAVER_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

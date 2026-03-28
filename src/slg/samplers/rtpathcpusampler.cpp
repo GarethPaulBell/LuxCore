@@ -17,6 +17,7 @@
  ***************************************************************************/
 
 #include "luxrays/core/color/color.h"
+#include "slg/usings.h"
 #include "slg/samplers/rtpathcpusampler.h"
 #include "slg/engines/rtpathcpu/rtpathcpu.h"
 
@@ -28,8 +29,10 @@ using namespace slg;
 // RTPathCPU specific sampler shared data
 //------------------------------------------------------------------------------
 
-RTPathCPUSamplerSharedData::RTPathCPUSamplerSharedData(Film *film) :
-		SamplerSharedData() {
+RTPathCPUSamplerSharedData::RTPathCPUSamplerSharedData(FilmPtr film) :
+	engineFilm(film),
+	SamplerSharedData()
+{
 	filmSubRegion[0] = 0;
 	filmSubRegion[1] = 0;
 	filmSubRegion[2] = 0;
@@ -40,9 +43,9 @@ RTPathCPUSamplerSharedData::RTPathCPUSamplerSharedData(Film *film) :
 	Reset(film);
 }
 
-void RTPathCPUSamplerSharedData::Reset(Film *film) {
+void RTPathCPUSamplerSharedData::Reset(FilmPtr film) {
 	engineFilm = film;
-	Reset();	
+	Reset();
 }
 
 void RTPathCPUSamplerSharedData::Reset() {
@@ -82,19 +85,25 @@ void RTPathCPUSamplerSharedData::Reset() {
 	step = 0;
 }
 
-SamplerSharedData *RTPathCPUSamplerSharedData::FromProperties(const Properties &cfg,
-		RandomGenerator *rndGen, Film *film) {
-	return new RTPathCPUSamplerSharedData(film);
+std::unique_ptr<SamplerSharedData> RTPathCPUSamplerSharedData::FromProperties(
+	const Properties &cfg, const RandomGeneratorUPtr & rndGen, FilmPtr film
+) {
+	return std::make_unique<RTPathCPUSamplerSharedData>(film);
 }
 
 //------------------------------------------------------------------------------
 // RTPathCPU specific sampler
 //------------------------------------------------------------------------------
 
-RTPathCPUSampler::RTPathCPUSampler(luxrays::RandomGenerator *rnd, Film *flm,
-			const FilmSampleSplatter *flmSplatter,
-			RTPathCPUSamplerSharedData *samplerSharedData) :
-			Sampler(rnd, flm, flmSplatter, true), sharedData(samplerSharedData) {
+RTPathCPUSampler::RTPathCPUSampler(
+	const luxrays::RandomGeneratorUPtr & rnd,
+	FilmPtr flm,
+	const FilmSampleSplatterUPtr& flmSplatter,
+	SamplerSharedDataSPtr samplerSharedData
+) :
+	Sampler(rnd, flm, flmSplatter, true),
+	sharedData(dynamic_pointer_cast<RTPathCPUSamplerSharedData>(samplerSharedData))
+{
 	film = flm;
 	// Disable denoiser statistics collection
 	film->GetDenoiser().SetEnabled(false);
@@ -111,7 +120,7 @@ void RTPathCPUSampler::SetRenderEngine(RTPathCPURenderEngine *re) {
 	Reset(film);
 }
 
-void RTPathCPUSampler::Reset(Film *flm) {
+void RTPathCPUSampler::Reset(FilmPtr flm) {
 	film = flm;
 	// Disable denoiser statistics collection
 	film->GetDenoiser().SetEnabled(false);
@@ -142,7 +151,7 @@ void RTPathCPUSampler::NextPixel() {
 			if (!stillOnFirstFrame) {
 				// Signal the main thread after have finished the rendering
 				// of the first frame
-				boost::unique_lock<boost::mutex> lock(engine->firstFrameMutex);
+				std::unique_lock<std::mutex> lock(engine->firstFrameMutex);
 
 				++(engine->firstFrameThreadDoneCount);
 
@@ -233,14 +242,15 @@ void RTPathCPUSampler::NextSample(const vector<SampleResult> &sampleResults) {
 // Static methods used by SamplerRegistry
 //------------------------------------------------------------------------------
 
-Properties RTPathCPUSampler::ToProperties(const Properties &cfg) {
-	return Properties() <<
-			cfg.Get(GetDefaultProps().Get("sampler.type"));
+PropertiesUPtr RTPathCPUSampler::ToProperties(const Properties &cfg) {
+	PropertiesUPtr props = std::make_unique<Properties>();
+	*props << cfg.Get(GetDefaultProps()->Get("sampler.type"));
+	return props;
 }
 
-Sampler *RTPathCPUSampler::FromProperties(const Properties &cfg, RandomGenerator *rndGen,
-		Film *film, const FilmSampleSplatter *flmSplatter, SamplerSharedData *sharedData) {
-	return new RTPathCPUSampler(rndGen, film, flmSplatter, (RTPathCPUSamplerSharedData *)sharedData);
+SamplerUPtr RTPathCPUSampler::FromProperties(const Properties &cfg, const RandomGeneratorUPtr & rndGen,
+		FilmPtr film, const FilmSampleSplatterUPtr& flmSplatter, SamplerSharedDataSPtr sharedData) {
+	return std::make_unique<RTPathCPUSampler>(rndGen, film, flmSplatter, sharedData);
 }
 
 slg::ocl::Sampler *RTPathCPUSampler::FromPropertiesOCL(const Properties &cfg) {
@@ -252,10 +262,12 @@ void RTPathCPUSampler::AddRequiredChannels(Film::FilmChannels &channels, const l
 	// No additional channels required
 }
 
-const Properties &RTPathCPUSampler::GetDefaultProps() {
-	static Properties props = Properties() <<
+PropertiesUPtr RTPathCPUSampler::GetDefaultProps() {
+	auto props = std::make_unique<Properties>();
+	*props <<
 			Sampler::GetDefaultProps() <<
 			Property("sampler.type")(GetObjectTag());
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

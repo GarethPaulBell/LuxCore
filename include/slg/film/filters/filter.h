@@ -24,6 +24,8 @@
 #include "luxrays/utils/mc.h"
 #include "luxrays/utils/mcdistribution.h"
 #include "luxrays/core/namedobject.h"
+#include "luxrays/usings.h"
+#include "slg/usings.h"
 
 namespace slg {
 
@@ -59,7 +61,7 @@ public:
 	virtual float Evaluate(const float x, const float y) const = 0;
 
 	// Transform the current object in Properties
-	virtual luxrays::Properties ToProperties() const;
+	virtual luxrays::PropertiesUPtr ToProperties() const;
 
 	//--------------------------------------------------------------------------
 	// Static methods used by ObjectRegistry
@@ -67,9 +69,9 @@ public:
 
 	// Transform the current configuration Properties in a complete list of
 	// object Properties (including all defaults values)
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
 	// Allocate a Object based on the cfg definition
-	static Filter *FromProperties(const luxrays::Properties &cfg);
+	static FilterUPtr FromProperties(const luxrays::Properties &cfg);
 	static slg::ocl::Filter *FromPropertiesOCL(const luxrays::Properties &cfg);
 
 	static FilterType String2FilterType(const std::string &type);
@@ -82,7 +84,7 @@ public:
 	friend class boost::serialization::access;
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	// Used by serialization
 	Filter() { }
@@ -103,3 +105,4 @@ BOOST_SERIALIZATION_ASSUME_ABSTRACT(slg::Filter)
 BOOST_CLASS_VERSION(slg::Filter, 3)
 
 #endif	/* _SLG_FILTER_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

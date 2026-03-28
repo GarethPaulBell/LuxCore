@@ -41,8 +41,11 @@ public:
 
 	virtual void Reset() { }
 
-	static SamplerSharedData *FromProperties(const luxrays::Properties &cfg,
-			luxrays::RandomGenerator *rndGen, Film *film);
+	static std::unique_ptr<SamplerSharedData> FromProperties(
+		const luxrays::Properties &cfg,
+		const luxrays::RandomGeneratorUPtr & rndGen,
+		FilmPtr film
+	);
 
 	// Nothing to share
 };
@@ -53,8 +56,8 @@ public:
 
 class TilePathSampler : public Sampler {
 public:
-	TilePathSampler(luxrays::RandomGenerator *rnd, Film *flm,
-			const FilmSampleSplatter *flmSplatter);
+	TilePathSampler(const luxrays::RandomGeneratorUPtr & rnd, FilmPtr flm,
+			const FilmSampleSplatterUPtr& flmSplatter);
 	virtual ~TilePathSampler();
 
 	virtual SamplerType GetType() const { return GetObjectType(); }
@@ -69,30 +72,34 @@ public:
 	//--------------------------------------------------------------------------
 
 	void SetAASamples(const u_int aaSamp);
-	void Init(TileWork *tileWork, Film *tileFilm);
-	
+	void Init(TileWork *tileWork, FilmPtr tileFilm);
+
 	//--------------------------------------------------------------------------
 	// Static methods used by SamplerRegistry
 	//--------------------------------------------------------------------------
 
 	static SamplerType GetObjectType() { return TILEPATHSAMPLER; }
 	static std::string GetObjectTag() { return "TILEPATHSAMPLER"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static Sampler *FromProperties(const luxrays::Properties &cfg, luxrays::RandomGenerator *rndGen,
-		Film *film, const FilmSampleSplatter *flmSplatter, SamplerSharedData *sharedData);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static SamplerUPtr FromProperties(
+		const luxrays::Properties &cfg,
+		const luxrays::RandomGeneratorUPtr & rndGen,
+		FilmPtr film, const FilmSampleSplatterUPtr& flmSplatter,
+		SamplerSharedDataSPtr sharedData
+	);
 	static slg::ocl::Sampler *FromPropertiesOCL(const luxrays::Properties &cfg);
 	static void AddRequiredChannels(Film::FilmChannels &channels, const luxrays::Properties &cfg);
 
 private:
-	static const luxrays::Properties &GetDefaultProps();
-	
+	static luxrays::PropertiesUPtr GetDefaultProps();
+
 	void InitNewSample();
-	
+
 	u_int aaSamples;
 	SobolSequence sobolSequence;
 
 	TileWork *tileWork;
-	Film *tileFilm;
+	FilmPtr tileFilm;
 	u_int tileX, tileY, tilePass;
 
 	float sample0, sample1;
@@ -101,3 +108,4 @@ private:
 }
 
 #endif	/* _SLG_TILEPATHOCL_SAMPLER_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

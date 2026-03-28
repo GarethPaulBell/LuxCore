@@ -96,3 +96,4 @@ BOOST_CLASS_VERSION(slg::CameraResponsePlugin, 1)
 BOOST_CLASS_EXPORT_KEY(slg::CameraResponsePlugin)
 
 #endif	/*  _SLG_CAMERARESPONSE_PLUGIN_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

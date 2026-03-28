@@ -21,6 +21,7 @@
 
 #include "luxrays/utils/serializationutils.h"
 #include "slg/slg.h"
+#include "slg/usings.h"
 
 namespace slg {
 
@@ -34,7 +35,7 @@ public:
 
 	void SaveSerialized(const std::string &fileName);
 
-	static RenderState *LoadSerialized(const std::string &fileName);
+	static RenderStateSPtr LoadSerialized(const std::string &fileName);
 
 	friend class boost::serialization::access;
 
@@ -55,3 +56,4 @@ private:
 BOOST_SERIALIZATION_ASSUME_ABSTRACT(slg::RenderState)
 
 #endif	/* _SLG_RENDERSTATE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

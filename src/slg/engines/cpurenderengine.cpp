@@ -17,7 +17,9 @@
  ***************************************************************************/
 
 #include <boost/format.hpp>
+#include <memory>
 
+#include "luxrays/usings.h"
 #include "luxrays/utils/thread.h"
 
 #include "slg/engines/cpurenderengine.h"
@@ -56,7 +58,7 @@ void CPURenderThread::Start() {
 
 void CPURenderThread::Interrupt() {
 	if (renderThread)
-		renderThread->interrupt();
+		renderThread->request_stop();
 }
 
 void CPURenderThread::Stop() {
@@ -74,10 +76,9 @@ void CPURenderThread::StartRenderThread() {
 
 void CPURenderThread::StopRenderThread() {
 	if (renderThread) {
-		renderThread->interrupt();
+		renderThread->request_stop();
 		renderThread->join();
-		delete renderThread;
-		renderThread = NULL;
+		renderThread.reset();
 	}
 }
 
@@ -102,9 +103,9 @@ void CPURenderThread::WaitForDone() const {
 // CPURenderEngine
 //------------------------------------------------------------------------------
 
-CPURenderEngine::CPURenderEngine(const RenderConfig *cfg) : RenderEngine(cfg) {
+CPURenderEngine::CPURenderEngine(RenderConfigRef cfg) : RenderEngine(cfg) {
 	// I have to use u_int because Property::Get<size_t>() is not defined
-	const size_t renderThreadCount =  Max<u_int>(1u, cfg->cfg.Get(GetDefaultProps().Get("native.threads.count")).Get<u_int>());
+	const size_t renderThreadCount =  Max<u_int>(1u, cfg.GetConfig().Get(GetDefaultProps()->Get("native.threads.count")).Get<u_int>());
 
 	//--------------------------------------------------------------------------
 	// Allocate devices
@@ -122,7 +123,7 @@ CPURenderEngine::CPURenderEngine(const RenderConfig *cfg) : RenderEngine(cfg) {
 	//--------------------------------------------------------------------------
 
 	SLG_LOG("Configuring "<< renderThreadCount << " CPU render threads");
-	renderThreads.resize(renderThreadCount, NULL);
+	renderThreads.resize(renderThreadCount);
 }
 
 CPURenderEngine::~CPURenderEngine() {
@@ -132,7 +133,7 @@ CPURenderEngine::~CPURenderEngine() {
 		Stop();
 
 	for (size_t i = 0; i < renderThreads.size(); ++i)
-		delete renderThreads[i];
+		renderThreads[i].reset();
 }
 
 void CPURenderEngine::StartLockLess() {
@@ -180,15 +181,16 @@ void CPURenderEngine::WaitForDone() const {
 		renderThreads[i]->WaitForDone();
 }
 
-Properties CPURenderEngine::ToProperties(const Properties &cfg) {
-	return Properties() <<
-			cfg.Get(GetDefaultProps().Get("native.threads.count"));
+PropertiesUPtr CPURenderEngine::ToProperties(const Properties &cfg) {
+	PropertiesUPtr props = std::make_unique<Properties>();
+	*props << cfg.Get(GetDefaultProps()->Get("native.threads.count"));
+	return props;
 }
 
-const Properties &CPURenderEngine::GetDefaultProps() {
-	static Properties props = Properties() <<
-			RenderEngine::GetDefaultProps() <<
-			Property("native.threads.count")((u_int)GetHardwareThreadCount());
+PropertiesUPtr CPURenderEngine::GetDefaultProps() {
+	PropertiesUPtr props = std::make_unique<Properties>();
+	*props << RenderEngine::GetDefaultProps()
+		<< Property("native.threads.count")((u_int)GetHardwareThreadCount());
 
 	return props;
 }
@@ -208,25 +210,23 @@ CPUNoTileRenderThread::~CPUNoTileRenderThread() {
 // CPUNoTileRenderEngine
 //------------------------------------------------------------------------------
 
-CPUNoTileRenderEngine::CPUNoTileRenderEngine(const RenderConfig *cfg) : CPURenderEngine(cfg) {
+CPUNoTileRenderEngine::CPUNoTileRenderEngine(RenderConfigRef cfg) : CPURenderEngine(cfg) {
 	samplerSharedData = NULL;
 }
 
 CPUNoTileRenderEngine::~CPUNoTileRenderEngine() {
-	delete samplerSharedData;
 }
 
 void CPUNoTileRenderEngine::StartLockLess() {
-	samplerSharedData = renderConfig->AllocSamplerSharedData(&seedBaseGenerator, film);
-	
+	samplerSharedData = renderConfig.AllocSamplerSharedData(seedBaseGenerator, GetFilm());
+
 	CPURenderEngine::StartLockLess();
 }
 
 void CPUNoTileRenderEngine::StopLockLess() {
 	CPURenderEngine::StopLockLess();
 
-	delete samplerSharedData;
-	samplerSharedData = NULL;
+	samplerSharedData.reset();
 }
 
 void CPUNoTileRenderEngine::EndSceneEditLockLess(const EditActionList &editActions) {
@@ -242,18 +242,19 @@ void CPUNoTileRenderEngine::UpdateCounters() {
 	// Update the ray count statistic
 	double totalCount = 0.0;
 	for (size_t i = 0; i < renderThreads.size(); ++i) {
-		const CPUNoTileRenderThread *thread = (CPUNoTileRenderThread *)renderThreads[i];
-		totalCount += thread->device->GetTotalRaysCount();
+		const auto& thread = renderThreads[i];
+		//const CPUNoTileRenderThreadUPtr& thread = (CPUNoTileRenderThread *)renderThreads[i];
+		totalCount += thread->GetIntersectionDevice().GetTotalRaysCount();
 	}
 	raysCount = totalCount;
 }
 
-Properties CPUNoTileRenderEngine::ToProperties(const Properties &cfg) {
+PropertiesUPtr CPUNoTileRenderEngine::ToProperties(const Properties &cfg) {
 	return CPURenderEngine::ToProperties(cfg);
 }
 
-const Properties &CPUNoTileRenderEngine::GetDefaultProps() {
-	static Properties props;
+luxrays::PropertiesUPtr CPUNoTileRenderEngine::GetDefaultProps() {
+	auto props = std::make_unique<Properties>();
 	return props;
 }
 
@@ -268,15 +269,17 @@ CPUTileRenderThread::CPUTileRenderThread(CPUTileRenderEngine *engine,
 }
 
 CPUTileRenderThread::~CPUTileRenderThread() {
-	delete tileFilm;
 }
 
 void CPUTileRenderThread::StartRenderThread() {
-	delete tileFilm;
 
 	CPUTileRenderEngine *cpuTileEngine = (CPUTileRenderEngine *)renderEngine;
-	tileFilm = new Film(cpuTileEngine->tileRepository->tileWidth, cpuTileEngine->tileRepository->tileHeight, NULL);
-	tileFilm->CopyDynamicSettings(*(cpuTileEngine->film));
+	tileFilm = Film::Create(
+			cpuTileEngine->tileRepository->tileWidth,
+			cpuTileEngine->tileRepository->tileHeight,
+			nullptr
+	);
+	tileFilm->CopyDynamicSettings(cpuTileEngine->GetFilm());
 	tileFilm->Init();
 
 	CPURenderThread::StartRenderThread();
@@ -286,7 +289,7 @@ void CPUTileRenderThread::StartRenderThread() {
 // CPUTileRenderEngine
 //------------------------------------------------------------------------------
 
-CPUTileRenderEngine::CPUTileRenderEngine(const RenderConfig *cfg) : CPURenderEngine(cfg) {
+CPUTileRenderEngine::CPUTileRenderEngine(RenderConfigRef cfg) : CPURenderEngine(cfg) {
 	tileRepository = NULL;
 }
 
@@ -303,7 +306,7 @@ void CPUTileRenderEngine::StopLockLess() {
 
 void CPUTileRenderEngine::EndSceneEditLockLess(const EditActionList &editActions) {
 	tileRepository->Clear();
-	tileRepository->InitTiles(*film);
+	tileRepository->InitTiles(GetFilm());
 
 	CPURenderEngine::EndSceneEditLockLess(editActions);
 }
@@ -312,17 +315,22 @@ void CPUTileRenderEngine::UpdateCounters() {
 	// Update the ray count statistic
 	double totalCount = 0.0;
 	for (size_t i = 0; i < renderThreads.size(); ++i) {
-		const CPUTileRenderThread *thread = (CPUTileRenderThread *)renderThreads[i];
-		totalCount += thread->device->GetTotalRaysCount();
+		const auto& thread = renderThreads[i];
+		totalCount += thread->GetIntersectionDevice().GetTotalRaysCount();
 	}
 	raysCount = totalCount;
 }
 
-Properties CPUTileRenderEngine::ToProperties(const Properties &cfg) {
-	return CPURenderEngine::ToProperties(cfg) <<
-			TileRepository::ToProperties(cfg);
+PropertiesUPtr CPUTileRenderEngine::ToProperties(const Properties &cfg) {
+	auto props_ptr = std::make_unique<Properties>();
+	auto& props = *props_ptr;
+	props
+		<< *CPURenderEngine::ToProperties(cfg)
+		<< *TileRepository::ToProperties(cfg);
+	return props_ptr;
 }
 
-const Properties &CPUTileRenderEngine::GetDefaultProps() {
+PropertiesUPtr CPUTileRenderEngine::GetDefaultProps() {
 	return TileRepository::GetDefaultProps();
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -63,3 +63,4 @@ STATICTABLE_DECLARATION(R, std::string, FromPropertiesOCL)
 }
 
 #endif	/* _SLG_OBJECTSTATICREGISTRY_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

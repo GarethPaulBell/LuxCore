@@ -63,13 +63,13 @@ void SharpDistantLight::GetPreprocessedData(float *absoluteLightDirData,
 	}
 }
 
-float SharpDistantLight::GetPower(const Scene &scene) const {
+float SharpDistantLight::GetPower(SceneConstRef scene) const {
 	const float envRadius = GetEnvRadius(scene);
 
 	return temperatureScale.Y() * gain.Y() * color.Y() * M_PI * envRadius * envRadius;
 }
 
-Spectrum SharpDistantLight::Emit(const Scene &scene,
+Spectrum SharpDistantLight::Emit(SceneConstRef scene,
 		const float time, const float u0, const float u1,
 		const float u2, const float u3, const float passThroughEvent,
 		Ray &ray, float &emissionPdfW,
@@ -77,7 +77,7 @@ Spectrum SharpDistantLight::Emit(const Scene &scene,
 	if (cosThetaAtLight)
 		*cosThetaAtLight = 1.f;
 
-	const Point worldCenter = scene.dataSet->GetBSphere().center;
+	const Point worldCenter = scene.GetDataSet().GetBSphere().center;
 	const float envRadius = GetEnvRadius(scene);
 
 	float d1, d2;
@@ -94,13 +94,13 @@ Spectrum SharpDistantLight::Emit(const Scene &scene,
 	return temperatureScale * gain * color;
 }
 
-Spectrum SharpDistantLight::Illuminate(const Scene &scene, const BSDF &bsdf,
+Spectrum SharpDistantLight::Illuminate(SceneConstRef scene, const BSDF &bsdf,
 		const float time, const float u0, const float u1, const float passThroughEvent,
         Ray &shadowRay, float &directPdfW,
 		float *emissionPdfW, float *cosThetaAtLight) const {
 	const Vector shadowRayDir = -absoluteLightDir;
 
-	const Point worldCenter = scene.dataSet->GetBSphere().center;
+	const Point worldCenter = scene.GetDataSet().GetBSphere().center;
 	const float envRadius = GetEnvRadius(scene);
 
 	const Point shadowRayOrig = bsdf.GetRayOrigin(shadowRayDir);
@@ -123,13 +123,14 @@ Spectrum SharpDistantLight::Illuminate(const Scene &scene, const BSDF &bsdf,
 	return temperatureScale * gain * color;
 }
 
-Properties SharpDistantLight::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+PropertiesUPtr SharpDistantLight::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
 	const string prefix = "scene.lights." + GetName();
-	Properties props = NotIntersectableLightSource::ToProperties(imgMapCache, useRealFileName);
+	PropertiesUPtr props = NotIntersectableLightSource::ToProperties(imgMapCache, useRealFileName);
 
-	props.Set(Property(prefix + ".type")("sharpdistant"));
-	props.Set(Property(prefix + ".color")(color));
-	props.Set(Property(prefix + ".direction")(localLightDir));
+	props->Set(Property(prefix + ".type")("sharpdistant"));
+	props->Set(Property(prefix + ".color")(color));
+	props->Set(Property(prefix + ".direction")(localLightDir));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

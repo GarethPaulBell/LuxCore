@@ -30,9 +30,9 @@ using namespace slg;
 // ImageMapResizeMinMemPolicy::ApplyResizePolicy()
 //------------------------------------------------------------------------------
 
-ImageMap *ImageMapResizeMinMemPolicy::ApplyResizePolicy(const std::string &fileName,
+ImageMapUPtr ImageMapResizeMinMemPolicy::ApplyResizePolicy(const std::string &fileName,
 		const ImageMapConfig &imgCfg, bool &toApply) const {
-	ImageMap *im = new ImageMap(fileName, imgCfg);
+	auto im = std::make_unique<ImageMap>(fileName, imgCfg);
 
 	const u_int width = im->GetWidth();
 	const u_int height = im->GetHeight();
@@ -50,15 +50,15 @@ ImageMap *ImageMapResizeMinMemPolicy::ApplyResizePolicy(const std::string &fileN
 		SDL_LOG("Scaling probe ImageMap: " << im->GetName() << " [from " << width << "x" << height <<
 				" to " << newWidth << "x" << newHeight <<"]");
 
+		im->SetUpInstrumentation(width, height, imgCfg);
 		im->Resize(newWidth, newHeight);
 		im->Preprocess();
 
-		im->SetUpInstrumentation(width, height, imgCfg);
 
 		toApply = true;
 	} else
 		toApply = false;
-	
+
 	return im;
 }
 
@@ -66,15 +66,15 @@ ImageMap *ImageMapResizeMinMemPolicy::ApplyResizePolicy(const std::string &fileN
 // ImageMapResizeMinMemPolicy::Preprocess()
 //------------------------------------------------------------------------------
 
-void ImageMapResizeMinMemPolicy::Preprocess(ImageMapCache &imc, const Scene *scene,
+void ImageMapResizeMinMemPolicy::Preprocess(ImageMapCache &imc, SceneConstRef scene,
 		const bool useRTMode) const {
 	if (useRTMode)
 		return;
 
 	SDL_LOG("Applying resize policy " << ImageMapResizePolicyType2String(GetType()) << "...");
-	
+
 	const double startTime = WallClockTime();
-	
+
 	// Build the list of image maps to check
 	vector<u_int> imgMapsIndices;
 	for (u_int i = 0; i < imc.resizePolicyToApply.size(); ++i) {
@@ -83,7 +83,7 @@ void ImageMapResizeMinMemPolicy::Preprocess(ImageMapCache &imc, const Scene *sce
 			imgMapsIndices.push_back(i);
 		}
 	}
-	
+
 	SDL_LOG("Image maps to process:  " << imgMapsIndices.size());
 
 	// Enable instrumentation for image maps to check
@@ -136,11 +136,11 @@ void ImageMapResizeMinMemPolicy::Preprocess(ImageMapCache &imc, const Scene *sce
 
 		// Reload the original image map
 		imc.maps[i]->Reload();
-		originalMemUsed += imc.maps[i]->GetStorage()->GetMemorySize();
+		originalMemUsed += imc.maps[i]->GetStorage().GetMemorySize();
 
 		// Resize the image map
 		imc.maps[i]->Resize(newWidth, newHeight);
-		currentMemUsed += imc.maps[i]->GetStorage()->GetMemorySize();
+		currentMemUsed += imc.maps[i]->GetStorage().GetMemorySize();
 		
 		SDL_LOG("Image maps \"" << imc.maps[i]->GetName() << "\" scaled: " <<
 				originalWidth << "x" << originalHeigth << " => " <<
@@ -150,10 +150,12 @@ void ImageMapResizeMinMemPolicy::Preprocess(ImageMapCache &imc, const Scene *sce
 	SDL_LOG("Memory required for original Image maps: " + ToMemString(originalMemUsed));
 	SDL_LOG("Memory required for MINMEM Image maps: " + ToMemString(currentMemUsed));
 	
-	// Delete instrumentation for image maps checked
-	for (auto i : imgMapsIndices)
-		imc.maps[i]->DeleteInstrumentation();
+	//TODO
+	//// Delete instrumentation for image maps checked
+	//for (auto i : imgMapsIndices)
+		//imc.maps[i]->DeleteInstrumentation();
 
 	SDL_LOG("Applying resize policy " << ImageMapResizePolicyType2String(GetType()) << " time: " <<
 			(boost::format("%.1f") % (WallClockTime() - startTime)) << "secs");
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

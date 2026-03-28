@@ -48,14 +48,14 @@ public:
 
 	static FilterType GetObjectType() { return FILTER_BOX; }
 	static std::string GetObjectTag() { return "BOX"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static Filter *FromProperties(const luxrays::Properties &cfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static FilterUPtr FromProperties(const luxrays::Properties &cfg);
 	static slg::ocl::Filter *FromPropertiesOCL(const luxrays::Properties &cfg);
 
 	friend class boost::serialization::access;
 
 private:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	// Used by serialization
 	BoxFilter() { }
@@ -73,3 +73,4 @@ BOOST_CLASS_VERSION(slg::BoxFilter, 2)
 BOOST_CLASS_EXPORT_KEY(slg::BoxFilter)
 
 #endif	/* _SLG_BOX_FILTER_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

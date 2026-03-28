@@ -24,6 +24,7 @@
 
 #include "luxrays/core/namedobjectvector.h"
 #include "slg/scene/sceneobject.h"
+#include "slg/usings.h"
 
 namespace slg {
 
@@ -39,56 +40,64 @@ public:
 	bool IsSceneObjectDefined(const std::string &name) const {
 		return objs.IsObjDefined(name);
 	}
-	void DefineSceneObject(SceneObject *m);
-	void DefineIntersectableLights(LightSourceDefinitions &lightDefs, const Material *newMat) const;
-	void DefineIntersectableLights(LightSourceDefinitions &lightDefs, const SceneObject *obj) const;
+	std::tuple<SceneObject&, SceneObjectUPtr> DefineSceneObject(SceneObjectUPtr&& m);
+	void DefineIntersectableLights(LightSourceDefinitions &lightDefs, MaterialConstRef newMat) const;
+	void DefineIntersectableLights(LightSourceDefinitions &lightDefs, SceneObjectConstRef obj) const;
 
-	const SceneObject *GetSceneObject(const std::string &name) const {
-		return static_cast<const SceneObject *>(objs.GetObj(name));
+	SceneObjectConstRef GetSceneObject(const std::string &name) const {
+		return dynamic_cast<SceneObjectConstRef>(objs.GetObj(name));
 	}
-	SceneObject *GetSceneObject(const std::string &name) {
-		std::vector<luxrays::NamedObject *> &v = objs.GetObjs();
-		return static_cast<SceneObject *>(v[objs.GetIndex(name)]);
+	SceneObjectRef GetSceneObject(const std::string &name) {
+		return dynamic_cast<SceneObjectRef>(objs.GetObj(name));
 	}
-	const SceneObject *GetSceneObject(const u_int index) const {
-		return static_cast<const SceneObject *>(objs.GetObj(index));
+	SceneObjectConstRef GetSceneObject(const u_int index) const {
+		return dynamic_cast<SceneObjectConstRef>(objs.GetObj(index));
+	}
+	SceneObjectRef GetSceneObject(const u_int index) {
+		return dynamic_cast<SceneObjectRef>(objs.GetObj(index));
 	}
 	u_int GetSceneObjectIndex(const std::string &name) const {
 		return objs.GetIndex(name);
 	}
-	u_int GetSceneObjectIndex(const SceneObject *so) const {
+	u_int GetSceneObjectIndex(SceneObjectConstRef so) const {
 		return objs.GetIndex(so);
 	}
 
 	u_int GetSize() const {
 		return objs.GetSize();
 	}
-	void GetSceneObjectNames(std::vector<std::string> &names) const {
-		objs.GetNames(names);
+	auto GetSceneObjectNames() const {
+		return objs.GetNames();
 	}
 
 	// Update any reference to oldMat with newMat
-	void UpdateMaterialReferences(const Material *oldMat, const Material *newMat);
+	void UpdateMaterialReferences(MaterialConstRef oldMat, MaterialRef newMat);
 	// Update any reference to oldMesh with newMesh. It returns also the
 	// list of modified objects
-	void UpdateMeshReferences(const luxrays::ExtMesh *oldMesh, luxrays::ExtMesh *newMesh,
-		boost::unordered_set<SceneObject *> &modifiedObjsList);
+	void UpdateMeshReferences(
+		luxrays::ExtMeshConstRef oldMesh,
+		luxrays::ExtMeshRef newMesh,
+		std::unordered_set<const SceneObject *> &modifiedObjsList
+	);
 
-	void DeleteSceneObject(const std::string &name) {
-		objs.DeleteObj(name);
+	SceneObjectUPtr DeleteSceneObject(const std::string &name) {
+		return objs.DeleteObj<SceneObject>(name);
 	}
 
 	void DeleteSceneObjects(const std::vector<std::string> &names) {
 		objs.DeleteObjs(names);
 	}
-  
+ 
+	friend class slg::ExtMeshCache;
+
 private:
 	luxrays::NamedObjectVector objs;
 
 	// mapping mesh.name -> scene object list using it
-	boost::unordered_multimap<std::string, std::string> meshToSceneObjects;
+	std::unordered_multimap<std::string, std::string> meshToSceneObjects;
 };
 
 }
 
 #endif	/* _SLG_SCENEOBJECTDEFS_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

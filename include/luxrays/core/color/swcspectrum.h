@@ -261,3 +261,4 @@ inline Scalar SWCSpectrum::Filter(const SpectrumWavelengths &sw) const {
 }
 
 #endif // _LUXRAYS_SWCSPECTRUM_H
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

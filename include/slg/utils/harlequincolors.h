@@ -30,3 +30,4 @@ const luxrays::Spectrum &GetHarlequinColorByAddr(const u_longlong v);
 }
 
 #endif	/* _SLG_HARLEQUINCOLORS_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

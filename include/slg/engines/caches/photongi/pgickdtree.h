@@ -55,3 +55,4 @@ BOOST_CLASS_VERSION(slg::PGICKdTree, 1)
 BOOST_CLASS_EXPORT_KEY(slg::PGICKdTree)
 		
 #endif	/* _SLG_PGCIKDTREE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

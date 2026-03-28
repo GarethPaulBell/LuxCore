@@ -67,46 +67,45 @@ protected:
 	const Point *verts_;
 };
 
-PointinessShape::PointinessShape(ExtTriangleMesh *srcMesh, const u_int destAOVIndex) {
-	SDL_LOG("Pointiness shape " << srcMesh->GetName());
+PointinessShape::PointinessShape(ExtTriangleMeshRef srcMesh, const u_int destAOVIndex) {
+	SDL_LOG("Pointiness shape " << srcMesh.GetName());
 
 	const double startTime = WallClockTime();
 
-	const u_int originalVertCount = srcMesh->GetTotalVertexCount();
-	const u_int triCount = srcMesh->GetTotalTriangleCount();
+	const u_int originalVertCount = srcMesh.GetTotalVertexCount();
+	const u_int triCount = srcMesh.GetTotalTriangleCount();
 
-	const Point *originalVertices = srcMesh->GetVertices();
+	const Point *originalVertices = srcMesh.GetVertices();
 
 	// Find duplicate vertices
 	auto compareVerts = [](const TriangleMesh &mesh, const u_int vertIndex1, const u_int vertIndex2) {
-		const ExtTriangleMesh *triMesh = dynamic_cast<const ExtTriangleMesh *>(&mesh);
-		assert (triMesh);
+		auto& triMesh = dynamic_cast<const ExtTriangleMesh&>(mesh);
 
 		return (DistanceSquared(
-					triMesh->GetVertex(Transform::TRANS_IDENTITY, vertIndex1),
-					triMesh->GetVertex(Transform::TRANS_IDENTITY, vertIndex2)) < DEFAULT_EPSILON_STATIC) &&
-				(triMesh->HasNormals() && Dot(
-					triMesh->GetShadeNormal(Transform::TRANS_IDENTITY, vertIndex1),
-					triMesh->GetShadeNormal(Transform::TRANS_IDENTITY, vertIndex2)));
+					triMesh.GetVertex(Transform::TRANS_IDENTITY, vertIndex1),
+					triMesh.GetVertex(Transform::TRANS_IDENTITY, vertIndex2)) < DEFAULT_EPSILON_STATIC) &&
+				(triMesh.HasNormals() && Dot(
+					triMesh.GetShadeNormal(Transform::TRANS_IDENTITY, vertIndex1),
+					triMesh.GetShadeNormal(Transform::TRANS_IDENTITY, vertIndex2)));
 	};
 	vector<u_int> uniqueVertices;
-	const u_int uniqueVertCount = srcMesh->GetUniqueVerticesMapping(uniqueVertices, compareVerts);
+	const u_int uniqueVertCount = srcMesh.GetUniqueVerticesMapping(uniqueVertices, compareVerts);
 	SDL_LOG("Pointiness shape has " << uniqueVertCount << " unique vertices over " << originalVertCount);
 
-	const Triangle *tris = srcMesh->GetTriangles();
+	const Triangle *tris = srcMesh.GetTriangles();
 
 	// Build the edge information
-	set<Edge> edges;
+	std::set<Edge> edges;
 	for (u_int i = 0; i < triCount; ++i) {
-		edges.insert(Edge(uniqueVertices[tris[i].v[0]], uniqueVertices[tris[i].v[1]]));
-		edges.insert(Edge(uniqueVertices[tris[i].v[1]], uniqueVertices[tris[i].v[2]]));
-		edges.insert(Edge(uniqueVertices[tris[i].v[2]], uniqueVertices[tris[i].v[0]]));
+		edges.emplace(uniqueVertices[tris[i].v[0]], uniqueVertices[tris[i].v[1]]);
+		edges.emplace(uniqueVertices[tris[i].v[1]], uniqueVertices[tris[i].v[2]]);
+		edges.emplace(uniqueVertices[tris[i].v[2]], uniqueVertices[tris[i].v[0]]);
 	}
 
 	// Build the vertex information
 	vector<Vector> vertexEdgeVecs(originalVertCount, Vector());
 	vector<u_int> vertexCounters(originalVertCount, 0);
-	BOOST_FOREACH(const Edge &e, edges) {
+	for(const Edge &e: edges) {
 		const Vector ev = Normalize(originalVertices[e.v0] - originalVertices[e.v1]);
 
 		vertexEdgeVecs[e.v0] += ev;
@@ -118,12 +117,12 @@ PointinessShape::PointinessShape(ExtTriangleMesh *srcMesh, const u_int destAOVIn
 
 	// Build the normal information
 	vector<Normal> vertexNormal(originalVertCount);
-	if (srcMesh->HasNormals()) {
+	if (srcMesh.HasNormals()) {
 		for (u_int i = 0; i < originalVertCount; ++i) 
-			vertexNormal[i] = srcMesh->GetShadeNormal(Transform::TRANS_IDENTITY, i);
+			vertexNormal[i] = srcMesh.GetShadeNormal(Transform::TRANS_IDENTITY, i);
 	} else {
 		for (u_int i = 0; i < triCount; ++i) {
-			const Normal triNormal = srcMesh->GetGeometryNormal(Transform::TRANS_IDENTITY, i);
+			const Normal triNormal = srcMesh.GetGeometryNormal(Transform::TRANS_IDENTITY, i);
 
 			vertexNormal[uniqueVertices[tris[i].v[0]]] += triNormal;
 			vertexNormal[uniqueVertices[tris[i].v[1]]] += triNormal;
@@ -151,7 +150,7 @@ PointinessShape::PointinessShape(ExtTriangleMesh *srcMesh, const u_int destAOVIn
 	float *curvature = new float[originalVertCount];
 	fill(curvature, curvature + originalVertCount, 0.f);
 	fill(vertexCounters.begin(), vertexCounters.end(), 1);
-	BOOST_FOREACH(const Edge &e, edges) {
+	for(const Edge &e: edges) {
 		curvature[e.v0] += rawCurvature[e.v1];
 		vertexCounters[e.v0]++;
 
@@ -163,7 +162,7 @@ PointinessShape::PointinessShape(ExtTriangleMesh *srcMesh, const u_int destAOVIn
 	for (u_int i = 0; i < originalVertCount; ++i) {
 		if (uniqueVertices[i] == i) {
 			// It is an unique vertex
-			curvature[i] *= (srcMesh->HasAlphas(0) ? srcMesh->GetAlpha(i, 0) : 1.f) / vertexCounters[i];
+			curvature[i] *= (srcMesh.HasAlphas(0) ? srcMesh.GetAlpha(i, 0) : 1.f) / vertexCounters[i];
 		} else {
 			// It is a duplicate, just copy the already compute curvature
 			curvature[i] = curvature[uniqueVertices[i]];
@@ -172,9 +171,9 @@ PointinessShape::PointinessShape(ExtTriangleMesh *srcMesh, const u_int destAOVIn
 
 	if (destAOVIndex == NULL_INDEX) {
 		// Make a copy of the original mesh and overwrite vertex color information
-		mesh = srcMesh->Copy(NULL, NULL, NULL, NULL, NULL, curvature);
+		mesh = srcMesh.Copy(NULL, NULL, NULL, NULL, NULL, curvature);
 	} else {
-		mesh = srcMesh->Copy();
+		mesh = srcMesh.Copy();
 
 		assert (destAOVIndex < EXTMESH_MAX_DATA_COUNT);
 		mesh->SetVertexAOV(destAOVIndex, curvature);
@@ -185,10 +184,9 @@ PointinessShape::PointinessShape(ExtTriangleMesh *srcMesh, const u_int destAOVIn
 }
 
 PointinessShape::~PointinessShape() {
-	if (!refined)
-		delete mesh;
 }
 
-ExtTriangleMesh *PointinessShape::RefineImpl(const Scene *scene) {
-	return mesh;
+ExtTriangleMeshUPtr PointinessShape::RefineImpl(SceneConstRef scene) {
+	return std::move(mesh);
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

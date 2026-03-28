@@ -33,50 +33,50 @@ typedef enum {
 
 class BrickTexture : public Texture {
 public:
-	BrickTexture(const TextureMapping3D *mp, const Texture *t1,
-			const Texture *t2, const Texture *t3,
+	BrickTexture(TextureMapping3DUPtr&& mp, TextureConstRef t1,
+			TextureConstRef t2, TextureConstRef t3,
 			float brickw, float brickh, float brickd, float mortar,
 			float r, const std::string &b, const float modulationBias);
-	virtual ~BrickTexture() { delete mapping; }
+	virtual ~BrickTexture() {  }
 
 	virtual TextureType GetType() const { return BRICK; }
 	virtual float GetFloatValue(const HitPoint &hitPoint) const;
 	virtual luxrays::Spectrum GetSpectrumValue(const HitPoint &hitPoint) const;
 	virtual float Y() const {
 		const float m = powf(luxrays::Clamp(1.f - mortarsize, 0.f, 1.f), 3);
-		return luxrays::Lerp(m, tex2->Y(), tex1->Y());
+		return luxrays::Lerp(m, GetTexture2().Y(), GetTexture1().Y());
 	}
 	virtual float Filter() const {
 		const float m = powf(luxrays::Clamp(1.f - mortarsize, 0.f, 1.f), 3);
-		return luxrays::Lerp(m, tex2->Filter(), tex1->Filter());
+		return luxrays::Lerp(m, GetTexture2().Filter(), GetTexture1().Filter());
 	}
 
-	virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 		Texture::AddReferencedTextures(referencedTexs);
 
-		tex1->AddReferencedTextures(referencedTexs);
-		tex2->AddReferencedTextures(referencedTexs);
-		tex3->AddReferencedTextures(referencedTexs);
+		GetTexture1().AddReferencedTextures(referencedTexs);
+		GetTexture2().AddReferencedTextures(referencedTexs);
+		GetTexture3().AddReferencedTextures(referencedTexs);
 	}
-	virtual void AddReferencedImageMaps(boost::unordered_set<const ImageMap *> &referencedImgMaps) const {
-		tex1->AddReferencedImageMaps(referencedImgMaps);
-		tex2->AddReferencedImageMaps(referencedImgMaps);
-		tex3->AddReferencedImageMaps(referencedImgMaps);
+	virtual void AddReferencedImageMaps(std::unordered_set<const ImageMap * > &referencedImgMaps) const {
+		GetTexture1().AddReferencedImageMaps(referencedImgMaps);
+		GetTexture2().AddReferencedImageMaps(referencedImgMaps);
+		GetTexture3().AddReferencedImageMaps(referencedImgMaps);
 	}
 
-	virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
-		if (tex1 == oldTex)
+	virtual void UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
+		if (&GetTexture1() == &oldTex)
 			tex1 = newTex;
-		if (tex2 == oldTex)
+		if (&GetTexture2() == &oldTex)
 			tex2 = newTex;
-		if (tex3 == oldTex)
+		if (&GetTexture3() == &oldTex)
 			tex3 = newTex;
 	}
 
-	const TextureMapping3D *GetTextureMapping() const { return mapping; }
-	const Texture *GetTexture1() const { return tex1; }
-	const Texture *GetTexture2() const { return tex2; }
-	const Texture *GetTexture3() const { return tex3; }
+	TextureMapping3DConstRef GetTextureMapping() const { return *mapping; }
+	TextureConstRef GetTexture1() const { return tex1; }
+	TextureConstRef GetTexture2() const { return tex2; }
+	TextureConstRef GetTexture3() const { return tex3; }
 	MasonryBond GetBond() const { return bond; }
 	const luxrays::Point &GetOffset() const { return offset; }
 	float GetInitialBrickWidth() const { return initialbrickwidth; }
@@ -94,7 +94,7 @@ public:
 	float GetMortarDepth() const { return mortardepth; }
 	float GetModulationBias() const { return modulationBias; }
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
 	bool RunningAlternate(const luxrays::Point &p, luxrays::Point &i, luxrays::Point &b, int nWhole) const;
@@ -104,8 +104,8 @@ private:
 	bool English(const luxrays::Point &p, luxrays::Point &i, luxrays::Point &b) const;
 	float BrickNoise(u_int n) const;
 
-	const TextureMapping3D *mapping;
-	const Texture *tex1, *tex2, *tex3;
+	TextureMapping3DUPtr mapping;
+	std::reference_wrapper<const Texture> tex1, tex2, tex3;  // Const, but swappable...
 
 	MasonryBond bond;
 	luxrays::Point offset;
@@ -123,3 +123,4 @@ private:
 }
 
 #endif	/* _SLG_BRICKTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

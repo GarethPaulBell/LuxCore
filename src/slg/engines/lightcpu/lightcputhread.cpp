@@ -16,6 +16,7 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include <cassert>
 #include "luxrays/utils/thread.h"
 
 #include "slg/engines/lightcpu/lightcpu.h"
@@ -23,6 +24,7 @@
 using namespace std;
 using namespace luxrays;
 using namespace slg;
+using namespace std::literals::chrono_literals;
 
 //------------------------------------------------------------------------------
 // LightCPU RenderThread
@@ -33,8 +35,10 @@ LightCPURenderThread::LightCPURenderThread(LightCPURenderEngine *engine,
 		CPUNoTileRenderThread(engine, index, device) {
 }
 
-void LightCPURenderThread::RenderFunc() {
-	//SLG_LOG("[LightCPURenderThread::" << threadIndex << "] Rendering thread started");
+void LightCPURenderThread::RenderFunc(std::stop_token stop_token) {
+#ifndef NDEBUG
+	SLG_LOG("[LightCPURenderThread::" << threadIndex << "] Rendering thread started");
+#endif
 
 	//--------------------------------------------------------------------------
 	// Initialization
@@ -46,11 +50,11 @@ void LightCPURenderThread::RenderFunc() {
 	LightCPURenderEngine *engine = (LightCPURenderEngine *)renderEngine;
 	const PathTracer &pathTracer = engine->pathTracer;
 	// (engine->seedBase + 1) seed is used for sharedRndGen
-	RandomGenerator *rndGen = new RandomGenerator(engine->seedBase + 1 + threadIndex);
+	auto rndGen = std::make_unique<RandomGenerator>(engine->seedBase + 1 + threadIndex);
 
 	// Setup the sampler
-	Sampler *sampler = engine->renderConfig->AllocSampler(rndGen, engine->film,
-			engine->sampleSplatter, engine->samplerSharedData,
+	auto sampler = engine->renderConfig.AllocSampler(rndGen, engine->GetFilm(),
+			engine->GetSampleSplatter(), engine->samplerSharedData,
 			// Disable image plane meaning for samples 0 and 1
 			Properties() << Property("sampler.imagesamples.enable")(false));
 	sampler->SetThreadIndex(threadIndex);
@@ -63,42 +67,42 @@ void LightCPURenderThread::RenderFunc() {
 	//--------------------------------------------------------------------------
 
 	vector<SampleResult> sampleResults;
-	for(u_int steps = 0; !boost::this_thread::interruption_requested(); ++steps) {
+	for(u_int steps = 0; !stop_token.stop_requested(); ++steps) {
 		// Check if we are in pause mode
 		if (engine->pauseMode) {
 			// Check every 100ms if I have to continue the rendering
-			while (!boost::this_thread::interruption_requested() && engine->pauseMode)
-				boost::this_thread::sleep(boost::posix_time::millisec(100));
+			while (!stop_token.stop_requested() && engine->pauseMode)
+				std::this_thread::sleep_for(100ms);
 
-			if (boost::this_thread::interruption_requested())
+			if (stop_token.stop_requested())
 				break;
 		}
 
-		pathTracer.RenderLightSample(device, engine->renderConfig->scene,
-				engine->film, sampler, sampleResults);
+		pathTracer.RenderLightSample(device, engine->renderConfig.GetScene(),
+				engine->GetFilm(), *sampler, sampleResults);
 
 		// Variance clamping
 		if (varianceClamping.hasClamping()) {
 			for(u_int i = 0; i < sampleResults.size(); ++i)
-				varianceClamping.Clamp(*(engine->film), sampleResults[i]);
+				varianceClamping.Clamp(engine->GetFilm(), sampleResults[i]);
 		}
 
 		sampler->NextSample(sampleResults);
 
 #ifdef WIN32
 		// Work around Windows bad scheduling
-		renderThread->yield();
+        std::this_thread::yield();
 #endif
 
 		// Check halt conditions
-		if (engine->film->GetConvergence() == 1.f)
+		if (engine->GetFilm().GetConvergence() == 1.f)
 			break;
 	}
 
-	delete sampler;
-	delete rndGen;
-
 	threadDone = true;
 
-	//SLG_LOG("[LightCPURenderThread::" << threadIndex << "] Rendering thread halted");
+#ifndef NDEBUG
+	SLG_LOG("[LightCPURenderThread::" << threadIndex << "] Rendering thread halted");
+#endif
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

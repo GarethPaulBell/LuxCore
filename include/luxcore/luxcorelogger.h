@@ -50,7 +50,7 @@ extern double lcInitTime;
 #define API_BEGIN(FMT, ...) { \
 	if (luxcore::detail::logAPIEnabled) { \
 		luxcore::detail::luxcoreLogger->info( \
-                    fmt::runtime("[API][{:.3f}] Begin [{}](" FMT ")"), \
+                    "[API][{:.3f}] Begin [{}](" FMT ")", \
                     (luxrays::WallClockTime() - luxcore::detail::lcInitTime), \
                     LC_FUNCTION_NAME, \
                     __VA_ARGS__); \
@@ -135,3 +135,4 @@ inline std::string ToArgString(const T *p, const size_t size) {
 }
 
 #endif	/* _LUXCORE_LOGGER_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

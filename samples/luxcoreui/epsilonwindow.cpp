@@ -18,6 +18,7 @@
 
 #include <iostream>
 #include <boost/format.hpp>
+#include <memory>
 
 #include "luxcoreapp.h"
 
@@ -32,39 +33,42 @@ using namespace luxcore;
 EpsilonWindow::EpsilonWindow(LuxCoreApp *a) : ObjectEditorWindow(a, "Epsilon") {
 }
 
-Properties EpsilonWindow::GetEpsilonProperties(const Properties &cfgProps) const {
-	return cfgProps.GetAllProperties("scene.epsilon");
+std::unique_ptr<Properties> EpsilonWindow::GetEpsilonProperties(
+    PropertiesRPtr cfgProps
+) const {
+	return cfgProps->GetAllProperties("scene.epsilon");
 }
 
-void EpsilonWindow::RefreshObjectProperties(Properties &props) {
-	RenderConfig *config = app->config;
+void EpsilonWindow::RefreshObjectProperties(const std::unique_ptr<Properties> & props) {
+	auto& config = app->config;
 	try {
-		props = GetEpsilonProperties(config->ToProperties());
+		//*props << GetEpsilonProperties(config->ToProperties());
+		props->Set(GetEpsilonProperties(config->ToProperties()));
 	} catch(exception &ex) {
 		LA_LOG("Epsilon parsing error: " << endl << ex.what());
 
 		// Just revert to the initialized properties (note: they will include the error)
-		props = GetEpsilonProperties(config->GetProperties());
+		props->Set(GetEpsilonProperties(config->GetProperties()));
 	}
 }
 
-void EpsilonWindow::ParseObjectProperties(const Properties &props) {
+void EpsilonWindow::ParseObjectProperties(PropertiesRPtr props) {
 	app->RenderConfigParse(GetEpsilonProperties(props));
 }
 
-bool EpsilonWindow::DrawObjectGUI(Properties &props, bool &modifiedProps) {
+bool EpsilonWindow::DrawObjectGUI(const std::unique_ptr<Properties> & props, bool &modifiedProps) {
 	float fval;
 
-	fval = props.Get("scene.epsilon.min").Get<float>();
+	fval = props->Get("scene.epsilon.min").Get<float>();
 	if (ImGui::InputFloat("Min. epsilon value", &fval, 0.f, 0.f, "%.15f")) {
-		props.Set(Property("scene.epsilon.min")(fval));
+		props->Set(Property("scene.epsilon.min")(fval));
 		modifiedProps = true;
 	}
 	LuxCoreApp::HelpMarker("scene.epsilon.min");
 
-	fval = props.Get("scene.epsilon.max").Get<float>();
+	fval = props->Get("scene.epsilon.max").Get<float>();
 	if (ImGui::InputFloat("Max. epsilon value", &fval, 0.f, 0.f, "%.15f")) {
-		props.Set(Property("scene.epsilon.max")(fval));
+		props->Set(Property("scene.epsilon.max")(fval));
 		modifiedProps = true;
 	}
 	LuxCoreApp::HelpMarker("scene.epsilon.max");

@@ -157,3 +157,4 @@ extern std::vector<Point> PlaneClipPolygon(const Point &clippingPlaneOrigin,
 }
 
 #endif	/* _LUXRAYS_BOX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

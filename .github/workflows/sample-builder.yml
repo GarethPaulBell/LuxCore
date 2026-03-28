@@ -43,7 +43,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-13, macos-14]
+        os: [ubuntu-latest, windows-latest, macos-15, macos-15-intel]
     env:
       BUILD_TYPE: Release
       #CXX_VERSION: 20
@@ -96,7 +96,7 @@ jobs:
             version = input_version
           else:
             # Fall back to default
-            build_settings_file = Path("build-helpers", "build-settings.json")
+            build_settings_file = Path("build-system", "build-settings.json")
             with open(build_settings_file) as in_file:
               default_version = json.load(in_file)["DefaultVersion"]
             version = ".".join(default_version[i] for i in ("major", "minor", "patch"))
@@ -191,20 +191,56 @@ jobs:
             core.exportVariable('MACOSX_DEPLOYMENT_TARGET', target);
             core.exportVariable('PKG_ARCH', arch);
 
+      - name: Prepare MacOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+            # We make conan believe we use apple-clang (see profiles), but
+            # actually we use recent version of llvm, to get full compatibility
+            # with C++20 (in particular: joining threads)
+
+            # llvm
+            brew install llvm@20
+            LLVM_PREFIX=$(brew --prefix llvm@20)
+            echo "CC=clang" >> $GITHUB_ENV
+            echo "CXX=clang++" >> $GITHUB_ENV
+            echo "AR=llvm-ar" >> $GITHUB_ENV
+            echo "RANLIB=llvm-ranlib" >> $GITHUB_ENV
+
+            # lld
+            brew install lld@20
+            LLD_PREFIX=$(brew --prefix lld@20)
+
+            # Set paths
+            echo "PATH=${LLVM_PREFIX}/bin:${LLD_PREFIX}/bin:$PATH" >> $GITHUB_ENV
+            echo "DYLD_LIBRARY_PATH=${LLVM_PREFIX}/lib:${LLD_PREFIX}/lib:${DYLD_LIBRARY_PATH}" >> $GITHUB_ENV
+
+            # Set flags
+            echo "LDFLAGS=${LD_FLAGS} -fuse-ld=${LLD_PREFIX}/bin/ld64.lld -L${LLVM_PREFIX}/lib -L${LLD_PREFIX}/lib" >> $GITHUB_ENV
+            echo "CPPFLAGS=${CPPFLAGS} -I${LLVM_PREFIX}/include -I${LLD_PREFIX}/include" >> $GITHUB_ENV
+
+            # OpenMP
+            brew install libomp
+            echo "OpenMP_ROOT=$(brew --prefix libomp)" >> $GITHUB_ENV
+
       - name: Build (Windows)
         if: runner.os == 'Windows'
         shell: cmd
         env:
           CONAN_HOME: ${{ github.workspace }}\.conan2
         run: |
-          pip install conan && make deps && make luxcore && make luxcoreui && make luxcoreconsole
+          rem We have to install 'wheel', despite it is useless for samples,
+          rem Otherwise 'make deps' will complain
+
+          pip install conan && pip install wheel && make deps && make luxcore && make luxcoreui && make luxcoreconsole
 
       - name: Build (MacOS)
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          pip install conan
-          make deps
+          # We have to install 'wheel', despite it is useless for samples,
+          # otherwise make deps will complain
+          pip install conan && pip install wheel && make deps
           make luxcore
           make luxcoreui
           make luxcoreconsole
@@ -221,7 +257,11 @@ jobs:
             manylinux-interpreters ensure cp313-cp313
             PATH=/opt/python/cp313-cp313/bin:$PATH
             which python
+
+            # We have to install 'wheel', despite it is useless for samples,
+            # otherwise make deps will complain
             python -m pip install conan
+            python -m pip install wheel
 
             # Install toolchain (gcc, ccache...)
             CC=/opt/rh/gcc-toolset-14/root/usr/bin/gcc
@@ -229,6 +269,7 @@ jobs:
             export CMAKE_C_COMPILER_LAUNCHER=ccache
             export CMAKE_CXX_COMPILER_LAUNCHER=ccache
             export VERBOSE=1
+            dnf install -y sudo
             #export CLICOLOR_FORCE=1
 
             # Install conda

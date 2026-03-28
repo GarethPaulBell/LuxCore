@@ -60,3 +60,4 @@ BOOST_CLASS_EXPORT_KEY(slg::PathOCLRenderState)
 #endif
 		
 #endif	/* _SLG_PATHCPURENDERSTATE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

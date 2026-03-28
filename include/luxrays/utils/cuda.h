@@ -73,3 +73,4 @@ inline void CheckOptixError(const OptixResult err, const char *file, const int l
 #endif
 
 #endif	/* _LUXRAYS_CUDA_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

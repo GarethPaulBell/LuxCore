@@ -29,7 +29,7 @@ namespace slg {
 
 class GreaterThanTexture : public Texture {
 public:
-	GreaterThanTexture(const Texture *t1, const Texture *t2) : tex1(t1), tex2(t2) { }
+	GreaterThanTexture(TextureRef t1, TextureRef t2) : tex1(t1), tex2(t2) { }
 	virtual ~GreaterThanTexture() { }
 
 	virtual TextureType GetType() const { return GREATER_THAN_TEX; }
@@ -37,41 +37,40 @@ public:
 	virtual luxrays::Spectrum GetSpectrumValue(const HitPoint &hitPoint) const;
 	virtual float Y() const { 
 		// Doesn't really make sense here
-		return (tex1->Y() > tex2->Y()) ? 1.f : 0.f;
+		return (GetTexture1().Y() > GetTexture2().Y()) ? 1.f : 0.f;
 	}
 	virtual float Filter() const {
 		// Doesn't really make sense here
-		return (tex1->Filter() > tex2->Filter()) ? 1.f : 0.f;
+		return (GetTexture1().Filter() > GetTexture2().Filter()) ? 1.f : 0.f;
 	}
 
-	virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 		Texture::AddReferencedTextures(referencedTexs);
 
-		tex1->AddReferencedTextures(referencedTexs);
-		tex2->AddReferencedTextures(referencedTexs);
+		GetTexture1().AddReferencedTextures(referencedTexs);
+		GetTexture2().AddReferencedTextures(referencedTexs);
 	}
-	virtual void AddReferencedImageMaps(boost::unordered_set<const ImageMap *> &referencedImgMaps) const {
-		tex1->AddReferencedImageMaps(referencedImgMaps);
-		tex2->AddReferencedImageMaps(referencedImgMaps);
-	}
-
-	virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
-		if (tex1 == oldTex)
-			tex1 = newTex;
-		if (tex2 == oldTex)
-			tex2 = newTex;
+	virtual void AddReferencedImageMaps(std::unordered_set<const ImageMap * > &referencedImgMaps) const {
+		GetTexture1().AddReferencedImageMaps(referencedImgMaps);
+		GetTexture2().AddReferencedImageMaps(referencedImgMaps);
 	}
 
-	const Texture *GetTexture1() const { return tex1; }
-	const Texture *GetTexture2() const { return tex2; }
+	virtual void UpdateTextureReferences(TextureRef oldTex, TextureRef newTex) {
+		updtex(tex1, oldTex, newTex);
+		updtex(tex2, oldTex, newTex);
+	}
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	TextureConstRef GetTexture1() const { return tex1; }
+	TextureConstRef GetTexture2() const { return tex2; }
+
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
-	const Texture *tex1;
-	const Texture *tex2;
+	std::reference_wrapper<Texture> tex1;
+	std::reference_wrapper<Texture> tex2;
 };
 
 }
 
 #endif	/* _SLG_GREATERTHANTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

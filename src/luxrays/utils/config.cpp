@@ -40,34 +40,63 @@ string SanitizeFileName(const string &name) {
 	return sanitizedName;
 }
 
-boost::filesystem::path GetConfigDir() {
+std::filesystem::path GetEnvPath(const string &name) {
+	char *path = getenv(name.c_str());
+
+	if (path && path[0]) {
+		return std::filesystem::path(path);
+	}
+
+	return "";
+}
+
+std::filesystem::path GetCacheDir() {
+
 #if defined(__linux__)
-	// boost::filesystem::temp_directory_path() is usually mapped to /tmp and
+	// std::filesystem::temp_directory_path() is usually mapped to /tmp and
 	// the content of the directory is often deleted at each reboot
-	boost::filesystem::path kernelConfigDir = getenv("HOME");
-	kernelConfigDir = kernelConfigDir / ".config" / "luxcorerender.org";
+
+	// XDG standard says XDG_CACHE_HOME is unset by default.
+	std::filesystem::path xdgCacheHome = GetEnvPath("XDG_CACHE_HOME");
+
+	if (xdgCacheHome.empty()) {
+		// HOME should never be unset, but we better not want to
+		// crash if that happens.
+		std::filesystem::path home = GetEnvPath("HOME");
+
+		if (!home.empty()) {
+			xdgCacheHome = home / ".config";
+		}
+		else {
+			xdgCacheHome = std::filesystem::temp_directory_path();
+		}
+	}
+
+	std::filesystem::path kernelConfigDir = xdgCacheHome / "luxcorerender.org";
 #elif defined(__APPLE__)
-	// boost::filesystem::temp_directory_path() is usually mapped to /tmp and
+	// std::filesystem::temp_directory_path() is usually mapped to /tmp and
 	// the content of the directory is deleted at each reboot on MacOS
 	
 	// This may not work on MacOS for application started from the GUI
-	//boost::filesystem::path kernelConfigDir(getenv("HOME"));
+	//std::filesystem::path kernelConfigDir(getenv("HOME"));
 
-	boost::filesystem::path kernelConfigDir;
+	std::filesystem::path kernelConfigDir;
 
 	const uid_t uid = getuid();
 	const struct passwd *pwd = getpwuid(uid);
 	if (!pwd)
-		kernelConfigDir = boost::filesystem::temp_directory_path();
+		kernelConfigDir = std::filesystem::temp_directory_path();
 	else
 		kernelConfigDir = string(pwd->pw_dir);
 	
 	kernelConfigDir = kernelConfigDir / "luxcorerender.org";
 #else
-	boost::filesystem::path kernelConfigDir= boost::filesystem::temp_directory_path() / "luxcorerender.org";
+	std::filesystem::path kernelConfigDir= std::filesystem::temp_directory_path() / "luxcorerender.org";
 #endif
 
 	return kernelConfigDir;
 }
 
 }
+
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

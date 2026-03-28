@@ -30,20 +30,23 @@ using namespace slg;
 // TilePathSamplerSharedData
 //------------------------------------------------------------------------------
 
-SamplerSharedData *TilePathSamplerSharedData::FromProperties(const Properties &cfg,
-		RandomGenerator *rndGen, Film *film) {
-	return new TilePathSamplerSharedData();
+std::unique_ptr<SamplerSharedData> TilePathSamplerSharedData::FromProperties(const Properties &cfg,
+		const RandomGeneratorUPtr & rndGen, FilmPtr film) {
+	return std::make_unique<TilePathSamplerSharedData>();
 }
 
 //------------------------------------------------------------------------------
 // TilePath sampler
 //------------------------------------------------------------------------------
 
-TilePathSampler::TilePathSampler(luxrays::RandomGenerator *rnd, Film *flm,
-		const FilmSampleSplatter *flmSplatter) : Sampler(rnd, flm, flmSplatter, true),
-		sobolSequence() {
-	aaSamples = 1;
-}
+TilePathSampler::TilePathSampler(const RandomGeneratorUPtr & rnd, FilmPtr flm,
+		const FilmSampleSplatterUPtr& flmSplatter
+) :
+	Sampler(rnd, flm, flmSplatter, true),
+	sobolSequence(),
+	tileFilm(flm),
+	aaSamples{1}
+{}
 
 TilePathSampler::~TilePathSampler() {
 }
@@ -105,7 +108,7 @@ void TilePathSampler::NextSample(const vector<SampleResult> &sampleResults) {
 	InitNewSample();
 }
 
-void TilePathSampler::Init(TileWork *tWork, Film *tFilm) {
+void TilePathSampler::Init(TileWork *tWork, FilmPtr tFilm) {
 	tileWork = tWork;
 	tileFilm = tFilm;
 
@@ -120,14 +123,15 @@ void TilePathSampler::Init(TileWork *tWork, Film *tFilm) {
 // Static methods used by SamplerRegistry
 //------------------------------------------------------------------------------
 
-Properties TilePathSampler::ToProperties(const Properties &cfg) {
-	return Properties() <<
-			cfg.Get(GetDefaultProps().Get("sampler.type"));
+PropertiesUPtr TilePathSampler::ToProperties(const Properties &cfg) {
+	PropertiesUPtr props = std::make_unique<Properties>();
+	*props << cfg.Get(GetDefaultProps()->Get("sampler.type"));
+	return props;
 }
 
-Sampler *TilePathSampler::FromProperties(const Properties &cfg, RandomGenerator *rndGen,
-		Film *film, const FilmSampleSplatter *flmSplatter, SamplerSharedData *sharedData) {
-	return new TilePathSampler(rndGen, film, flmSplatter);
+SamplerUPtr TilePathSampler::FromProperties(const Properties &cfg, const RandomGeneratorUPtr & rndGen,
+		FilmPtr film, const FilmSampleSplatterUPtr& flmSplatter, SamplerSharedDataSPtr sharedData) {
+	return std::make_unique<TilePathSampler>(rndGen, film, flmSplatter);
 }
 
 slg::ocl::Sampler *TilePathSampler::FromPropertiesOCL(const Properties &cfg) {
@@ -142,10 +146,12 @@ void TilePathSampler::AddRequiredChannels(Film::FilmChannels &channels, const lu
 	// No additional channels required
 }
 
-const Properties &TilePathSampler::GetDefaultProps() {
-	static Properties props = Properties() <<
+PropertiesUPtr TilePathSampler::GetDefaultProps() {
+	auto props = std::make_unique<Properties>();
+	*props <<
 			Sampler::GetDefaultProps() <<
 			Property("sampler.type")(GetObjectTag());
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -16,6 +16,7 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include <cassert>
 #include "luxrays/utils/thread.h"
 
 #include "slg/slg.h"
@@ -44,8 +45,10 @@ void RTPathCPURenderThread::StartRenderThread() {
 	CPURenderThread::StartRenderThread();
 }
 
-void RTPathCPURenderThread::RTRenderFunc() {
-	//SLG_LOG("[RTPathCPURenderEngine::" << threadIndex << "] Rendering thread started");
+void RTPathCPURenderThread::RTRenderFunc(std::stop_token stop_token) {
+#ifndef NDEBUG
+	SLG_LOG("[RTPathCPURenderEngine::" << threadIndex << "] Rendering thread started");
+#endif
 
 	//--------------------------------------------------------------------------
 	// Initialization
@@ -57,11 +60,13 @@ void RTPathCPURenderThread::RTRenderFunc() {
 	RTPathCPURenderEngine *engine = (RTPathCPURenderEngine *)renderEngine;
 	const PathTracer &pathTracer = engine->pathTracer;
 	// (engine->seedBase + 1) seed is used for sharedRndGen
-	RandomGenerator *rndGen = new RandomGenerator(engine->seedBase + 1 + threadIndex);
+	auto rndGen = std::make_unique<RandomGenerator>(engine->seedBase + 1 + threadIndex);
 	// Setup the sampler
-	Sampler *sampler = engine->renderConfig->AllocSampler(rndGen, engine->film, NULL,
-			engine->samplerSharedData, Properties());
-	((RTPathCPUSampler *)sampler)->SetRenderEngine(engine);
+	auto sampler = engine->renderConfig.AllocSampler(
+		rndGen, engine->GetFilm(), engine->GetSampleSplatter(),
+		engine->samplerSharedData, Properties()
+	);
+	(static_cast<RTPathCPUSampler *>(sampler.get()))->SetRenderEngine(engine);
 	sampler->RequestSamples(PIXEL_NORMALIZED_ONLY, pathTracer.eyeSampleSize);
 
 	//--------------------------------------------------------------------------
@@ -70,44 +75,50 @@ void RTPathCPURenderThread::RTRenderFunc() {
 
 	vector<SampleResult> sampleResults(1);
 	SampleResult &sampleResult = sampleResults[0];
-	PathTracer::InitEyeSampleResults(engine->film, sampleResults);
+	PathTracer::InitEyeSampleResults(engine->GetFilm(), sampleResults);
 
 	VarianceClamping varianceClamping(pathTracer.sqrtVarianceClampMaxValue);
 
-	for (u_int steps = 0; !boost::this_thread::interruption_requested(); ++steps) {
+	for (u_int steps = 0; !stop_token.stop_requested(); ++steps) {
 		// Check if we are in pause or edit mode
 		if (engine->threadsPauseMode) {
-			// Synchronize all threads
-			engine->threadsSyncBarrier->wait();
+			// Synchronize all threads -> This waits for RTPathCPURenderEngine::PauseThreads()
+			engine->threadsSyncBarrier->arrive_and_wait();
 
-			// Wait for the main thread
-			engine->threadsSyncBarrier->wait();
+			while (!stop_token.stop_requested() && engine->threadsPauseMode)
+				std::this_thread::sleep_for(100ms);
 
-			if (boost::this_thread::interruption_requested())
+			// If the above loop was broken because of the stop, we don't want to enter the second
+			// arrive_and_wait() because that would wait for the resume signal, which won't come.
+			if (stop_token.stop_requested())
 				break;
 
-			((RTPathCPUSampler *)sampler)->Reset(engine->film);
+			// Wait for the main thread -> This waits for RTPathCPURenderEngine::ResumeThreads()
+			engine->threadsSyncBarrier->arrive_and_wait();
+
+			(static_cast<RTPathCPUSampler *>(sampler.get()))->Reset(FilmPtr(&engine->GetFilm()));
 		}
 
-		pathTracer.RenderEyeSample(device, engine->renderConfig->scene,
-				engine->film, sampler, sampleResults);
+		pathTracer.RenderEyeSample(device, engine->renderConfig.GetScene(),
+				engine->GetFilm(), *sampler, sampleResults);
 
 		// Variance clamping
 		if (varianceClamping.hasClamping())
-			varianceClamping.Clamp(*(engine->film), sampleResult);
+			varianceClamping.Clamp(engine->GetFilm(), sampleResult);
 
 		sampler->NextSample(sampleResults);
 
 #ifdef WIN32
 		// Work around Windows bad scheduling
-		renderThread->yield();
+        std::this_thread::yield();
 #endif
 	}
 
-	delete sampler;
-	delete rndGen;
 
 	threadDone = true;
 
-	//SLG_LOG("[RTPathCPURenderEngine::" << threadIndex << "] Rendering thread halted");
+#ifndef NDEBUG
+	SLG_LOG("[RTPathCPURenderEngine::" << threadIndex << "] Rendering thread halted");
+#endif
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -20,8 +20,7 @@
 #define	_LUXRAYS_OPENCLCACHE_H
 
 #include <string>
-#include <boost/filesystem.hpp>
-#include <boost/unordered_map.hpp>
+#include <filesystem>
 
 #if !defined(LUXRAYS_DISABLE_OPENCL)
 
@@ -72,7 +71,11 @@ public:
 	static std::string HashString(const std::string &ss);
 	static u_int HashBin(const char *s, const size_t size);
 
-	static boost::filesystem::path GetCacheDir(const std::string &applicationName);
+	static std::filesystem::path GetCacheDir(const std::string &applicationName);
+
+	std::string GetApplicationName() {
+		return appName;
+	}
 
 private:
 	std::string appName;
@@ -84,3 +87,4 @@ private:
 
 #endif	/* _LUXRAYS_OPENCLCACHE_H */
 
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

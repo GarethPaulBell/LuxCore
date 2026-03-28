@@ -40,3 +40,4 @@ typedef int BSDFEvent;
 }
 
 #endif	/* _SLG_BSDFEVENTS_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

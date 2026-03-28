@@ -27,20 +27,21 @@ using namespace slg;
 //------------------------------------------------------------------------------
 
 float GreaterThanTexture::GetFloatValue(const HitPoint &hitPoint) const {
-	return (tex1->GetFloatValue(hitPoint) > tex2->GetFloatValue(hitPoint)) ? 1.f : 0.f;
+	return (GetTexture1().GetFloatValue(hitPoint) > GetTexture2().GetFloatValue(hitPoint)) ? 1.f : 0.f;
 }
 
 Spectrum GreaterThanTexture::GetSpectrumValue(const HitPoint &hitPoint) const {
 	return Spectrum(GetFloatValue(hitPoint));
 }
 
-Properties GreaterThanTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
-	Properties props;
+PropertiesUPtr GreaterThanTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.textures." + name + ".type")("greaterthan"));
-	props.Set(Property("scene.textures." + name + ".texture1")(tex1->GetSDLValue()));
-	props.Set(Property("scene.textures." + name + ".texture2")(tex2->GetSDLValue()));
+	props->Set(Property("scene.textures." + name + ".type")("greaterthan"));
+	props->Set(Property("scene.textures." + name + ".texture1")(GetTexture1().GetSDLValue()));
+	props->Set(Property("scene.textures." + name + ".texture2")(GetTexture2().GetSDLValue()));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

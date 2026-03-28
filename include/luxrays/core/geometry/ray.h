@@ -111,3 +111,4 @@ inline std::ostream &operator<<(std::ostream &os, const RayHit &rh) {
 }
 
 #endif	/* _LUXRAYS_RAY_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

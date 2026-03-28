@@ -22,6 +22,8 @@
 #include <sstream>
 
 #include "luxrays/luxrays.h"
+#include "slg/usings.h"
+#include "slg/slg.h"
 
 /*!
  * \namespace slg
@@ -65,3 +67,4 @@ extern FileNameResolver SLG_FileNameResolver;
 }
 
 #endif	/* _SLG_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

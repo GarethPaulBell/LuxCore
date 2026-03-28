@@ -72,11 +72,11 @@ void PointLight::GetPreprocessedData(float *localPosData, float *absolutePosData
 	}
 }
 
-float PointLight::GetPower(const Scene &scene) const {
+float PointLight::GetPower(SceneConstRef scene) const {
 	return emittedFactor.Y();
 }
 
-Spectrum PointLight::Emit(const Scene &scene,
+Spectrum PointLight::Emit(SceneConstRef scene,
 		const float time, const float u0, const float u1,
 		const float u2, const float u3, const float passThroughEvent,
 		Ray &ray, float &emissionPdfW,
@@ -95,7 +95,7 @@ Spectrum PointLight::Emit(const Scene &scene,
 	return emittedFactor * (1.f / (4.f * M_PI));
 }
 
-Spectrum PointLight::Illuminate(const Scene &scene, const BSDF &bsdf,
+Spectrum PointLight::Illuminate(SceneConstRef scene, const BSDF &bsdf,
 		const float time, const float u0, const float u1, const float passThroughEvent,
         Ray &shadowRay, float &directPdfW,
 		float *emissionPdfW, float *cosThetaAtLight) const {
@@ -119,16 +119,17 @@ Spectrum PointLight::Illuminate(const Scene &scene, const BSDF &bsdf,
 	return emittedFactor * (1.f / (4.f * M_PI));
 }
 
-Properties PointLight::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+PropertiesUPtr PointLight::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
 	const string prefix = "scene.lights." + GetName();
-	Properties props = NotIntersectableLightSource::ToProperties(imgMapCache, useRealFileName);
+	PropertiesUPtr props = NotIntersectableLightSource::ToProperties(imgMapCache, useRealFileName);
 
-	props.Set(Property(prefix + ".type")("point"));
-	props.Set(Property(prefix + ".color")(color));
-	props.Set(Property(prefix + ".power")(power));
-	props.Set(Property(prefix + ".normalizebycolor")(emittedPowerNormalize));
-	props.Set(Property(prefix + ".efficiency")(efficiency));
-	props.Set(Property(prefix + ".position")(localPos));
+	props->Set(Property(prefix + ".type")("point"));
+	props->Set(Property(prefix + ".color")(color));
+	props->Set(Property(prefix + ".power")(power));
+	props->Set(Property(prefix + ".normalizebycolor")(emittedPowerNormalize));
+	props->Set(Property(prefix + ".efficiency")(efficiency));
+	props->Set(Property(prefix + ".position")(localPos));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

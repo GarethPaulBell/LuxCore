@@ -28,7 +28,7 @@ atomic<u_int> defaultObjectIDIndex(0);
 }
 
 void Scene::ParseObjects(const Properties &props) {
-	vector<string> objKeys = props.GetAllUniqueSubNames("scene.objects");
+	std::vector<string> objKeys = props.GetAllUniqueSubNames("scene.objects");
 	if (objKeys.size() == 0) {
 		// There are not object definitions
 		return;
@@ -36,7 +36,7 @@ void Scene::ParseObjects(const Properties &props) {
 
 	double lastPrint = WallClockTime();
 	u_int objCount = 0;
-	BOOST_FOREACH(const string &key, objKeys) {
+	for(const string &key: objKeys) {
 		// Extract the object name
 		const string objName = Property::ExtractField(key, 2);
 		if (objName == "")
@@ -44,15 +44,15 @@ void Scene::ParseObjects(const Properties &props) {
 
 		if (objDefs.IsSceneObjectDefined(objName)) {
 			// A replacement for an existing object
-			const SceneObject *oldObj = objDefs.GetSceneObject(objName);
-			const bool wasLightSource = oldObj->GetMaterial()->IsLightSource();
+			auto& oldObj = objDefs.GetSceneObject(objName);
+			const bool wasLightSource = oldObj.GetMaterial().IsLightSource();
 
 			// Check if the old object was a light source
 			if (wasLightSource) {
 				editActions.AddActions(LIGHTS_EDIT | LIGHT_TYPES_EDIT);
 
 				// Delete all old triangle lights
-				lightDefs.DeleteLightSourceStartWith(Scene::EncodeTriangleLightNamePrefix(oldObj->GetName()));
+				lightDefs.DeleteLightSourceStartWith(Scene::EncodeTriangleLightNamePrefix(oldObj.GetName()));
 			}
 		}
 
@@ -61,13 +61,14 @@ void Scene::ParseObjects(const Properties &props) {
 		const u_int objID = ((u_int)(RadicalInverse(index + 1, 2) * 255.f + .5f)) |
 				(((u_int)(RadicalInverse(index + 1, 3) * 255.f + .5f)) << 8) |
 				(((u_int)(RadicalInverse(index + 1, 5) * 255.f + .5f)) << 16);
-		SceneObject *obj = CreateObject(objID, objName, props);
-		objDefs.DefineSceneObject(obj);
+		auto objptr = CreateObject(objID, objName, props);
+		//SceneObjectRef obj = objDefs.DefineSceneObject(objptr);
+		auto [obj, oldObjPtr] = objDefs.DefineSceneObject(std::move(objptr));
 
 		// Check if it is a light source
-		const Material *mat = obj->GetMaterial();
-		if (mat->IsLightSource()) {
-			SDL_LOG("The " << objName << " object is a light sources with " << obj->GetExtMesh()->GetTotalTriangleCount() << " triangles");
+		auto& mat = obj.GetMaterial();
+		if (mat.IsLightSource()) {
+			SDL_LOG("The " << objName << " object is a light sources with " << obj.GetExtMesh().GetTotalTriangleCount() << " triangles");
 
 			objDefs.DefineIntersectableLights(lightDefs, obj);
 		}
@@ -85,7 +86,7 @@ void Scene::ParseObjects(const Properties &props) {
 	editActions.AddActions(GEOMETRY_EDIT);
 }
 
-SceneObject *Scene::CreateObject(const u_int defaultObjID, const string &objName, const Properties &props) {
+SceneObjectUPtr Scene::CreateObject(const u_int defaultObjID, const string &objName, const Properties &props) {
 	const string propName = "scene.objects." + objName;
 
 	// Extract the material name
@@ -96,7 +97,7 @@ SceneObject *Scene::CreateObject(const u_int defaultObjID, const string &objName
 	// Get the material
 	if (!matDefs.IsMaterialDefined(matName))
 		throw runtime_error("Unknown material: " + matName);
-	const Material *mat = matDefs.GetMaterial(matName);
+	MaterialRef mat = matDefs.GetMaterial(matName);
 
 	// Get the mesh
 	string shapeName;
@@ -106,14 +107,14 @@ SceneObject *Scene::CreateObject(const u_int defaultObjID, const string &objName
 
 		if (!extMeshCache.IsExtMeshDefined(shapeName)) {
 			// It is a mesh to define
-			ExtTriangleMesh *mesh = ExtTriangleMesh::Load(SLG_FileNameResolver.ResolveFile(shapeName));
+			auto mesh = ExtTriangleMesh::Load(SLG_FileNameResolver.ResolveFile(shapeName));
 			mesh->SetName(shapeName);
 
 			const Matrix4x4 mat = props.Get(Property(propName +
 				".appliedtransformation")(Matrix4x4::MAT_IDENTITY)).Get<Matrix4x4>();
 			mesh->SetLocal2World(Transform(mat));
 
-			DefineMesh(mesh);
+			DefineMesh(std::move(mesh));
 		}
 	} else if (props.IsDefined(propName + ".vertices")) {
 		// For compatibility with the past SDL syntax
@@ -121,9 +122,9 @@ SceneObject *Scene::CreateObject(const u_int defaultObjID, const string &objName
 
 		if (!extMeshCache.IsExtMeshDefined(shapeName)) {
 			// It is a mesh to define
-			ExtMesh *mesh = CreateInlinedMesh(shapeName, propName, props);
+			auto mesh = CreateInlinedMesh(shapeName, propName, props);
 			mesh->SetName(shapeName);
-			DefineMesh(mesh);
+			DefineMesh(std::move(mesh));
 		}
 	} else if (props.IsDefined(propName + ".shape")) {
 		shapeName = props.Get(Property(propName + ".shape")("")).Get<string>();
@@ -134,7 +135,7 @@ SceneObject *Scene::CreateObject(const u_int defaultObjID, const string &objName
 		throw runtime_error("Missing shape in object definition: " + objName);
 
 	// Check if I have to use a motion mesh, instance mesh or normal mesh
-	ExtMesh *mesh;
+	std::string meshName;
 	if (props.IsDefined(propName + ".motion.0.time")) {
 		// Build the motion system
 		vector<float> times;
@@ -144,7 +145,7 @@ SceneObject *Scene::CreateObject(const u_int defaultObjID, const string &objName
 			if (!props.IsDefined(prefix +".time"))
 				break;
 
-			const float t = props.Get(prefix +".time").Get<float>();
+			const float t = props.Get(prefix +".time").Get<double>();
 			if (i > 0 && t <= times.back())
 				throw runtime_error(objName + " motion time must be monotonic");
 			times.push_back(t);
@@ -160,7 +161,8 @@ SceneObject *Scene::CreateObject(const u_int defaultObjID, const string &objName
 		const string motionShapeName = "MotionMesh-" + objName;
 		DefineMesh(motionShapeName, shapeName, ms);
 
-		mesh = extMeshCache.GetExtMesh(motionShapeName);
+		//mesh = extMeshCache.GetExtMesh(motionShapeName);
+		meshName = motionShapeName;
 	} else if (props.IsDefined(propName + ".transformation")) {
 		const Matrix4x4 mat = props.Get(Property(propName +
 			".transformation")(Matrix4x4::MAT_IDENTITY)).Get<Matrix4x4>();
@@ -168,39 +170,43 @@ SceneObject *Scene::CreateObject(const u_int defaultObjID, const string &objName
 		const string InstanceShapeName = "InstanceMesh-" + objName;
 		DefineMesh(InstanceShapeName, shapeName, Transform(mat));
 
-		mesh = extMeshCache.GetExtMesh(InstanceShapeName);
-	} else
-		mesh = extMeshCache.GetExtMesh(shapeName);
+		//mesh = extMeshCache.GetExtMesh(InstanceShapeName);
+		meshName = InstanceShapeName;
+	} else {
+		//mesh = extMeshCache.GetExtMesh(shapeName);
+		meshName = shapeName;
+	}
+	ExtMeshRef mesh = extMeshCache.GetExtMesh(meshName);
 
 	const u_int objID = props.Get(Property(propName + ".id")(defaultObjID)).Get<u_int>();
 	const bool cameraInvisible = props.Get(Property(propName + ".camerainvisible")(false)).Get<bool>();
 
 	// Build the scene object
-	SceneObject *scnObj = new SceneObject(mesh, mat, objID, cameraInvisible);
+	auto scnObj = std::make_unique<SceneObject>(mesh, mat, objID, cameraInvisible);
 	scnObj->SetName(objName);
 
 	if (props.IsDefined(propName + ".bake.combined.file")) {
-		ImageMap *imgMap = ImageMap::FromProperties(props, propName + ".bake.combined");
+		ImageMapUPtr imgMap = ImageMap::FromProperties(props, propName + ".bake.combined");
 
 		// Add the image map to the cache
 		const string name ="LUXCORE_BAKEMAP_COMBINED_" + propName;
 		imgMap->SetName(name);
-		imgMapCache.DefineImageMap(imgMap);
+		imgMapCache.DefineImageMap(std::move(imgMap));
 
 		const u_int uvIndex = Clamp(props.Get(Property(propName + ".bake.combined.uvindex")(0)).Get<u_int>(), 0u, EXTMESH_MAX_DATA_COUNT);
 
-		scnObj->SetBakeMap(imgMap, COMBINED, uvIndex);
+		scnObj->SetBakeMap(*imgMap, COMBINED, uvIndex);
 	} else if (props.IsDefined(propName + ".bake.lightmap.file")) {
-		ImageMap *imgMap = ImageMap::FromProperties(props, propName + ".bake.lightmap");
+		auto imgMap = ImageMap::FromProperties(props, propName + ".bake.lightmap");
 
 		// Add the image map to the cache
 		const string name ="LUXCORE_BAKEMAP_LIGHTMAP_" + propName;
 		imgMap->SetName(name);
-		imgMapCache.DefineImageMap(imgMap);
+		auto& ref = imgMapCache.DefineImageMap(std::move(imgMap));
 
 		const u_int uvIndex = Clamp(props.Get(Property(propName + ".bake.lightmap.uvindex")(0)).Get<u_int>(), 0u, EXTMESH_MAX_DATA_COUNT);
 
-		scnObj->SetBakeMap(imgMap, LIGHTMAP, uvIndex);
+		scnObj->SetBakeMap(ref, LIGHTMAP, uvIndex);
 	}
 
 	return scnObj;
@@ -208,62 +214,68 @@ SceneObject *Scene::CreateObject(const u_int defaultObjID, const string &objName
 
 void Scene::DuplicateObject(const std::string &srcObjName, const std::string &dstObjName,
 		const luxrays::Transform &trans, const u_int dstObjID) {
-	const SceneObject *srcObj = objDefs.GetSceneObject(srcObjName);
+	auto& srcObj = objDefs.GetSceneObject(srcObjName);
 
 	// Check the type of mesh
-	ExtMesh *newMesh;
-	const ExtMesh *srcMesh = srcObj->GetExtMesh();
-	switch (srcMesh->GetType()) {
+	std::string instanceShapeName;
+	auto& srcMesh = srcObj.GetExtMesh();
+	switch (srcMesh.GetType()) {
 		case TYPE_EXT_TRIANGLE: {
 			// Create an instance of the mesh
-			const string instanceShapeName = "InstanceMesh-" + dstObjName;
-			DefineMesh(instanceShapeName, srcMesh->GetName(), trans);
-
-			newMesh = extMeshCache.GetExtMesh(instanceShapeName);
+			instanceShapeName = "InstanceMesh-" + dstObjName;
+			DefineMesh(instanceShapeName, srcMesh.GetName(), trans);
 			break;
 		}
 		case TYPE_EXT_TRIANGLE_INSTANCE: {
 			// Get the instanced mesh
-			const ExtInstanceTriangleMesh *srcInstanceMesh = static_cast<const ExtInstanceTriangleMesh *>(srcMesh);
-			const ExtTriangleMesh *baseMesh = static_cast<const ExtTriangleMesh *>(srcInstanceMesh->GetTriangleMesh());
+			auto& srcInstanceMesh = static_cast<const ExtInstanceTriangleMesh&>(srcMesh);
+			auto& baseMesh = static_cast<const ExtTriangleMesh&>(
+				srcInstanceMesh.GetTriangleMesh()
+			);
 
 			// Create the new instance of the base mesh
-			const string instanceShapeName = "InstanceMesh-" + dstObjName;
-			DefineMesh(instanceShapeName, baseMesh->GetName(), trans);
-
-			newMesh = extMeshCache.GetExtMesh(instanceShapeName);
+			instanceShapeName = "InstanceMesh-" + dstObjName;
+			DefineMesh(instanceShapeName, baseMesh.GetName(), trans);
 			break;
 		}
 		case TYPE_EXT_TRIANGLE_MOTION: {
 			// Get the motion mesh
-			const ExtMotionTriangleMesh *srcMotionMesh = static_cast<const ExtMotionTriangleMesh *>(srcMesh);
-			const ExtTriangleMesh *baseMesh = static_cast<const ExtTriangleMesh *>(srcMotionMesh->GetTriangleMesh());
+			auto& srcMotionMesh = static_cast<const ExtMotionTriangleMesh&>(srcMesh);
+			auto& baseMesh = static_cast<const ExtTriangleMesh&>(
+				srcMotionMesh.GetTriangleMesh()
+			);
 
 			// Create the new instance of the base mesh
-			const string instanceShapeName = "InstanceMesh-" + dstObjName;
-			DefineMesh(instanceShapeName, baseMesh->GetName(), trans);
-
-			newMesh = extMeshCache.GetExtMesh(instanceShapeName);
+			instanceShapeName = "InstanceMesh-" + dstObjName;
+			DefineMesh(instanceShapeName, baseMesh.GetName(), trans);
 			break;
 		}
-		default:
-			throw runtime_error("Unknown mesh type in Scene::DuplicateObject(): " + ToString(srcMesh->GetType()));
+		default: {
+			throw runtime_error("Unknown mesh type in Scene::DuplicateObject(): "
+					+ ToString(srcMesh.GetType()));
+		}
 	}
+	auto& newMesh = extMeshCache.GetExtMesh(instanceShapeName);
 
 	// If the Null index was passed as ID, copy the ID of the source object
-	const u_int objID = (dstObjID == 0xffffffff) ? srcObj->GetID() : dstObjID;
+	const u_int objID = (dstObjID == 0xffffffff) ? srcObj.GetID() : dstObjID;
 
-	SceneObject *dstObj = new SceneObject(newMesh, srcObj->GetMaterial(), objID,
-			srcObj->IsCameraInvisible());
+	auto dstObj = std::make_unique<SceneObject>(
+		newMesh, srcObj.GetMaterial(), objID, srcObj.IsCameraInvisible()
+	);
+
 	dstObj->SetName(dstObjName);
-	objDefs.DefineSceneObject(dstObj);
+	auto [dstObjRef, oldObjPtr] = objDefs.DefineSceneObject(std::move(dstObj));
 
 	// Check if it is a light source
-	const Material *mat = dstObj->GetMaterial();
-	if (mat->IsLightSource()) {
-		SDL_LOG("The " << dstObjName << " object is a light sources with " << dstObj->GetExtMesh()->GetTotalTriangleCount() << " triangles");
+	auto& mat = dstObjRef.GetMaterial();
+	if (mat.IsLightSource()) {
+		SDL_LOG(
+			"The " << dstObjName << " object is a light sources with "
+			<< dstObjRef.GetExtMesh().GetTotalTriangleCount() << " triangles"
+		);
 
-		objDefs.DefineIntersectableLights(lightDefs, dstObj);
+		objDefs.DefineIntersectableLights(lightDefs, dstObjRef);
 	}
 
 	editActions.AddActions(GEOMETRY_EDIT);
@@ -271,63 +283,64 @@ void Scene::DuplicateObject(const std::string &srcObjName, const std::string &ds
 
 void Scene::DuplicateObject(const std::string &srcObjName, const std::string &dstObjName,
 		const MotionSystem &ms, const u_int dstObjID) {
-	const SceneObject *srcObj = objDefs.GetSceneObject(srcObjName);
+	auto& srcObj = objDefs.GetSceneObject(srcObjName);
 
 	// Check the type of mesh
-	ExtMesh *newMesh;
-	const ExtMesh *srcMesh = srcObj->GetExtMesh();
-	switch (srcMesh->GetType()) {
+	std::string motionShapeName;
+
+	auto& srcMesh = srcObj.GetExtMesh();
+	switch (srcMesh.GetType()) {
 		case TYPE_EXT_TRIANGLE: {
 			// Create an instance of the mesh
-			const string motionShapeName = "MotionMesh-" + dstObjName;
-			DefineMesh(motionShapeName, srcMesh->GetName(), ms);
-
-			newMesh = extMeshCache.GetExtMesh(motionShapeName);
+			motionShapeName = "MotionMesh-" + dstObjName;
+			DefineMesh(motionShapeName, srcMesh.GetName(), ms);
 			break;
 		}
 		case TYPE_EXT_TRIANGLE_INSTANCE: {
 			// Get the instanced mesh
-			const ExtInstanceTriangleMesh *srcInstanceMesh = static_cast<const ExtInstanceTriangleMesh *>(srcMesh);
-			const ExtTriangleMesh *baseMesh = static_cast<const ExtTriangleMesh *>(srcInstanceMesh->GetTriangleMesh());
+			auto& srcInstanceMesh = static_cast<const ExtInstanceTriangleMesh&>(srcMesh);
+			auto& baseMesh = static_cast<const ExtTriangleMesh&>(srcInstanceMesh.GetTriangleMesh());
 
 			// Create the new instance of the base mesh
-			const string motionShapeName = "MotionMesh-" + dstObjName;
-			DefineMesh(motionShapeName, baseMesh->GetName(), ms);
-
-			newMesh = extMeshCache.GetExtMesh(motionShapeName);
+			motionShapeName = "MotionMesh-" + dstObjName;
+			DefineMesh(motionShapeName, baseMesh.GetName(), ms);
 			break;
 		}
 		case TYPE_EXT_TRIANGLE_MOTION: {
 			// Get the motion mesh
-			const ExtMotionTriangleMesh *srcMotionMesh = static_cast<const ExtMotionTriangleMesh *>(srcMesh);
-			const ExtTriangleMesh *baseMesh = static_cast<const ExtTriangleMesh *>(srcMotionMesh->GetTriangleMesh());
+			auto& srcMotionMesh = static_cast<const ExtMotionTriangleMesh&>(srcMesh);
+			auto& baseMesh = static_cast<const ExtTriangleMesh&>(srcMotionMesh.GetTriangleMesh());
 
 			// Create the new instance of the base mesh
-			const string motionShapeName = "MotionMesh-" + dstObjName;
-			DefineMesh(motionShapeName, baseMesh->GetName(), ms);
-
-			newMesh = extMeshCache.GetExtMesh(motionShapeName);
+			motionShapeName = "MotionMesh-" + dstObjName;
+			DefineMesh(motionShapeName, baseMesh.GetName(), ms);
 			break;
 		}
 		default:
-			throw runtime_error("Unknown mesh type in Scene::DuplicateObject(): " + ToString(srcMesh->GetType()));
+			throw runtime_error(
+				"Unknown mesh type in Scene::DuplicateObject(): "
+				+ ToString(srcMesh.GetType())
+			);
 	}
+	auto& newMesh = extMeshCache.GetExtMesh(motionShapeName);
 
 	// If the Null index was passed as ID, copy the ID of the source object
-	const u_int objID = (dstObjID == 0xffffffff) ? srcObj->GetID() : dstObjID;
+	const u_int objID = (dstObjID == 0xffffffff) ? srcObj.GetID() : dstObjID;
 
-	SceneObject *dstObj = new SceneObject(newMesh, srcObj->GetMaterial(), objID,
-			srcObj->IsCameraInvisible());
+	auto dstObj = std::make_unique<SceneObject>(
+		newMesh, srcObj.GetMaterial(), objID, srcObj.IsCameraInvisible()
+	);
 	dstObj->SetName(dstObjName);
-	objDefs.DefineSceneObject(dstObj);
+	auto [dstObjRef, oldObjPtr] = objDefs.DefineSceneObject(std::move(dstObj));
 
 	// Check if it is a light source
-	const Material *mat = dstObj->GetMaterial();
-	if (mat->IsLightSource()) {
-		SDL_LOG("The " << dstObjName << " object is a light sources with " << dstObj->GetExtMesh()->GetTotalTriangleCount() << " triangles");
+	MaterialConstRef mat = dstObjRef.GetMaterial();
+	if (mat.IsLightSource()) {
+		SDL_LOG("The " << dstObjName << " object is a light sources with " << dstObjRef.GetExtMesh().GetTotalTriangleCount() << " triangles");
 
-		objDefs.DefineIntersectableLights(lightDefs, dstObj);
+		objDefs.DefineIntersectableLights(lightDefs, dstObjRef);
 	}
 
 	editActions.AddActions(GEOMETRY_EDIT);
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

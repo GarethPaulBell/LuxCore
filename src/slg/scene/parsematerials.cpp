@@ -16,18 +16,21 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
-#include <boost/detail/container_fwd.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/format.hpp>
-#include <boost/unordered_map.hpp>
-#include <boost/unordered_set.hpp>
+#include <optional>
+#include <typeinfo>
 
+#include "luxrays/core/color/color.h"
+#include "luxrays/usings.h"
+#include "slg/materials/material.h"
 #include "slg/scene/scene.h"
 #include "slg/textures/constfloat.h"
 #include "slg/textures/constfloat3.h"
 #include "slg/textures/fresnel/fresnelpreset.h"
+#include "slg/textures/fresnel/fresneltexture.h"
 #include "slg/textures/normalmap.h"
 
 #include "slg/materials/archglass.h"
@@ -50,6 +53,8 @@
 #include "slg/materials/disney.h"
 #include "slg/materials/twosided.h"
 
+#include "slg/textures/texture.h"
+#include "slg/usings.h"
 #include "slg/utils/filenameresolver.h"
 
 using namespace std;
@@ -69,21 +74,21 @@ void Scene::ParseMaterials(const Properties &props) {
 
 	// Cache isLightSource values before we go deleting materials (required for
 	// updating mix material)
-	boost::unordered_map<const Material *, bool> cachedIsLightSource;
+	std::unordered_map<const Material * , bool> cachedIsLightSource;
 
-	BOOST_FOREACH(const string &key, matKeys) {
+	for(const string &key: matKeys) {
 		const string matName = Property::ExtractField(key, 2);
 		if (matName == "")
 			throw runtime_error("Syntax error in material definition: " + matName);
 
 		if (matDefs.IsMaterialDefined(matName)) {
-			const Material *oldMat = matDefs.GetMaterial(matName);
-			cachedIsLightSource[oldMat] = oldMat->IsLightSource();
+			auto& oldMat = matDefs.GetMaterial(matName);
+			cachedIsLightSource[&oldMat] = oldMat.IsLightSource();
 		}
 	}
 
 	// Now I can update the materials
-	BOOST_FOREACH(const string &key, matKeys) {
+	for(const string &key: matKeys) {
 		// Extract the material name
 		const string matName = Property::ExtractField(key, 2);
 		if (matName == "")
@@ -100,270 +105,414 @@ void Scene::ParseMaterials(const Properties &props) {
 		const u_int matID = ((u_int)(RadicalInverse(index + 1, 2) * 255.f + .5f)) |
 				(((u_int)(RadicalInverse(index + 1, 3) * 255.f + .5f)) << 8) |
 				(((u_int)(RadicalInverse(index + 1, 5) * 255.f + .5f)) << 16);
-		Material *newMat = CreateMaterial(matID, matName, props);
+		auto newMat = CreateMaterial(matID, matName, props);
 
 		if (matDefs.IsMaterialDefined(matName)) {
-			// A replacement for an existing material
-			const Material *oldMat = matDefs.GetMaterial(matName);
+			//// A replacement for an existing material
+			//auto& oldMat = matDefs.GetMaterial(matName);
 
-			// Check if it is a volume
-			if (dynamic_cast<const Volume *>(oldMat))
-				throw runtime_error("You can not replace a material with the volume: " + matName);
+			// Add to material list
+			auto [newMatRef, oldMatPtr] = matDefs.DefineMaterial(std::move(newMat));
+			auto& oldMatRef = *oldMatPtr;
 
-			matDefs.DefineMaterial(newMat);
+			// The mat should not be a volume: let's check it
+			try {
+				dynamic_cast<const Volume&>(oldMatRef);
+				throw runtime_error(
+					"You can not replace a material with the volume: " + matName
+				);
+			} catch(std::bad_cast&) {
+			}
 
 			// If old material was emitting light, delete all TriangleLight
-			if (cachedIsLightSource[oldMat])
-				lightDefs.DeleteLightSourceByMaterial(oldMat);
-				
+			if (cachedIsLightSource[&oldMatRef])
+				lightDefs.DeleteLightSourceByMaterial(oldMatRef);
+
 			// Replace old material direct references with new one
-			objDefs.UpdateMaterialReferences(oldMat, newMat);
+			objDefs.UpdateMaterialReferences(oldMatRef, newMatRef);
 
 			// If new material is emitting light, create all TriangleLight
-			if (newMat->IsLightSource())
-				objDefs.DefineIntersectableLights(lightDefs, newMat);
+			if (newMatRef.IsLightSource())
+				objDefs.DefineIntersectableLights(lightDefs, newMatRef);
 
 			// Check if the old material was or the new material is a light source
-			if (cachedIsLightSource[oldMat] || newMat->IsLightSource())
+			if (cachedIsLightSource[&oldMatRef] || newMatRef.IsLightSource())
 				editActions.AddActions(LIGHTS_EDIT | LIGHT_TYPES_EDIT);
-		} else {
-			// Only a new Material
-			matDefs.DefineMaterial(newMat);
 
+			moveToTrash(std::move(oldMatPtr));
+		} else {
+
+			// Only a new Material
+			auto [newMatRef, oldMatPtr] = matDefs.DefineMaterial(std::move(newMat));
+			assert(!oldMatPtr);
 			// Check if the new material is a light source
-			if (newMat->IsLightSource())
+			if (newMatRef.IsLightSource())
 				editActions.AddActions(LIGHTS_EDIT | LIGHT_TYPES_EDIT);
+
 		}
 	}
 
 	editActions.AddActions(MATERIALS_EDIT | MATERIAL_TYPES_EDIT);
 }
 
-Material *Scene::CreateMaterial(const u_int defaultMatID, const string &matName, const Properties &props) {
+MaterialUPtr Scene::CreateMaterial(
+	const u_int defaultMatID, const string &matName, const Properties &props
+) {
+	// A few helpful constants
 	const string propName = "scene.materials." + matName;
-	const string matType = props.Get(Property(propName + ".type")("matte")).Get<string>();
+	static constexpr auto nullTex = TextureConstPtr(nullptr);
+	const auto zeroSpectrum = Spectrum(0.f);
+	const auto oneSpectrum = Spectrum(1.f);
 
+	// A few helpers to facilitate texture property parsing:
+
+	// Parse required texture
+	auto parseTex = [&](
+		const std::string_view suffix,
+		Spectrum defaultVal
+	) -> TexturePtr {
+		assert(suffix[0] != '.');
+		auto& tex = GetTexture(
+			props.Get(Property(propName + "." + std::string(suffix))(defaultVal))
+		);
+
+		return TexturePtr(std::addressof(tex));
+	};
+
+	// Parse optional texture
+	auto parseTextureConstPtr = [&](  // Parse optional texture
+		const std::string suffix,
+		Spectrum defaultVal,
+		TextureConstPtr fallbackTex=TextureConstPtr(nullptr)
+	) -> TextureConstPtr {
+		assert(suffix[0] != '.');
+		return props.IsDefined(propName + "." + suffix) ?
+		TexturePtr(
+			&GetTexture(props.Get(Property(propName + "." + suffix)(defaultVal)))
+		) :
+		fallbackTex;
+	};
+
+	// Parse float
+	auto parseFloat = [&](
+		const std::string_view suffix,
+		float defaultVal
+	) -> float {
+		assert(suffix[0] != '.');
+		return props.Get(Property(propName + "." + std::string(suffix))(defaultVal))
+			.Get<double>();
+	};
+
+	// Parse boolean
+	auto parseBool = [&](
+		const std::string_view suffix,
+		bool defaultVal
+	) -> bool {
+		assert(suffix[0] != '.');
+		return props.Get(Property(propName + "." + std::string(suffix))(defaultVal))
+			.Get<bool>();
+	};
+
+	// Parse string
+	auto parseString = [&](
+		const std::string_view suffix,
+		std::string defaultVal
+	) -> std::string {
+		assert(suffix[0] != '.');
+		return props.Get(Property(propName + "." + std::string(suffix))(defaultVal))
+			.Get<std::string>();
+	};
+
+	// Check whether texture is defined
+	auto isDefined = [&](const std::string_view suffix) -> bool {
+		assert(suffix[0] != '.');
+		return props.IsDefined(propName + "." + std::string(suffix));
+	};
+
+	// Warn for deprecated property
+	auto warnDeprecated = [&](std::string_view suffix) {
+		assert(suffix[0] != '.');
+		SLG_LOG("WARNING: deprecated property " + propName + "." + std::string(suffix));
+	};
+
+	// PARSING STARTS HERE
+	const string matType = parseString("type", "matte");
 	// For compatibility with the past
-	const Texture *transparencyTex = props.IsDefined(propName + ".transparency") ?
-		GetTexture(props.Get(Property(propName + ".transparency")(Spectrum(0.f)))) : NULL;
+	auto transparencyTex = parseTextureConstPtr("transparency", Spectrum(0.f));
 
-	const Texture *frontTransparencyTex = props.IsDefined(propName + ".transparency.front") ?
-		GetTexture(props.Get(Property(propName + ".transparency.front")(Spectrum(0.f)))) : transparencyTex;
-	const Texture *backTransparencyTex = props.IsDefined(propName + ".transparency.back") ?
-		GetTexture(props.Get(Property(propName + ".transparency.back")(Spectrum(0.f)))) : transparencyTex;
+	auto frontTransparencyTex = parseTextureConstPtr(
+		"transparency.front", Spectrum(0.f), transparencyTex
+	);
 
-	const Texture *emissionTex = props.IsDefined(propName + ".emission") ?
-		GetTexture(props.Get(Property(propName + ".emission")(Spectrum(0.f)))) : NULL;
+	auto backTransparencyTex = parseTextureConstPtr(
+		"transparency.back", {Spectrum(0.f)}, transparencyTex
+	);
+
+	// Start non-legacy parsing
+	auto emissionTex = parseTextureConstPtr("emission", {Spectrum(0.f)});
+
 	// Required to remove light source while editing the scene
 	if (emissionTex && (
-			((emissionTex->GetType() == CONST_FLOAT) && (((ConstFloatTexture *)emissionTex)->GetValue() == 0.f)) ||
-			((emissionTex->GetType() == CONST_FLOAT3) && (((ConstFloat3Texture *)emissionTex)->GetColor().Black()))))
-		emissionTex = NULL;
+		((emissionTex->GetType() == CONST_FLOAT) && ((static_cast<const ConstFloatTexture*>(emissionTex.get()))->GetValue() == 0.f)) ||
+		((emissionTex->GetType() == CONST_FLOAT3) && ((static_cast<const ConstFloat3Texture*>(emissionTex.get()))->GetColor().Black()))))
+	{
+		emissionTex = nullTex;
+	}
 
-	const Texture *bumpTex = props.IsDefined(propName + ".bumptex") ?
-		GetTexture(props.Get(Property(propName + ".bumptex")(1.f))) : NULL;
+	auto bumpTex = parseTextureConstPtr("bumptex", {1.f});
     if (!bumpTex) {
-        const Texture *normalTex = props.IsDefined(propName + ".normaltex") ?
-            GetTexture(props.Get(Property(propName + ".normaltex")(1.f))) : NULL;
+		auto normalTex = parseTextureConstPtr("normaltex", {1.f});
 
         if (normalTex) {
-			const float scale = Max(0.f, props.Get(Property(propName + ".normaltex.scale")(1.f)).Get<float>());
+			const float scale = std::max(0.f, parseFloat("normaltex.scale", {1.0}));
 
-            Texture *implBumpTex = new NormalMapTexture(normalTex, scale);
+            auto implBumpTex = std::make_unique<NormalMapTexture>(*normalTex, scale);
 			implBumpTex->SetName(NamedObject::GetUniqueName("Implicit-NormalMapTexture"));
-            texDefs.DefineTexture(implBumpTex);
-			
-			bumpTex = implBumpTex;
+
+			auto [newTexRef, oldTexPtr] = texDefs.DefineTexture(std::move(implBumpTex));
+            bumpTex = TextureConstPtr(&newTexRef);
+			moveToTrash(std::move(oldTexPtr));
         }
     }
 
-    const float bumpSampleDistance = props.Get(Property(propName + ".bumpsamplingdistance")(.001f)).Get<float>();
+    const float bumpSampleDistance = parseFloat("bumpsamplingdistance", {.001f});
 
-	Material *mat;
+	MaterialUPtr mat;
 	if (matType == "matte") {
-		const Texture *kd = GetTexture(props.Get(Property(propName + ".kd")(.75f, .75f, .75f)));
+		auto kd = parseTex("kd", {.75f, .75f, .75f});
 
-		mat = new MatteMaterial(frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, kd);
+		mat = std::make_unique<MatteMaterial>(
+			frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, kd
+		);
 	} else if (matType == "roughmatte") {
-		const Texture *kd = GetTexture(props.Get(Property(propName + ".kd")(.75f, .75f, .75f)));
-		const Texture *sigma = GetTexture(props.Get(Property(propName + ".sigma")(0.f)));
+		auto kd = parseTex("kd", {.75f, .75f, .75f});
+		auto sigma = parseTex("sigma", {.75f, .75f, .75f});
 
-		mat = new RoughMatteMaterial(frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, kd, sigma);
+		mat = std::make_unique<RoughMatteMaterial>(
+			frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, kd, sigma
+		);
 	} else if (matType == "mirror") {
-		const Texture *kr = GetTexture(props.Get(Property(propName + ".kr")(1.f, 1.f, 1.f)));
+		auto kr = parseTex("kr", {1.f, 1.f, 1.f});
 
-		mat = new MirrorMaterial(frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, kr);
+		mat = std::make_unique<MirrorMaterial>(
+			frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, kr
+		);
 	} else if (matType == "glass") {
-		const Texture *kr = GetTexture(props.Get(Property(propName + ".kr")(1.f, 1.f, 1.f)));
-		const Texture *kt = GetTexture(props.Get(Property(propName + ".kt")(1.f, 1.f, 1.f)));
+		auto kr = parseTex("kr", {1.f, 1.f, 1.f});
+		auto kt = parseTex("kt", {1.f, 1.f, 1.f});
 
-		const Texture *exteriorIor = NULL;
-		const Texture *interiorIor = NULL;
+		TextureConstPtr exteriorIor = nullptr;
+		TextureConstPtr interiorIor = nullptr;
 		// For compatibility with the past
-		if (props.IsDefined(propName + ".ioroutside")) {
-			SLG_LOG("WARNING: deprecated property " + propName + ".ioroutside");
-			exteriorIor = GetTexture(props.Get(Property(propName + ".ioroutside")(1.f)));
-		} else if (props.IsDefined(propName + ".exteriorior"))
-			exteriorIor = GetTexture(props.Get(Property(propName + ".exteriorior")(1.f)));
+		if (isDefined("ioroutside")) {
+			warnDeprecated("ioroutside");
+			exteriorIor = parseTex("ioroutside", 1.f);
+		} else if (isDefined("exteriorior"))
+			exteriorIor = parseTex("exteriorior", 1.f);
 		// For compatibility with the past
-		if (props.IsDefined(propName + ".iorinside")) {
-			SLG_LOG("WARNING: deprecated property " + propName + ".iorinside");
-			interiorIor = GetTexture(props.Get(Property(propName + ".iorinside")(1.5f)));
-		} else if (props.IsDefined(propName + ".interiorior"))
-			interiorIor = GetTexture(props.Get(Property(propName + ".interiorior")(1.5f)));
+		if (isDefined("iorinside")) {
+			warnDeprecated("iorinside");
+			interiorIor = parseTex("iorinside", 1.5f);
+		} else if (isDefined("interiorior"))
+			interiorIor = parseTex("interiorior", 1.5f);
 
-		const Texture *cauchyB = NULL;
-		if (props.IsDefined(propName + ".cauchyb"))
-			cauchyB = GetTexture(props.Get(Property(propName + ".cauchyb")(0.f, 0.f, 0.f)));
+		TextureConstPtr cauchyB = nullptr;
+		if (isDefined("cauchyb"))
+			cauchyB = parseTex("cauchyb", {0.f, 0.f, 0.f});
 		// For compatibility with the past
-		else if (props.IsDefined(propName + ".cauchyc")){
-			SLG_LOG("WARNING: deprecated property " + propName + ".cauchyc");
-			cauchyB = GetTexture(props.Get(Property(propName + ".cauchyc")(0.f, 0.f, 0.f)));
+		else if (isDefined("cauchyc")) {
+			warnDeprecated("cauchyc");
+			cauchyB = parseTex("cauchyc", {0.f, 0.f, 0.f});
 		}
-		
-		const Texture *filmThickness = NULL;
-		if (props.IsDefined(propName + ".filmthickness"))
-			filmThickness = GetTexture(props.Get(Property(propName + ".filmthickness")(0.f)));
-		
-		const Texture *filmIor = NULL;
-		if (props.IsDefined(propName + ".filmior"))
-			filmIor = GetTexture(props.Get(Property(propName + ".filmior")(1.5f)));
 
-		mat = new GlassMaterial(frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, kr, kt, exteriorIor, interiorIor, cauchyB, filmThickness, filmIor);
+		TextureConstPtr filmThickness = nullptr;
+		if (isDefined("filmthickness"))
+			filmThickness = parseTex("filmthickness", {0.f});
+
+		TextureConstPtr filmIor = nullptr;
+		if (isDefined("filmior"))
+			filmIor = parseTex("filmior", {1.5f});
+
+		mat = std::make_unique<GlassMaterial>(
+			frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, kr, kt,
+			exteriorIor, interiorIor, cauchyB, filmThickness, filmIor
+		);
 	} else if (matType == "archglass") {
-		const Texture *kr = GetTexture(props.Get(Property(propName + ".kr")(1.f, 1.f, 1.f)));
-		const Texture *kt = GetTexture(props.Get(Property(propName + ".kt")(1.f, 1.f, 1.f)));
+		auto kr = parseTex("kr", {1.f, 1.f, 1.f});
+		auto kt = parseTex("kt", {1.f, 1.f, 1.f});
 
-		const Texture *exteriorIor = NULL;
-		const Texture *interiorIor = NULL;
+		TextureConstPtr exteriorIor = nullptr;
+		TextureConstPtr interiorIor = nullptr;
 		// For compatibility with the past
-		if (props.IsDefined(propName + ".ioroutside")) {
-			SLG_LOG("WARNING: deprecated property " + propName + ".ioroutside");
-			exteriorIor = GetTexture(props.Get(Property(propName + ".ioroutside")(1.f)));
-		} else if (props.IsDefined(propName + ".exteriorior"))
-			exteriorIor = GetTexture(props.Get(Property(propName + ".exteriorior")(1.f)));
+		if (isDefined("ioroutside")) {
+			warnDeprecated("ioroutside");
+			exteriorIor = parseTex("ioroutside", {1.f});
+		} else if (isDefined("exteriorior"))
+			exteriorIor = parseTex("exteriorior", {1.f});
 		// For compatibility with the past
-		if (props.IsDefined(propName + ".iorinside")) {
-			SLG_LOG("WARNING: deprecated property " + propName + ".iorinside");
-			interiorIor = GetTexture(props.Get(Property(propName + ".iorinside")(1.f)));
-		} else if (props.IsDefined(propName + ".interiorior"))
-			interiorIor = GetTexture(props.Get(Property(propName + ".interiorior")(1.f)));
-			
-		const Texture *filmThickness = NULL;
-		if (props.IsDefined(propName + ".filmthickness"))
-			filmThickness = GetTexture(props.Get(Property(propName + ".filmthickness")(0.f)));
-		
-		const Texture *filmIor = NULL;
-		if (props.IsDefined(propName + ".filmior"))
-			filmIor = GetTexture(props.Get(Property(propName + ".filmior")(1.5f)));
+		if (isDefined("iorinside")) {
+			warnDeprecated("iorinside");
+			interiorIor = parseTex("iorinside", {1.f});
+		} else if (isDefined("interiorior"))
+			interiorIor = parseTex("interiorior", {1.f});
 
-		mat = new ArchGlassMaterial(frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, kr, kt, exteriorIor, interiorIor, filmThickness, filmIor);
+		TextureConstPtr filmThickness = nullptr;
+		if (isDefined("filmthickness"))
+			filmThickness = parseTex("filmthickness", {0.f});
+
+		TextureConstPtr filmIor = nullptr;
+		if (isDefined("filmior"))
+			filmIor = parseTex("filmior", {1.5f});
+
+		mat = std::make_unique<ArchGlassMaterial>(
+			frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex,
+			kr, kt, exteriorIor, interiorIor, filmThickness, filmIor
+		);
 	} else if (matType == "mix") {
-		const Material *matA = matDefs.GetMaterial(props.Get(Property(propName + ".material1")("mat1")).Get<string>());
-		const Material *matB = matDefs.GetMaterial(props.Get(Property(propName + ".material2")("mat2")).Get<string>());
-		const Texture *mix = GetTexture(props.Get(Property(propName + ".amount")(.5f)));
+		auto& matA = matDefs.GetMaterial(parseString("material1", "mat1"));
+		auto& matB = matDefs.GetMaterial(parseString("material2", "mat2"));
+		auto mix = parseTex("amount", {.5f});
 
-		MixMaterial *mixMat = new MixMaterial(frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, matA, matB, mix);
+		auto mixMat = std::make_unique<MixMaterial>(
+			frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex,
+			matA, matB, mix
+		);
 
 		// Check if there is a loop in Mix material definition
 		// (Note: this can not really happen at the moment because forward
 		// declarations are not supported)
-		if (mixMat->IsReferencing(mixMat))
+		if (mixMat->IsReferencing(*mixMat))
 			throw runtime_error("There is a loop in Mix material definition: " + matName);
 
-		mat = mixMat;
+		mat = std::move(mixMat);
 	} else if (matType == "null") {
-		mat = new NullMaterial(frontTransparencyTex, backTransparencyTex);
+		mat = std::make_unique<NullMaterial>(frontTransparencyTex, backTransparencyTex);
 	} else if (matType == "mattetranslucent") {
-		const Texture *kr = GetTexture(props.Get(Property(propName + ".kr")(.5f, .5f, .5f)));
-		const Texture *kt = GetTexture(props.Get(Property(propName + ".kt")(.5f, .5f, .5f)));
+		auto kr = parseTex("kr", {.5f, .5f, .5f});
+		auto kt = parseTex("kt", {.5f, .5f, .5f});
 
-		mat = new MatteTranslucentMaterial(frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, kr, kt);
+		mat = std::make_unique<MatteTranslucentMaterial>(
+			frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex,
+			kr, kt
+		);
 	} else if (matType == "roughmattetranslucent") {
-		const Texture *kr = GetTexture(props.Get(Property(propName + ".kr")(.5f, .5f, .5f)));
-		const Texture *kt = GetTexture(props.Get(Property(propName + ".kt")(.5f, .5f, .5f)));
-		const Texture *sigma = GetTexture(props.Get(Property(propName + ".sigma")(0.f)));
+		auto kr = parseTex("kr", {.5f, .5f, .5f});
+		auto kt = parseTex("kt", {.5f, .5f, .5f});
+		auto sigma = parseTex("sigma", {0.f});
 
-		mat = new RoughMatteTranslucentMaterial(frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, kr, kt, sigma);
+		mat = std::make_unique<RoughMatteTranslucentMaterial>(
+			frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex,
+			kr, kt, sigma
+		);
 	} else if (matType == "glossy2") {
-		const Texture *kd = GetTexture(props.Get(Property(propName + ".kd")(.5f, .5f, .5f)));
-		const Texture *ks = GetTexture(props.Get(Property(propName + ".ks")(.5f, .5f, .5f)));
-		const Texture *nu = GetTexture(props.Get(Property(propName + ".uroughness")(.1f)));
-		const Texture *nv = GetTexture(props.Get(Property(propName + ".vroughness")(.1f)));
-		const Texture *ka = GetTexture(props.Get(Property(propName + ".ka")(0.f, 0.f, 0.f)));
-		const Texture *d = GetTexture(props.Get(Property(propName + ".d")(0.f)));
-		const Texture *index = GetTexture(props.Get(Property(propName + ".index")(0.f, 0.f, 0.f)));
-		const bool multibounce = props.Get (Property (propName + ".multibounce")(false)).Get<bool> ();
-		const bool doublesided = props.Get (Property (propName + ".doublesided")(false)).Get<bool> ();
+		auto kd = parseTex("kd", {.5f, .5f, .5f});
+		auto ks = parseTex("ks", {.5f, .5f, .5f});
+		auto nu = parseTex("uroughness", {.1f});
+		auto nv = parseTex("vroughness", {.1f});
+		auto ka = parseTex("ka", {0.f, 0.f, 0.f});
+		auto d = parseTex("d", {0.f});
+		auto index = parseTex("index", {0.f, 0.f, 0.f});
+		const auto multibounce = parseBool("multibounce", false);
+		const auto doublesided = parseBool("doublesided", false);
 
-		mat = new Glossy2Material(frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, kd, ks, nu, nv, ka, d, index, multibounce, doublesided);
+		mat = std::make_unique<Glossy2Material>(
+			frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex,
+			kd, ks, nu, nv, ka, d, index, multibounce, doublesided
+		);
 	} else if (matType == "metal2") {
-		const Texture *nu = GetTexture(props.Get(Property(propName + ".uroughness")(.1f)));
-		const Texture *nv = GetTexture(props.Get(Property(propName + ".vroughness")(.1f)));
+		auto nu = parseTex("uroughness", {.1f});
+		auto nv = parseTex("vroughness", {.1f});
 
-		const Texture *n, *k;
-		if (props.IsDefined(propName + ".preset") || props.IsDefined(propName + ".name")) {
-			FresnelTexture *presetTex = AllocFresnelPresetTex(props, propName);
-			presetTex->SetName(NamedObject::GetUniqueName(matName + "-Implicit-FresnelPreset"));
-			texDefs.DefineTexture(presetTex);
-			
-			mat = new Metal2Material(frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, presetTex, nu, nv);
-		} else if (props.IsDefined(propName + ".fresnel")) {
-			const Texture *tex = GetTexture(props.Get(Property(propName + ".fresnel")(5.f)));
-			if (!dynamic_cast<const FresnelTexture *>(tex))
-				throw runtime_error("Metal2 fresnel property requires a fresnel texture: " + matName);
+		TextureConstPtr n, k;
+		if (isDefined("preset") || isDefined("name")) {
+			FresnelTextureUPtr presetTex = AllocFresnelPresetTex(props, propName);
+			const auto texname = NamedObject::GetUniqueName(matName + "-Implicit-FresnelPreset");
+			presetTex->SetName(texname);
+			auto [newTexRef, oldTexPtr] = texDefs.DefineTexture(std::move(presetTex));
+			auto refpreset = FresnelTextureConstPtr(
+				dynamic_cast<const FresnelTexture *>(std::addressof(newTexRef))
+			);
 
-			const FresnelTexture *fresnelTex = (const FresnelTexture *)tex;
-			mat = new Metal2Material(frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, fresnelTex, nu, nv);
+			mat = std::make_unique<Metal2Material>(
+				frontTransparencyTex,
+				backTransparencyTex,
+				emissionTex,
+				bumpTex,
+				refpreset,
+				nu,
+				nv
+			);
+			moveToTrash(std::move(oldTexPtr));
+		} else if (isDefined("fresnel")) {
+			auto tex = parseTex("fresnel", {5.f});
+			if (!dynamic_cast<const FresnelTexture *>(tex.get()))
+				throw runtime_error(
+					"Metal2 fresnel property requires a fresnel texture: " + matName
+				);
+
+			auto fresnelTex = static_cast<const FresnelTexture *>(tex.get());
+			mat = std::make_unique<Metal2Material>(
+				frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex,
+				FresnelTextureConstPtr(fresnelTex), nu, nv
+			);
 		} else {
-			n = GetTexture(props.Get(Property(propName + ".n")(.5f, .5f, .5f)));
-			k = GetTexture(props.Get(Property(propName + ".k")(.5f, .5f, .5f)));
-			mat = new Metal2Material(frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, n, k, nu, nv);
+			n = parseTex("n", {.5f, .5f, .5f});
+			k = parseTex("k", {.5f, .5f, .5f});
+			mat = std::make_unique<Metal2Material>(
+				frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex,
+				n, k, nu, nv
+			);
 		}
 	} else if (matType == "roughglass") {
-		const Texture *kr = GetTexture(props.Get(Property(propName + ".kr")(1.f, 1.f, 1.f)));
-		const Texture *kt = GetTexture(props.Get(Property(propName + ".kt")(1.f, 1.f, 1.f)));
+		auto kr = parseTex("kr", {1.f, 1.f, 1.f});
+		auto kt = parseTex("kt", {1.f, 1.f, 1.f});
 
-		const Texture *exteriorIor = NULL;
-		const Texture *interiorIor = NULL;
+		TextureConstPtr exteriorIor = nullptr;
+		TextureConstPtr interiorIor = nullptr;
 		// For compatibility with the past
-		if (props.IsDefined(propName + ".ioroutside")) {
-			SLG_LOG("WARNING: deprecated property " + propName + ".ioroutside");
-			exteriorIor = GetTexture(props.Get(Property(propName + ".ioroutside")(1.f)));
-		} else if (props.IsDefined(propName + ".exteriorior"))
-			exteriorIor = GetTexture(props.Get(Property(propName + ".exteriorior")(1.f)));
+		if (isDefined("ioroutside")) {
+			warnDeprecated("ioroutside");
+			exteriorIor = parseTex("ioroutside", {1.f});
+		} else if (isDefined("exteriorior"))
+			exteriorIor = parseTex("exteriorior", {1.f});
 		// For compatibility with the past
-		if (props.IsDefined(propName + ".iorinside")) {
-			SLG_LOG("WARNING: deprecated property " + propName + ".iorinside");
-			interiorIor = GetTexture(props.Get(Property(propName + ".iorinside")(1.5f)));
-		} else if (props.IsDefined(propName + ".interiorior"))
-			interiorIor = GetTexture(props.Get(Property(propName + ".interiorior")(1.5f)));
+		if (isDefined("iorinside")) {
+			warnDeprecated("iorinside");
+			interiorIor = parseTex("iorinside", {1.5f});
+		} else if (isDefined("interiorior"))
+			interiorIor = parseTex("interiorior", {1.5f});
 
-		const Texture *nu = GetTexture(props.Get(Property(propName + ".uroughness")(.1f)));
-		const Texture *nv = GetTexture(props.Get(Property(propName + ".vroughness")(.1f)));
-		
-		const Texture *filmThickness = NULL;
-		if (props.IsDefined(propName + ".filmthickness"))
-			filmThickness = GetTexture(props.Get(Property(propName + ".filmthickness")(0.f)));
-		
-		const Texture *filmIor = NULL;
-		if (props.IsDefined(propName + ".filmior"))
-			filmIor = GetTexture(props.Get(Property(propName + ".filmior")(1.5f)));
+		auto nu = parseTex("uroughness", {.1f});
+		auto nv = parseTex("vroughness", {.1f});
 
-		mat = new RoughGlassMaterial(frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, kr, kt, exteriorIor, interiorIor, nu, nv, filmThickness, filmIor);
+		TextureConstPtr filmThickness = nullptr;
+		if (isDefined("filmthickness"))
+			filmThickness = parseTex("filmthickness", {0.f});
+
+		TextureConstPtr filmIor = nullptr;
+		if (isDefined("filmior"))
+			filmIor = parseTex("filmior", {1.5f});
+
+		mat = std::make_unique<RoughGlassMaterial>(
+			frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex,
+			kr, kt, exteriorIor, interiorIor, nu, nv, filmThickness, filmIor
+		);
 	} else if (matType == "velvet") {
-		const Texture *kd = GetTexture(props.Get(Property(propName + ".kd")(.5f, .5f, .5f)));
-		const Texture *p1 = GetTexture(props.Get(Property(propName + ".p1")(-2.0f)));
-		const Texture *p2 = GetTexture(props.Get(Property(propName + ".p2")(20.0f)));
-		const Texture *p3 = GetTexture(props.Get(Property(propName + ".p3")(2.0f)));
-		const Texture *thickness = GetTexture(props.Get(Property(propName + ".thickness")(0.1f)));
+		auto kd = parseTex("kd", {.5f, .5f, .5f});
+		auto p1 = parseTex("p1", {-2.0f});
+		auto p2 = parseTex("p2", {20.0f});
+		auto p3 = parseTex("p3", {2.0f});
+		auto thickness = parseTex("thickness", {0.1f});
 
-		mat = new VelvetMaterial(frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, kd, p1, p2, p3, thickness);
+		mat = std::make_unique<VelvetMaterial>(
+			frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex,
+			kd, p1, p2, p3, thickness
+		);
 	} else if (matType == "cloth") {
 		slg::ocl::ClothPreset preset = slg::ocl::DENIM;
 
-		if (props.IsDefined(propName + ".preset")) {
-			const string type = props.Get(Property(propName + ".preset")("denim")).Get<string>();
+		if (isDefined("preset")) {
+			const string type = parseString("preset", "denim");
 
 			if (type == "denim")
 				preset = slg::ocl::DENIM;
@@ -379,20 +528,22 @@ Material *Scene::CreateMaterial(const u_int defaultMatID, const string &matName,
 			else if (type == "polyester_lining_cloth")
 				preset = slg::ocl::POLYESTER;
 		}
-		const Texture *weft_kd = GetTexture(props.Get(Property(propName + ".weft_kd")(.5f, .5f, .5f)));
-		const Texture *weft_ks = GetTexture(props.Get(Property(propName + ".weft_ks")(.5f, .5f, .5f)));
-		const Texture *warp_kd = GetTexture(props.Get(Property(propName + ".warp_kd")(.5f, .5f, .5f)));
-		const Texture *warp_ks = GetTexture(props.Get(Property(propName + ".warp_ks")(.5f, .5f, .5f)));
-		const float repeat_u = props.Get(Property(propName + ".repeat_u")(100.0f)).Get<float>();
-		const float repeat_v = props.Get(Property(propName + ".repeat_v")(100.0f)).Get<float>();
+		auto weft_kd = parseTex("weft_kd", {.5f, .5f, .5f});
+		auto weft_ks = parseTex("weft_ks", {.5f, .5f, .5f});
+		auto warp_kd = parseTex("warp_kd", {.5f, .5f, .5f});
+		auto warp_ks = parseTex("warp_ks", {.5f, .5f, .5f});
+		const float repeat_u = parseFloat("repeat_u", 100.0f);
+		const float repeat_v = parseFloat("repeat_v", 100.0f);
 
-		mat = new ClothMaterial(frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, preset, weft_kd, weft_ks, warp_kd, warp_ks, repeat_u, repeat_v);
+		mat = std::make_unique<ClothMaterial>(
+			frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex,
+			preset, weft_kd, weft_ks, warp_kd, warp_ks, repeat_u, repeat_v
+		);
 	} else if (matType == "carpaint") {
-		const Texture *ka = GetTexture(props.Get(Property(propName + ".ka")(0.f, 0.f, 0.f)));
-		const Texture *d = GetTexture(props.Get(Property(propName + ".d")(0.f)));
+		auto ka = parseTex("ka", {0.f, 0.f, 0.f});
+		auto d = parseTex("d", {0.f});
 
-        mat = NULL; // To remove a GCC warning
-		string preset = props.Get(Property(propName + ".preset")("")).Get<string>();
+		string preset = parseString("preset", "");
 		if (preset != "") {
 			const int numPaints = CarPaintMaterial::NbPresets();
 			int i;
@@ -404,115 +555,161 @@ Material *Scene::CreateMaterial(const u_int defaultMatID, const string &matName,
 			if (i == numPaints)
 				preset = "";
 			else {
-				const Texture *kd = GetTexture(Property(NamedObject::GetUniqueName(matName + "-Implicit-" + preset + "-kd"))
-					(CarPaintMaterial::data[i].kd[0], CarPaintMaterial::data[i].kd[1], CarPaintMaterial::data[i].kd[2]));
-				const Texture *ks1 = GetTexture(Property(NamedObject::GetUniqueName(matName + "-Implicit-" + preset + "-ks1"))
-					(CarPaintMaterial::data[i].ks1[0], CarPaintMaterial::data[i].ks1[1], CarPaintMaterial::data[i].ks1[2]));
-				const Texture *ks2 = GetTexture(Property(NamedObject::GetUniqueName(matName + "-Implicit-" + preset + "-ks2"))
-					(CarPaintMaterial::data[i].ks2[0], CarPaintMaterial::data[i].ks2[1], CarPaintMaterial::data[i].ks2[2]));
-				const Texture *ks3 = GetTexture(Property(NamedObject::GetUniqueName(matName + "-Implicit-" + preset + "-ks3"))
-					(CarPaintMaterial::data[i].ks3[0], CarPaintMaterial::data[i].ks3[1], CarPaintMaterial::data[i].ks3[2]));
-				const Texture *r1 = GetTexture(Property(NamedObject::GetUniqueName(matName + "-Implicit-" + preset + "-r1"))
-					(CarPaintMaterial::data[i].r1));
-				const Texture *r2 = GetTexture(Property(NamedObject::GetUniqueName(matName + "-Implicit-" + preset + "-r2"))
-					(CarPaintMaterial::data[i].r2));
-				const Texture *r3 = GetTexture(Property(NamedObject::GetUniqueName(matName + "-Implicit-" + preset + "-r3"))
-					(CarPaintMaterial::data[i].r3));
-				const Texture *m1 = GetTexture(Property(NamedObject::GetUniqueName(matName + "-Implicit-" + preset + "-m1"))
-					(CarPaintMaterial::data[i].m1));
-				const Texture *m2 = GetTexture(Property(NamedObject::GetUniqueName(matName + "-Implicit-" + preset + "-m2"))
-					(CarPaintMaterial::data[i].m2));
-				const Texture *m3 = GetTexture(Property(NamedObject::GetUniqueName(matName + "-Implicit-" + preset + "-m3"))
-					(CarPaintMaterial::data[i].m3));
-				mat = new CarPaintMaterial(frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, kd, ks1, ks2, ks3, m1, m2, m3, r1, r2, r3, ka, d);
+				auto& cpData = CarPaintMaterial::data;
+				auto& kd = GetTexture(Property(NamedObject::GetUniqueName(matName + "-Implicit-" + preset + "-kd"))
+					(cpData[i].kd[0], cpData[i].kd[1], cpData[i].kd[2]));
+				auto& ks1 = GetTexture(Property(NamedObject::GetUniqueName(matName + "-Implicit-" + preset + "-ks1"))
+					(cpData[i].ks1[0], cpData[i].ks1[1], cpData[i].ks1[2]));
+				auto& ks2 = GetTexture(Property(NamedObject::GetUniqueName(matName + "-Implicit-" + preset + "-ks2"))
+					(cpData[i].ks2[0], cpData[i].ks2[1], cpData[i].ks2[2]));
+				auto& ks3 = GetTexture(Property(NamedObject::GetUniqueName(matName + "-Implicit-" + preset + "-ks3"))
+					(cpData[i].ks3[0], cpData[i].ks3[1], cpData[i].ks3[2]));
+				auto& r1 = GetTexture(Property(NamedObject::GetUniqueName(matName + "-Implicit-" + preset + "-r1"))
+					(cpData[i].r1));
+				auto& r2 = GetTexture(Property(NamedObject::GetUniqueName(matName + "-Implicit-" + preset + "-r2"))
+					(cpData[i].r2));
+				auto& r3 = GetTexture(Property(NamedObject::GetUniqueName(matName + "-Implicit-" + preset + "-r3"))
+					(cpData[i].r3));
+				auto& m1 = GetTexture(Property(NamedObject::GetUniqueName(matName + "-Implicit-" + preset + "-m1"))
+					(cpData[i].m1));
+				auto& m2 = GetTexture(Property(NamedObject::GetUniqueName(matName + "-Implicit-" + preset + "-m2"))
+					(cpData[i].m2));
+				auto& m3 = GetTexture(Property(NamedObject::GetUniqueName(matName + "-Implicit-" + preset + "-m3"))
+					(cpData[i].m3));
+				mat = std::make_unique<CarPaintMaterial>(
+					frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex,
+					TextureConstPtr(&kd),
+					TextureConstPtr(&ks1),
+					TextureConstPtr(&ks2),
+					TextureConstPtr(&ks3),
+					TextureConstPtr(&m1),
+					TextureConstPtr(&m2),
+					TextureConstPtr(&m3),
+					TextureConstPtr(&r1),
+					TextureConstPtr(&r2),
+					TextureConstPtr(&r3),
+					ka,
+					d
+				);
 			}
 		}
 
 		// preset can be reset above if the name is not found
 		if (preset == "") {
-			const Texture *kd = GetTexture(props.Get(Property(propName + ".kd")(CarPaintMaterial::data[0].kd[0], CarPaintMaterial::data[0].kd[1], CarPaintMaterial::data[0].kd[2])));
-			const Texture *ks1 = GetTexture(props.Get(Property(propName + ".ks1")(CarPaintMaterial::data[0].ks1[0], CarPaintMaterial::data[0].ks1[1], CarPaintMaterial::data[0].ks1[2])));
-			const Texture *ks2 = GetTexture(props.Get(Property(propName + ".ks2")(CarPaintMaterial::data[0].ks2[0], CarPaintMaterial::data[0].ks2[1], CarPaintMaterial::data[0].ks2[2])));
-			const Texture *ks3 = GetTexture(props.Get(Property(propName + ".ks3")(CarPaintMaterial::data[0].ks3[0], CarPaintMaterial::data[0].ks3[1], CarPaintMaterial::data[0].ks3[2])));
-			const Texture *r1 = GetTexture(props.Get(Property(propName + ".r1")(CarPaintMaterial::data[0].r1)));
-			const Texture *r2 = GetTexture(props.Get(Property(propName + ".r2")(CarPaintMaterial::data[0].r2)));
-			const Texture *r3 = GetTexture(props.Get(Property(propName + ".r3")(CarPaintMaterial::data[0].r3)));
-			const Texture *m1 = GetTexture(props.Get(Property(propName + ".m1")(CarPaintMaterial::data[0].m1)));
-			const Texture *m2 = GetTexture(props.Get(Property(propName + ".m2")(CarPaintMaterial::data[0].m2)));
-			const Texture *m3 = GetTexture(props.Get(Property(propName + ".m3")(CarPaintMaterial::data[0].m3)));
-			mat = new CarPaintMaterial(frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, kd, ks1, ks2, ks3, m1, m2, m3, r1, r2, r3, ka, d);
+			auto& cpData = CarPaintMaterial::data[0];
+			auto kd = parseTex( "kd", {cpData.kd[0], cpData.kd[1], cpData.kd[2]});
+			auto ks1 = parseTex("ks1", {cpData.ks1[0], cpData.ks1[1], cpData.ks1[2]});
+			auto ks2 = parseTex("ks2", {cpData.ks2[0], cpData.ks2[1], cpData.ks2[2]});
+			auto ks3 = parseTex("ks3", {cpData.ks3[0], cpData.ks3[1], cpData.ks3[2]});
+			auto r1 = parseTex("r1", {cpData.r1});
+			auto r2 = parseTex("r2", {cpData.r2});
+			auto r3 = parseTex("r3", {cpData.r3});
+			auto m1 = parseTex("m1", {cpData.m1});
+			auto m2 = parseTex("m2", {cpData.m2});
+			auto m3 = parseTex("m3", {cpData.m3});
+			mat = std::make_unique<CarPaintMaterial>(
+				frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex,
+				kd, ks1, ks2, ks3, m1, m2, m3, r1, r2, r3, ka, d
+			);
 		}
 	} else if (matType == "glossytranslucent") {
-		const Texture *kd = GetTexture(props.Get(Property(propName + ".kd")(.5f, .5f, .5f)));
-		const Texture *kt = GetTexture(props.Get(Property(propName + ".kt")(.5f, .5f, .5f)));
-		const Texture *ks = GetTexture(props.Get(Property(propName + ".ks")(.5f, .5f, .5f)));
-		const Texture *ks_bf = GetTexture(props.Get(Property(propName + ".ks_bf")(.5f, .5f, .5f)));
-		const Texture *nu = GetTexture(props.Get(Property(propName + ".uroughness")(.1f)));
-		const Texture *nu_bf = GetTexture(props.Get(Property(propName + ".uroughness_bf")(.1f)));
-		const Texture *nv = GetTexture(props.Get(Property(propName + ".vroughness")(.1f)));
-		const Texture *nv_bf = GetTexture(props.Get(Property(propName + ".vroughness_bf")(.1f)));
-		const Texture *ka = GetTexture(props.Get(Property(propName + ".ka")(0.f, 0.f, 0.f)));
-		const Texture *ka_bf = GetTexture(props.Get(Property(propName + ".ka_bf")(0.f, 0.f, 0.f)));
-		const Texture *d = GetTexture(props.Get(Property(propName + ".d")(0.f)));
-		const Texture *d_bf = GetTexture(props.Get(Property(propName + ".d_bf")(0.f)));
-		const Texture *index = GetTexture(props.Get(Property(propName + ".index")(0.f, 0.f, 0.f)));
-		const Texture *index_bf = GetTexture(props.Get(Property(propName + ".index_bf")(0.f, 0.f, 0.f)));
-		const bool multibounce = props.Get(Property(propName + ".multibounce")(false)).Get<bool>();
-		const bool multibounce_bf = props.Get(Property(propName + ".multibounce_bf")(false)).Get<bool>();
+		auto kd = parseTex("kd", {.5f, .5f, .5f});
+		auto kt = parseTex("kt", {.5f, .5f, .5f});
+		auto ks = parseTex("ks", {.5f, .5f, .5f});
+		auto ks_bf = parseTex("ks_bf", {.5f, .5f, .5f});
+		auto nu = parseTex("uroughness", {.1f});
+		auto nu_bf = parseTex("uroughness_bf", {.1f});
+		auto nv = parseTex("vroughness", {.1f});
+		auto nv_bf = parseTex("vroughness_bf", {.1f});
+		auto ka = parseTex("ka", {0.f, 0.f, 0.f});
+		auto ka_bf = parseTex("ka_bf", {0.f, 0.f, 0.f});
+		auto d = parseTex("d", {0.f});
+		auto d_bf = parseTex("d_bf", {0.f});
+		auto index = parseTex("index", {0.f, 0.f, 0.f});
+		auto index_bf = parseTex("index_bf", {0.f, 0.f, 0.f});
+		const bool multibounce = parseBool("multibounce", false);
+		const bool multibounce_bf = parseBool("multibounce_bf", false);
 
-		mat = new GlossyTranslucentMaterial(frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, kd, kt, ks, ks_bf, nu, nu_bf, nv, nv_bf,
-			ka, ka_bf, d, d_bf, index, index_bf, multibounce, multibounce_bf);
+		mat = std::make_unique<GlossyTranslucentMaterial>(
+			frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex,
+			kd, kt, ks, ks_bf, nu, nu_bf, nv, nv_bf,
+			ka, ka_bf, d, d_bf, index, index_bf, multibounce, multibounce_bf
+		);
 	} else if (matType == "glossycoating") {
-		const Material *matBase = matDefs.GetMaterial(props.Get(Property(propName + ".base")("")).Get<string>());
-		const Texture *ks = GetTexture(props.Get(Property(propName + ".ks")(.5f, .5f, .5f)));
-		const Texture *nu = GetTexture(props.Get(Property(propName + ".uroughness")(.1f)));
-		const Texture *nv = GetTexture(props.Get(Property(propName + ".vroughness")(.1f)));
-		const Texture *ka = GetTexture(props.Get(Property(propName + ".ka")(0.f, 0.f, 0.f)));
-		const Texture *d = GetTexture(props.Get(Property(propName + ".d")(0.f)));
-		const Texture *index = GetTexture(props.Get(Property(propName + ".index")(0.f, 0.f, 0.f)));
-		const bool multibounce = props.Get(Property(propName + ".multibounce")(false)).Get<bool>();
+		MaterialConstRef matBase = matDefs.GetMaterial(parseString("base", ""));
+		auto ks = parseTex("ks", {.5f, .5f, .5f});
+		auto nu = parseTex("uroughness", {.1f});
+		auto nv = parseTex("vroughness", {.1f});
+		auto ka = parseTex("ka", {0.f, 0.f, 0.f});
+		auto d = parseTex("d", {0.f});
+		auto index = parseTex("index", {0.f, 0.f, 0.f});
+		const bool multibounce = parseBool("multibounce", false);
 
-		mat = new GlossyCoatingMaterial(frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, matBase, ks, nu, nv, ka, d, index, multibounce);
+		mat = std::make_unique<GlossyCoatingMaterial>(
+			frontTransparencyTex,
+			backTransparencyTex,
+			emissionTex,
+			bumpTex,
+			MaterialConstPtr(&matBase),
+			ks,
+			nu,
+			nv,
+			ka,
+			d,
+			index,
+			multibounce
+		);
 	} else if (matType == "disney") {
-		const Texture *baseColor = GetTexture(props.Get(Property(propName + ".basecolor")(.5f, .5f, .5f)));
-		const Texture *subsurface = GetTexture(props.Get(Property(propName + ".subsurface")(0.f)));
-		const Texture *roughness = GetTexture(props.Get(Property(propName + ".roughness")(0.f)));
-		const Texture *metallic = GetTexture(props.Get(Property(propName + ".metallic")(0.f)));
-		const Texture *specular = GetTexture(props.Get(Property(propName + ".specular")(0.f)));
-		const Texture *specularTint = GetTexture(props.Get(Property(propName + ".speculartint")(0.f)));
-		const Texture *clearcoat = GetTexture(props.Get(Property(propName + ".clearcoat")(0.f)));
-		const Texture *clearcoatGloss = GetTexture(props.Get(Property(propName + ".clearcoatgloss")(0.f)));
-		const Texture *anisotropic = GetTexture(props.Get(Property(propName + ".anisotropic")(0.f)));
-		const Texture *sheen = GetTexture(props.Get(Property(propName + ".sheen")(0.f)));
-		const Texture *sheenTint = GetTexture(props.Get(Property(propName + ".sheentint")(0.f)));
-		
-		const Texture *filmAmount = NULL;
-		if (props.IsDefined(propName + ".filmamount"))
-			filmAmount = GetTexture(props.Get(Property(propName + ".filmamount")(1.f)));
-		
-		const Texture *filmThickness = NULL;
-		if (props.IsDefined(propName + ".filmthickness"))
-			filmThickness = GetTexture(props.Get(Property(propName + ".filmthickness")(0.f)));
-		
-		const Texture *filmIor = NULL;
-		if (props.IsDefined(propName + ".filmior"))
-			filmIor = GetTexture(props.Get(Property(propName + ".filmior")(1.5f)));
+		auto baseColor = parseTex("basecolor", {.5f, .5f, .5f});
+		auto subsurface = parseTex("subsurface", {0.f});
+		auto roughness = parseTex("roughness", {0.f});
+		auto metallic = parseTex("metallic", {0.f});
+		auto specular = parseTex("specular", {0.f});
+		auto specularTint = parseTex("speculartint", {0.f});
+		auto clearcoat = parseTex("clearcoat", {0.f});
+		auto clearcoatGloss = parseTex("clearcoatgloss", {0.f});
+		auto anisotropic = parseTex("anisotropic", {0.f});
+		auto sheen = parseTex("sheen", {0.f});
+		auto sheenTint = parseTex("sheentint", {0.f});
 
-		mat = new DisneyMaterial(frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, baseColor, subsurface, roughness, metallic,
-			specular, specularTint, clearcoat, clearcoatGloss, anisotropic, sheen, sheenTint, filmAmount, filmThickness, filmIor);
+		TextureConstPtr filmAmount = nullptr;
+		if (isDefined("filmamount"))
+			filmAmount = parseTex("filmamount", {1.f});
+
+		TextureConstPtr filmThickness = nullptr;
+		if (isDefined("filmthickness"))
+			filmThickness = parseTex("filmthickness", {0.f});
+
+		TextureConstPtr filmIor = nullptr;
+		if (isDefined("filmior"))
+			filmIor = parseTex("filmior", {1.5f});
+
+		mat = std::make_unique<DisneyMaterial>(
+			frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex,
+			baseColor, subsurface, roughness, metallic,
+			specular, specularTint, clearcoat, clearcoatGloss, anisotropic,
+			sheen, sheenTint, filmAmount, filmThickness, filmIor
+		);
 	} else if (matType == "twosided") {
-		const Material *frontMat = matDefs.GetMaterial(props.Get(Property(propName + ".frontmaterial")("front")).Get<string>());
-		const Material *backMat = matDefs.GetMaterial(props.Get(Property(propName + ".backmaterial")("back")).Get<string>());
+		MaterialConstRef frontMat = matDefs.GetMaterial(parseString("frontmaterial", "front"));
+		MaterialConstRef backMat = matDefs.GetMaterial(parseString("backmaterial", "back"));
 
-		TwoSidedMaterial *twoSided = new TwoSidedMaterial(frontTransparencyTex, backTransparencyTex, emissionTex, bumpTex, frontMat, backMat);
+		auto twoSided = std::make_unique<TwoSidedMaterial>(
+			frontTransparencyTex,
+			backTransparencyTex,
+			emissionTex,
+			bumpTex,
+			frontMat,
+			backMat
+		);
 
 		// Check if there is a loop in Two-sided material definition
 		// (Note: this can not really happen at the moment because forward
 		// declarations are not supported)
-		if (twoSided->IsReferencing(twoSided))
+		if (twoSided->IsReferencing(*twoSided))
 			throw runtime_error("There is a loop in Two-sided material definition: " + matName);
 
-		mat = twoSided;
+		mat = std::move(twoSided);
 	} else
 		throw runtime_error("Unknown material type: " + matType);
 
@@ -523,19 +720,34 @@ Material *Scene::CreateMaterial(const u_int defaultMatID, const string &matName,
 
 	// Gain is not really a color so I avoid to use GetColor()
 	mat->SetEmittedGain(props.Get(Property(propName + ".emission.gain")(Spectrum(1.f))).Get<Spectrum>());
-	mat->SetEmittedPower(Max(0.f, props.Get(Property(propName + ".emission.power")(0.f)).Get<float>()));
-	mat->SetEmittedPowerNormalize(props.Get(Property(propName + ".emission.normalizebycolor")(true)).Get<bool>());
-	mat->SetEmittedGainNormalize(props.Get(Property(propName + ".emission.gain.normalizebycolor")(false)).Get<bool>());
-	mat->SetEmittedEfficency(Max(0.f, props.Get(Property(propName + ".emission.efficiency")(0.f), propName + ".emission.efficency").Get<float>()));
-	mat->SetEmittedTheta(Clamp(props.Get(Property(propName + ".emission.theta")(90.f)).Get<float>(), 0.f, 90.f));
+	mat->SetEmittedPower(std::max(0.f, parseFloat("emission.power", 0.0)));
+	mat->SetEmittedPowerNormalize(parseBool("emission.normalizebycolor", true));
+	mat->SetEmittedGainNormalize(parseBool("emission.gain.normalizebycolor", false));
+	mat->SetEmittedEfficency(
+		std::max(
+			0.0,
+			props.Get(
+				std::move(Property(propName + ".emission.efficiency")(0.0)),
+				propName + ".emission.efficency"
+			)->Get<double>()
+		)
+	);
+	mat->SetEmittedTheta(std::clamp(parseFloat("emission.theta", 90.0), 0.f, 90.f));
 	mat->SetLightID(props.Get(Property(propName + ".emission.id")(0u)).Get<u_int>());
-	mat->SetEmittedImportance(props.Get(Property(propName + ".emission.importance")(1.f)).Get<float>());
-	mat->SetEmittedTemperature(props.Get(Property(propName + ".emission.temperature")(-1.f)).Get<float>());
-	mat->SetEmittedTemperatureNormalize(props.Get(Property(propName + ".emission.temperature.normalize")(false)).Get<float>());
+	mat->SetEmittedImportance(parseFloat("emission.importance", 1.0));
+	mat->SetEmittedTemperature(parseFloat("emission.temperature", -1.f));
+	mat->SetEmittedTemperatureNormalize(parseBool("emission.temperature.normalize", false));
 
 	mat->SetPassThroughShadowTransparency(GetColor(props.Get(Property(propName + ".transparency.shadow")(Spectrum(0.f)))));
+	if (props.IsDefined(propName + ".transparency.shadowoverride")){
+		mat->SetPassThroughShadowTransparencyOverride(
+			parseBool("transparency.shadowoverride", false)
+		);
+	} else {
+		mat->SetPassThroughShadowTransparencyOverride(false);
+	}
 
-	const string dlsType = props.Get(Property(propName + ".emission.directlightsampling.type")("AUTO")).Get<string>();
+	const auto dlsType = parseString("emission.directlightsampling.type", "AUTO");
 	if (dlsType == "ENABLED")
 		mat->SetDirectLightSamplingType(DLS_ENABLED);
 	else if (dlsType == "DISABLED")
@@ -545,42 +757,51 @@ Material *Scene::CreateMaterial(const u_int defaultMatID, const string &matName,
 	else
 		throw runtime_error("Unknown material emission direct sampling type: " + dlsType);
 
-	mat->SetIndirectDiffuseVisibility(props.Get(Property(propName + ".visibility.indirect.diffuse.enable")(true)).Get<bool>());
-	mat->SetIndirectGlossyVisibility(props.Get(Property(propName + ".visibility.indirect.glossy.enable")(true)).Get<bool>());
-	mat->SetIndirectSpecularVisibility(props.Get(Property(propName + ".visibility.indirect.specular.enable")(true)).Get<bool>());
-	
-	mat->SetShadowCatcher(props.Get(Property(propName + ".shadowcatcher.enable")(false)).Get<bool>());
-	mat->SetShadowCatcherOnlyInfiniteLights(props.Get(Property(propName + ".shadowcatcher.onlyinfinitelights")(false)).Get<bool>());
+	mat->SetIndirectDiffuseVisibility(parseBool("visibility.indirect.diffuse.enable", true));
+	mat->SetIndirectGlossyVisibility(parseBool("visibility.indirect.glossy.enable", true));
+	mat->SetIndirectSpecularVisibility(parseBool("visibility.indirect.specular.enable", true));
 
-	mat->SetPhotonGIEnabled(props.Get(Property(propName + ".photongi.enable")(true)).Get<bool>());
-	mat->SetHoldout(props.Get(Property(propName + ".holdout.enable")(false)).Get<bool>());
+	mat->SetShadowCatcher(parseBool("shadowcatcher.enable", false));
+	mat->SetShadowCatcherOnlyInfiniteLights(parseBool("shadowcatcher.onlyinfinitelights", false));
+
+	mat->SetPhotonGIEnabled(parseBool("photongi.enable", true));
+	mat->SetHoldout(parseBool("holdout.enable", false));
 
 	// Check if there is a image or IES map
-	const ImageMap *emissionMap = CreateEmissionMap(propName + ".emission", props);
+	auto emissionMap = CreateEmissionMap(propName + ".emission", props);
 	if (emissionMap) {
 		// There is one
-		mat->SetEmissionMap(emissionMap);
+		mat->SetEmissionMap(*emissionMap);
 	}
 
 	// Interior volumes
 	if (props.IsDefined(propName + ".volume.interior")) {
-		const string volName = props.Get(Property(propName + ".volume.interior")("vol1")).Get<string>();
-		const Material *m = matDefs.GetMaterial(volName);
-		const Volume *v = dynamic_cast<const Volume *>(m);
-		if (!v)
-			throw runtime_error(volName + " is not a volume and can not be used for material interior volume: " + matName);
-		mat->SetInteriorVolume(v);
+		const string volName = parseString("volume.interior", "vol1");
+		MaterialConstRef m = matDefs.GetMaterial(volName);
+		try {
+			auto& v = dynamic_cast<const Volume&>(m);
+			mat->SetInteriorVolume(v);
+		} catch(std::bad_cast&) {
+			throw runtime_error(
+				volName
+				+ " is not a volume and can not be used for material interior volume: "
+				+ matName
+			);
+		}
 	}
 
 	// Exterior volumes
 	if (props.IsDefined(propName + ".volume.exterior")) {
-		const string volName = props.Get(Property(propName + ".volume.exterior")("vol2")).Get<string>();
-		const Material *m = matDefs.GetMaterial(volName);
-		const Volume *v = dynamic_cast<const Volume *>(m);
-		if (!v)
+		const string volName = parseString("volume.exterior", "vol2");
+		auto& m = matDefs.GetMaterial(volName);
+		try {
+			auto& v = dynamic_cast<const Volume&>(m);
+			mat->SetExteriorVolume(v);
+		} catch(std::bad_cast&) {
 			throw runtime_error(volName + " is not a volume and can not be used for material exterior volume: " + matName);
-		mat->SetExteriorVolume(v);
+		}
 	}
 
 	return mat;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -17,8 +17,11 @@
  ***************************************************************************/
 
 #include <boost/lexical_cast.hpp>
+#include <memory>
 
 #include "luxrays/core/color/color.h"
+#include "luxrays/usings.h"
+#include "slg/usings.h"
 #include "slg/samplers/sampler.h"
 #include "slg/samplers/sobol.h"
 #include "slg/utils/mortoncurve.h"
@@ -31,38 +34,47 @@ using namespace slg;
 // SobolSamplerSharedData
 //------------------------------------------------------------------------------
 
-SobolSamplerSharedData::SobolSamplerSharedData(const u_int seed, Film *engineFlm) : SamplerSharedData() {
-	engineFilm = engineFlm;
-	seedBase = seed;
-	
+SobolSamplerSharedData::SobolSamplerSharedData(
+	const u_int seed,
+	FilmPtr engineFlm
+) :
+	SamplerSharedData(),
+	engineFilm(engineFlm),
+	seedBase(std::make_shared<u_int>(seed))
+{
 	Reset();
 }
 
-SobolSamplerSharedData::SobolSamplerSharedData(RandomGenerator *rndGen, Film *engineFlm) : SamplerSharedData() {
-	engineFilm = engineFlm;
-	seedBase = rndGen->uintValue() % (0xFFFFFFFFu - 1u) + 1u;
-
+SobolSamplerSharedData::SobolSamplerSharedData(
+	const RandomGeneratorUPtr & rndGen,
+	FilmPtr engineFlm
+) :
+	SamplerSharedData(),
+	engineFilm(engineFlm),
+	seedBase(std::make_shared<u_int>(rndGen->uintValue() % (0xFFFFFFFFu - 1u) + 1u))
+{
 	Reset();
 }
 
 void SobolSamplerSharedData::Reset() {
-	if (engineFilm) {
-		const u_int *subRegion = engineFilm->GetSubRegion();
+	if (HasEngineFilm()) {
+		const u_int *subRegion = GetEngineFilm().GetSubRegion();
 		const u_int filmRegionPixelCount = (subRegion[1] - subRegion[0] + 1) * (subRegion[3] - subRegion[2] + 1);
-		
+
 		// Initialize with SOBOL_STARTOFFSET the vector holding the passes per pixel
 		passPerPixel.resize(filmRegionPixelCount, SOBOL_STARTOFFSET);
 	} else
 		passPerPixel.resize(1, SOBOL_STARTOFFSET);
 
-	bucketIndex = 0;
+	bucketIndex = std::make_shared<u_int>(0);
 }
 
-void SobolSamplerSharedData::GetNewBucket(const u_int bucketCount,
-		u_int *newBucketIndex, u_int *seed) {
-	*newBucketIndex = AtomicInc(&bucketIndex) % bucketCount;
+std::tuple<u_int, u_int> SobolSamplerSharedData::GetNewBucket(u_int bucketCount) {
+	u_int newBucketIndex = AtomicInc(bucketIndex.get()) % bucketCount;
 
-	*seed = (seedBase + *newBucketIndex) % (0xFFFFFFFFu - 1u) + 1u;
+	u_int seed = (*seedBase + newBucketIndex) % (0xFFFFFFFFu - 1u) + 1u;
+
+	return std::make_tuple(newBucketIndex, seed);
 }
 
 u_int SobolSamplerSharedData::GetNewPixelPass(const u_int pixelIndex) {
@@ -71,12 +83,12 @@ u_int SobolSamplerSharedData::GetNewPixelPass(const u_int pixelIndex) {
 }
 
 u_int SobolSamplerSharedData::GetPassCount(const u_int bucketCount) const {
-	return bucketIndex / bucketCount;
+	return *bucketIndex / bucketCount;
 }
 
-SamplerSharedData *SobolSamplerSharedData::FromProperties(const Properties &cfg,
-		RandomGenerator *rndGen, Film *film) {
-	return new SobolSamplerSharedData(rndGen, film);
+std::unique_ptr<SamplerSharedData> SobolSamplerSharedData::FromProperties(const Properties &cfg,
+		const RandomGeneratorUPtr& rndGen, FilmPtr film) {
+	return std::make_unique<SobolSamplerSharedData>(rndGen, film);
 }
 
 //------------------------------------------------------------------------------
@@ -85,16 +97,54 @@ SamplerSharedData *SobolSamplerSharedData::FromProperties(const Properties &cfg,
 // This sampler is based on Blender Cycles Sobol implementation.
 //------------------------------------------------------------------------------
 
-SobolSampler::SobolSampler(RandomGenerator *rnd, Film *flm,
-		const FilmSampleSplatter *flmSplatter, const bool imgSamplesEnable,
-		const float adaptiveStr, const float adaptiveUserImpWeight,
-		const u_int bucketSz, const u_int tileSz, const u_int superSmpl,
-		const u_int overlap, SobolSamplerSharedData *samplerSharedData) :
-		Sampler(rnd, flm, flmSplatter, imgSamplesEnable),
-		sharedData(samplerSharedData), sobolSequence(), adaptiveStrength(adaptiveStr),
-		adaptiveUserImportanceWeight(adaptiveUserImpWeight), bucketSize(bucketSz),
-		tileSize(tileSz), superSampling(superSmpl), overlapping(overlap) {
-}
+SobolSampler::SobolSampler(
+	const RandomGeneratorUPtr & rnd,
+	FilmPtr flm,  // Film is optional!
+	const FilmSampleSplatterUPtr& flmSplatter,
+	const bool imgSamplesEnable,
+	const float adaptiveStr,
+	const float adaptiveUserImpWeight,
+	const u_int bucketSz,
+	const u_int tileSz,
+	const u_int superSmpl,
+	const u_int overlap,
+	SamplerSharedDataSPtr samplerSharedData
+) :
+	Sampler(rnd, flm, flmSplatter, imgSamplesEnable),
+	sharedData(static_pointer_cast<SobolSamplerSharedData>(samplerSharedData)),
+	sobolSequence(),
+	adaptiveStrength(adaptiveStr),
+	adaptiveUserImportanceWeight(adaptiveUserImpWeight),
+	bucketSize(bucketSz),
+	tileSize(tileSz),
+	superSampling(superSmpl),
+	overlapping(overlap),
+	bucketIndex(std::make_shared<u_int>(0))
+{}
+SobolSampler::SobolSampler(
+	const RandomGeneratorUPtr & rnd,
+	FilmRef flm,
+	const FilmSampleSplatterUPtr& flmSplatter,
+	const bool imgSamplesEnable,
+	const float adaptiveStr,
+	const float adaptiveUserImpWeight,
+	const u_int bucketSz,
+	const u_int tileSz,
+	const u_int superSmpl,
+	const u_int overlap,
+	SamplerSharedDataSPtr samplerSharedData
+) :
+	Sampler(rnd, FilmPtr(std::addressof(flm)), flmSplatter, imgSamplesEnable),
+	sharedData(static_pointer_cast<SobolSamplerSharedData>(samplerSharedData)),
+	sobolSequence(),
+	adaptiveStrength(adaptiveStr),
+	adaptiveUserImportanceWeight(adaptiveUserImpWeight),
+	bucketSize(bucketSz),
+	tileSize(tileSz),
+	superSampling(superSmpl),
+	overlapping(overlap),
+	bucketIndex(std::make_shared<u_int>(0))
+{}
 
 SobolSampler::~SobolSampler() {
 }
@@ -106,7 +156,7 @@ void SobolSampler::InitNewSample() {
 	u_int subRegionWidth, subRegionHeight, tiletWidthCount, tileHeightCount, bucketCount;
 
 	if (doImageSamples) {
-		filmSubRegion = film->GetSubRegion();
+		filmSubRegion = GetFilm().GetSubRegion();
 
 		subRegionWidth = filmSubRegion[1] - filmSubRegion[0] + 1;
 		subRegionHeight = filmSubRegion[3] - filmSubRegion[2] + 1;
@@ -128,15 +178,14 @@ void SobolSampler::InitNewSample() {
 
 			if (pixelOffset >= bucketSize) {
 				// Ask for a new bucket
-				u_int bucketSeed;
-				sharedData->GetNewBucket(bucketCount,
-						&bucketIndex, &bucketSeed);
+				auto [newBucketIndex, newBucketSeed] = sharedData->GetNewBucket(bucketCount);
+				*bucketIndex = newBucketIndex;
 
 				pixelOffset = 0;
 				passOffset = 0;
 
 				// Initialize the rng0, rng1 and rngPass generator
-				rngGenerator.init(bucketSeed);
+				rngGenerator.init(newBucketSeed);
 			}
 		}
 
@@ -146,7 +195,7 @@ void SobolSampler::InitNewSample() {
 		if (doImageSamples) {
 			// Transform the bucket index in a pixel coordinate
 
-			const u_int pixelBucketIndex = (bucketIndex / overlapping) * bucketSize + pixelOffset;
+			const u_int pixelBucketIndex = (*bucketIndex / overlapping) * bucketSize + pixelOffset;
 			const u_int mortonCurveOffset = pixelBucketIndex % (tileSize * tileSize);
 			const u_int pixelTileIndex = pixelBucketIndex / (tileSize * tileSize);
 
@@ -161,15 +210,15 @@ void SobolSampler::InitNewSample() {
 			pixelY = filmSubRegion[2] + subRegionPixelY;
 
 			// Check if the current pixel is over or under the convergence threshold
-			const Film *film = sharedData->engineFilm;
-			if ((adaptiveStrength > 0.f) && film->HasChannel(Film::NOISE)) {
+			auto& film = sharedData->GetEngineFilm();
+			if ((adaptiveStrength > 0.f) && GetFilm().HasChannel(Film::NOISE)) {
 				// Pixels are sampled in accordance with how far from convergence they are
-				const float noise = *(film->channel_NOISE->GetPixel(pixelX, pixelY));
+				const float noise = *(GetFilm().channel_NOISE->GetPixel(pixelX, pixelY));
 
 				// Factor user driven importance sampling too
 				float threshold;
-				if (film->HasChannel(Film::USER_IMPORTANCE)) {
-					const float userImportance = *(film->channel_USER_IMPORTANCE->GetPixel(pixelX, pixelY));
+				if (GetFilm().HasChannel(Film::USER_IMPORTANCE)) {
+					const float userImportance = *(GetFilm().channel_USER_IMPORTANCE->GetPixel(pixelX, pixelY));
 
 					// Noise is initialized to INFINITY at start
 					if (isinf(noise))
@@ -242,13 +291,13 @@ void SobolSampler::NextSample(const vector<SampleResult> &sampleResults) {
 	if (film) {
 		switch (sampleType) {
 			case PIXEL_NORMALIZED_ONLY:
-				film->AddSampleCount(threadIndex, 1.0, 0.0);
+				GetFilm().AddSampleCount(threadIndex, 1.0, 0.0);
 				break;
 			case SCREEN_NORMALIZED_ONLY:
-				film->AddSampleCount(threadIndex, 0.0, 1.0);
+				GetFilm().AddSampleCount(threadIndex, 0.0, 1.0);
 				break;
 			case PIXEL_NORMALIZED_AND_SCREEN_NORMALIZED:
-				film->AddSampleCount(threadIndex, 1.0, 1.0);
+				GetFilm().AddSampleCount(threadIndex, 1.0, 1.0);
 				break;
 			case ONLY_AOV_SAMPLE:
 				break;
@@ -267,7 +316,7 @@ u_int SobolSampler::GetPassCount() const {
 	if (!doImageSamples)
 		throw runtime_error("Called SobolSampler::GetPassCount() without sampling an image");
 	
-	const u_int *filmSubRegion = film->GetSubRegion();
+	const u_int *filmSubRegion = GetFilm().GetSubRegion();
 
 	const u_int subRegionWidth = filmSubRegion[1] - filmSubRegion[0] + 1;
 	const u_int subRegionHeight = filmSubRegion[3] - filmSubRegion[2] + 1;
@@ -280,74 +329,83 @@ u_int SobolSampler::GetPassCount() const {
 	return sharedData->GetPassCount(bucketCount);
 }
 
-Properties SobolSampler::ToProperties() const {
-	return Sampler::ToProperties() <<
+PropertiesUPtr SobolSampler::ToProperties() const {
+	auto props_ptr = std::make_unique<Properties>();
+	auto& props = *props_ptr;
+	props << Sampler::ToProperties() <<
 			Property("sampler.sobol.adaptive.strength")(adaptiveStrength) <<
 			Property("sampler.sobol.adaptive.userimportanceweight")(adaptiveUserImportanceWeight) <<
 			Property("sampler.sobol.bucketsize")(bucketSize) <<
 			Property("sampler.sobol.tilesize")(tileSize) <<
 			Property("sampler.sobol.supersampling")(superSampling) <<
 			Property("sampler.sobol.overlapping")(overlapping);
+	return props_ptr;
 }
 
 //------------------------------------------------------------------------------
 // Static methods used by SamplerRegistry
 //------------------------------------------------------------------------------
 
-Properties SobolSampler::ToProperties(const Properties &cfg) {
-	return Properties() <<
-			cfg.Get(GetDefaultProps().Get("sampler.type")) <<
-			cfg.Get(GetDefaultProps().Get("sampler.imagesamples.enable")) <<
-			cfg.Get(GetDefaultProps().Get("sampler.sobol.adaptive.strength")) <<
-			cfg.Get(GetDefaultProps().Get("sampler.sobol.adaptive.userimportanceweight")) <<
-			cfg.Get(GetDefaultProps().Get("sampler.sobol.bucketsize")) <<
-			cfg.Get(GetDefaultProps().Get("sampler.sobol.tilesize")) <<
-			cfg.Get(GetDefaultProps().Get("sampler.sobol.supersampling")) <<
-			cfg.Get(GetDefaultProps().Get("sampler.sobol.overlapping"));
+PropertiesUPtr SobolSampler::ToProperties(const Properties &cfg) {
+	PropertiesUPtr props = std::make_unique<Properties>();
+	*props <<
+				cfg.Get(GetDefaultProps()->Get("sampler.type")) <<
+			cfg.Get(GetDefaultProps()->Get("sampler.imagesamples.enable")) <<
+			cfg.Get(GetDefaultProps()->Get("sampler.sobol.adaptive.strength")) <<
+			cfg.Get(GetDefaultProps()->Get("sampler.sobol.adaptive.userimportanceweight")) <<
+			cfg.Get(GetDefaultProps()->Get("sampler.sobol.bucketsize")) <<
+			cfg.Get(GetDefaultProps()->Get("sampler.sobol.tilesize")) <<
+			cfg.Get(GetDefaultProps()->Get("sampler.sobol.supersampling")) <<
+			cfg.Get(GetDefaultProps()->Get("sampler.sobol.overlapping"));
+	return props;
 }
 
-Sampler *SobolSampler::FromProperties(const Properties &cfg, RandomGenerator *rndGen,
-		Film *film, const FilmSampleSplatter *flmSplatter, SamplerSharedData *sharedData) {
-	const bool imageSamplesEnable = cfg.Get(GetDefaultProps().Get("sampler.imagesamples.enable")).Get<bool>();
+SamplerUPtr SobolSampler::FromProperties(const Properties &cfg, const RandomGeneratorUPtr & rndGen,
+		FilmPtr film, const FilmSampleSplatterUPtr& flmSplatter,
+		SamplerSharedDataSPtr sharedData
+) {
+	const bool imageSamplesEnable = cfg.Get(GetDefaultProps()->Get("sampler.imagesamples.enable")).Get<bool>();
 
-	const float adaptiveStrength = Clamp(cfg.Get(GetDefaultProps().Get("sampler.sobol.adaptive.strength")).Get<float>(), 0.f, .95f);
-	const float adaptiveUserImportanceWeight = cfg.Get(GetDefaultProps().Get("sampler.sobol.adaptive.userimportanceweight")).Get<float>();
-	const float bucketSize = RoundUpPow2(cfg.Get(GetDefaultProps().Get("sampler.sobol.bucketsize")).Get<u_int>());
-	const float tileSize = RoundUpPow2(cfg.Get(GetDefaultProps().Get("sampler.sobol.tilesize")).Get<u_int>());
-	const float superSampling = cfg.Get(GetDefaultProps().Get("sampler.sobol.supersampling")).Get<u_int>();
-	const float overlapping = cfg.Get(GetDefaultProps().Get("sampler.sobol.overlapping")).Get<u_int>();
+	const float adaptiveStrength = Clamp(cfg.Get(GetDefaultProps()->Get("sampler.sobol.adaptive.strength")).Get<double>(), 0.0, .95);
+	const float adaptiveUserImportanceWeight = cfg.Get(GetDefaultProps()->Get("sampler.sobol.adaptive.userimportanceweight")).Get<double>();
+	const float bucketSize = RoundUpPow2(cfg.Get(GetDefaultProps()->Get("sampler.sobol.bucketsize")).Get<u_int>());
+	const float tileSize = RoundUpPow2(cfg.Get(GetDefaultProps()->Get("sampler.sobol.tilesize")).Get<u_int>());
+	const float superSampling = cfg.Get(GetDefaultProps()->Get("sampler.sobol.supersampling")).Get<u_int>();
+	const float overlapping = cfg.Get(GetDefaultProps()->Get("sampler.sobol.overlapping")).Get<u_int>();
 
-	return new SobolSampler(rndGen, film, flmSplatter, imageSamplesEnable,
+	return std::make_unique<SobolSampler>(rndGen, film, flmSplatter, imageSamplesEnable,
 			adaptiveStrength, adaptiveUserImportanceWeight,
 			bucketSize, tileSize, superSampling, overlapping,
-			(SobolSamplerSharedData *)sharedData);
+			dynamic_pointer_cast<SobolSamplerSharedData>(sharedData)
+	);
 }
 
 slg::ocl::Sampler *SobolSampler::FromPropertiesOCL(const Properties &cfg) {
 	slg::ocl::Sampler *oclSampler = new slg::ocl::Sampler();
 
 	oclSampler->type = slg::ocl::SOBOL;
-	oclSampler->sobol.adaptiveStrength = Clamp(cfg.Get(GetDefaultProps().Get("sampler.sobol.adaptive.strength")).Get<float>(), 0.f, .95f);
-	oclSampler->sobol.adaptiveUserImportanceWeight = cfg.Get(GetDefaultProps().Get("sampler.sobol.adaptive.userimportanceweight")).Get<float>();
-	oclSampler->sobol.bucketSize = RoundUpPow2(cfg.Get(GetDefaultProps().Get("sampler.sobol.bucketsize")).Get<u_int>());
-	oclSampler->sobol.tileSize = RoundUpPow2(cfg.Get(GetDefaultProps().Get("sampler.sobol.tilesize")).Get<u_int>());
-	oclSampler->sobol.superSampling = cfg.Get(GetDefaultProps().Get("sampler.sobol.supersampling")).Get<u_int>();
-	oclSampler->sobol.overlapping = cfg.Get(GetDefaultProps().Get("sampler.sobol.overlapping")).Get<u_int>();
+	oclSampler->sobol.adaptiveStrength = Clamp(cfg.Get(GetDefaultProps()->Get("sampler.sobol.adaptive.strength")).Get<double>(), 0.0, .95);
+	oclSampler->sobol.adaptiveUserImportanceWeight = cfg.Get(GetDefaultProps()->Get("sampler.sobol.adaptive.userimportanceweight")).Get<double>();
+	oclSampler->sobol.bucketSize = RoundUpPow2(cfg.Get(GetDefaultProps()->Get("sampler.sobol.bucketsize")).Get<u_int>());
+	oclSampler->sobol.tileSize = RoundUpPow2(cfg.Get(GetDefaultProps()->Get("sampler.sobol.tilesize")).Get<u_int>());
+	oclSampler->sobol.superSampling = cfg.Get(GetDefaultProps()->Get("sampler.sobol.supersampling")).Get<u_int>();
+	oclSampler->sobol.overlapping = cfg.Get(GetDefaultProps()->Get("sampler.sobol.overlapping")).Get<u_int>();
 
 	return oclSampler;
 }
 
 void SobolSampler::AddRequiredChannels(Film::FilmChannels &channels, const luxrays::Properties &cfg) {
-	const bool imageSamplesEnable = cfg.Get(GetDefaultProps().Get("sampler.imagesamples.enable")).Get<bool>();
+	const bool imageSamplesEnable = cfg.Get(GetDefaultProps()->Get("sampler.imagesamples.enable")).Get<bool>();
 
-	const float str = cfg.Get(GetDefaultProps().Get("sampler.sobol.adaptive.strength")).Get<float>();
+	const float str = cfg.Get(GetDefaultProps()->Get("sampler.sobol.adaptive.strength")).Get<double>();
 
 	if (imageSamplesEnable && (str > 0.f))
 		channels.insert(Film::NOISE);
 }
 
-const Properties &SobolSampler::GetDefaultProps() {
-	static Properties props = Properties() <<
+PropertiesUPtr SobolSampler::GetDefaultProps() {
+	auto props = std::make_unique<Properties>();
+	*props <<
 			Sampler::GetDefaultProps() <<
 			Property("sampler.type")(GetObjectTag()) <<
 			Property("sampler.sobol.adaptive.strength")(.95f) <<
@@ -359,3 +417,4 @@ const Properties &SobolSampler::GetDefaultProps() {
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

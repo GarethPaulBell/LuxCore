@@ -35,8 +35,8 @@ namespace luxrays {
 
 // BVHAccel Method Definitions
 
-BVHAccel::BVHAccel(const Context *context) : ctx(context) {
-	params = ToBVHParams(ctx->GetConfig());
+BVHAccel::BVHAccel(const Context & context) : ctx(context) {
+	params = ToBVHParams(ctx.GetConfig());
 
 	initialized = false;
 }
@@ -53,7 +53,7 @@ BVHParams BVHAccel::ToBVHParams(const Properties &props) {
 	const int costSamples = props.Get(Property("accelerator.bvh.costsamples")(0)).Get<int>();
 	const int isectCost = props.Get(Property("accelerator.bvh.isectcost")(80)).Get<int>();
 	const int travCost = props.Get(Property("accelerator.bvh.travcost")(10)).Get<int>();
-	const float emptyBonus = props.Get(Property("accelerator.bvh.emptybonus")(.5)).Get<float>();
+	const float emptyBonus = props.Get(Property("accelerator.bvh.emptybonus")(.5)).Get<double>();
 	
 	BVHParams params;
 	// Make sure treeType is 2, 4 or 8
@@ -97,7 +97,7 @@ void BVHAccel::Init(const deque<const Mesh *> &ms, const u_longlong totVert,
 	vector<BVHTreeNode *> bvList(totalTriangleCount, NULL);
 	u_int meshIndex = 0;
 	u_int bvListIndex = 0;
-	BOOST_FOREACH(const Mesh *mesh, meshes) {
+	for(auto& mesh: meshes) {
 		const Triangle *p = mesh->GetTriangles();
 		const u_int triangleCount = mesh->GetTotalTriangleCount();
 
@@ -141,7 +141,7 @@ void BVHAccel::Init(const deque<const Mesh *> &ms, const u_longlong totVert,
 
 	const double t1 = WallClockTime();
 
-	const string builderType = ctx->GetConfig().Get(Property("accelerator.bvh.builder.type")(
+	const string builderType = ctx.GetConfig().Get(Property("accelerator.bvh.builder.type")(
 		"EMBREE_BINNED_SAH"
 		)).Get<string>();
 
@@ -187,7 +187,7 @@ bool BVHAccel::Intersect(const Ray *initialRay, RayHit *rayHit) const {
 		const u_int nodeData = node.nodeData;
 		if (BVHNodeData_IsLeaf(nodeData)) {
 			// It is a leaf, check the triangle
-			const Mesh *mesh = meshes[node.triangleLeaf.meshIndex];
+			auto& mesh = meshes[node.triangleLeaf.meshIndex];
 
 			// This is a fast path because I know Mesh can be only TYPE_TRIANGLE/TYPE_EXT_TRIANGLE
 			// in BVH
@@ -260,3 +260,4 @@ bool BVHAccel::Intersect(const Ray *initialRay, RayHit *rayHit) const {
 }
 
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

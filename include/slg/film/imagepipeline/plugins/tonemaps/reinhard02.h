@@ -78,3 +78,4 @@ BOOST_CLASS_VERSION(slg::Reinhard02ToneMap, 1)
 BOOST_CLASS_EXPORT_KEY(slg::Reinhard02ToneMap)
 
 #endif	/* _SLG_REINAHARD02_TONEMAP_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

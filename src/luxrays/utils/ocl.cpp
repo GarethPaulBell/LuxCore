@@ -1,4 +1,4 @@
-#include <boost/filesystem/fstream.hpp> /***************************************************************************
+/***************************************************************************
  * Copyright 1998-2020 by authors (see AUTHORS.txt)                        *
  *                                                                         *
  *   This file is part of LuxCoreRender.                                   *
@@ -20,10 +20,10 @@
 
 #include <iostream>
 #include <string.h>
+#include <fstream>
 
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/trim.hpp>
-#include <boost/filesystem/fstream.hpp>
 
 #include "luxrays/luxrays.h"
 #include "luxrays/utils/utils.h"
@@ -201,15 +201,15 @@ cl_program oclKernelCache::ForcedCompile(cl_context context, cl_device_id device
 // oclKernelPersistentCache
 //------------------------------------------------------------------------------
 
-boost::filesystem::path oclKernelPersistentCache::GetCacheDir(const string &applicationName) {
-	return GetConfigDir() / "ocl_kernel_cache" / SanitizeFileName(applicationName);
+std::filesystem::path oclKernelPersistentCache::GetCacheDir(const string &applicationName) {
+	return luxrays::GetCacheDir() / "ocl_kernel_cache" / SanitizeFileName(applicationName);
 }
 
 oclKernelPersistentCache::oclKernelPersistentCache(const string &applicationName) {
 	appName = applicationName;
 
 	// Crate the cache directory
-	boost::filesystem::create_directories(GetCacheDir(appName));
+	std::filesystem::create_directories(GetCacheDir(appName));
 }
 
 oclKernelPersistentCache::~oclKernelPersistentCache() {
@@ -271,12 +271,12 @@ cl_program oclKernelPersistentCache::Compile(cl_context context, cl_device_id de
 	string deviceUnits = ToString(deviceUnitsUInt);
 
 	const string kernelName = HashString(ToOptsString(kernelsParameters)) + "-" + HashString(kernelSource) + ".ocl";
-	const boost::filesystem::path dirPath = GetCacheDir(appName) / SanitizeFileName(platformName) /
+	const std::filesystem::path dirPath = GetCacheDir(appName) / SanitizeFileName(platformName) /
 		SanitizeFileName(deviceName) / SanitizeFileName(deviceUnits);
-	const boost::filesystem::path filePath = dirPath / kernelName;
+	const std::filesystem::path filePath = dirPath / kernelName;
 	const string fileName = filePath.generic_string();
 	
-	if (!boost::filesystem::exists(filePath)) {
+	if (!std::filesystem::exists(filePath)) {
 		// It isn't available, compile the source
 		cl_program program = ForcedCompile(context, device,
 				kernelsParameters, kernelSource, errorStr);
@@ -294,20 +294,20 @@ cl_program oclKernelPersistentCache::Compile(cl_context context, cl_device_id de
 		if (binsSizes[0] > 0) {
 			// Using here alloca() can trigger a stack overflow on Windows for
 			// large kernel binaries
-			unique_ptr<char> bin(new char[binsSizes[0]]);
+			std::unique_ptr<char[]> bin(new char[binsSizes[0]]);
 			char *bins = bin.get();
 			CHECK_OCL_ERROR(clGetProgramInfo(program, CL_PROGRAM_BINARIES, sizeof(char *), &bins, nullptr));
 
 			// Add the kernel to the cache
-			boost::filesystem::create_directories(dirPath);
+			std::filesystem::create_directories(dirPath);
 
-			// The use of boost::filesystem::path is required for UNICODE support: fileName
+			// The use of std::filesystem::path is required for UNICODE support: fileName
 			// is supposed to be UTF-8 encoded.
-			
-			boost::filesystem::ofstream file(boost::filesystem::path(fileName),
-				boost::filesystem::ofstream::out |
-				boost::filesystem::ofstream::binary |
-				boost::filesystem::ofstream::trunc);
+
+			std::ofstream file(std::filesystem::path(fileName),
+				std::ofstream::out |
+				std::ofstream::binary |
+				std::ofstream::trunc);
 
 			// Write the binary hash
 			const u_int hashBin = HashBin(bins, binsSizes[0]);
@@ -329,17 +329,17 @@ cl_program oclKernelPersistentCache::Compile(cl_context context, cl_device_id de
 
 		return program;
 	} else {
-		const size_t fileSize = boost::filesystem::file_size(filePath);
+		const size_t fileSize = std::filesystem::file_size(filePath);
 
 		if (fileSize > 4) {
 			const size_t kernelSize = fileSize - 4;
 
 			vector<char> kernelBin(kernelSize);
 
-			// The use of boost::filesystem::path is required for UNICODE support: fileName
+			// The use of std::filesystem::path is required for UNICODE support: fileName
 			// is supposed to be UTF-8 encoded.
-			boost::filesystem::ifstream file(boost::filesystem::path(fileName),
-				boost::filesystem::ifstream::in | boost::filesystem::ifstream::binary);
+			std::ifstream file(std::filesystem::path(fileName),
+				std::ifstream::in | std::ifstream::binary);
 
 			// Read the binary hash
 			u_int hashBin;
@@ -359,7 +359,7 @@ cl_program oclKernelPersistentCache::Compile(cl_context context, cl_device_id de
 			// Check the binary hash
 			if (hashBin != HashBin(&kernelBin[0], kernelSize)) {
 				// Something wrong in the file, remove the file and retry
-				boost::filesystem::remove(filePath);
+				std::filesystem::remove(filePath);
 				return Compile(context, device, kernelsParameters, kernelSource, cached, errorStr);
 			} else {
 				// Compile from the binaries
@@ -381,10 +381,23 @@ cl_program oclKernelPersistentCache::Compile(cl_context context, cl_device_id de
 			}
 		} else {
 			// Something wrong in the file, remove the file and retry
-			boost::filesystem::remove(filePath);
+			std::filesystem::remove(filePath);
 			return Compile(context, device, kernelsParameters, kernelSource, cached, errorStr);
 		}
 	}
 }
 
+void luxrays::CheckOpenCLError(const cl_int err, const char *file, const int line) {
+  	if (err != CL_SUCCESS) {
+		std::string msg = std::string("OpenCL driver API error ")
+			+ std::string("(code: ") + ToString(err)
+			+ std::string(", file:") + std::string(file)
+			+ std::string(", line: ") + ToString(line) + std::string(")")
+			+ std::string(": ") + oclErrorString(err) + "\n";
+		throw std::runtime_error(msg);
+	}
+}
+
+
 #endif
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

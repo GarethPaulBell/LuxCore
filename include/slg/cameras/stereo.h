@@ -35,7 +35,6 @@ public:
 	StereoCamera(const StereoCameraType type,
 			const luxrays::Point &orig, const luxrays::Point &target,
 			const luxrays::Vector &up);
-	virtual ~StereoCamera();
 
 	const luxrays::Transform &GetRasterToCamera(const u_int index = 0) const;
 	const luxrays::Transform &GetCameraToWorld(const u_int index = 0) const;
@@ -57,18 +56,19 @@ public:
 		const float filmX, const float filmY,
 		float *pdfW, float *fluxToRadianceFactor) const;
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 	StereoCameraType GetStereoType() const { return stereoType; }
-	
+
 	float horizStereoEyesDistance, horizStereoLensDistance;
 
 private:
 	const StereoCameraType stereoType;
-	Camera *leftEye;
-	Camera *rightEye;
+	CameraUPtr leftEye;
+	CameraUPtr rightEye;
 };
 
 }
 
 #endif	/* _SLG_CAMERA_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -29,12 +29,14 @@ namespace slg {
 
 class RoughGlassMaterial : public Material {
 public:
-	RoughGlassMaterial(const Texture *frontTransp, const Texture *backTransp,
-			const Texture *emitted, const Texture *bump,
-			const Texture *refl, const Texture *trans,
-			const Texture *exteriorIorFact, const Texture *interiorIorFact,
-			const Texture *u, const Texture *v,
-			const Texture *filmThickness, const Texture *filmIor);
+	using TexRef = TextureConstPtr;
+
+	RoughGlassMaterial(TexRef frontTransp, TexRef backTransp,
+			TexRef emitted, TexRef bump,
+			TexRef refl, TexRef trans,
+			TexRef exteriorIorFact, TexRef interiorIorFact,
+			TexRef u, TexRef v,
+			TexRef filmThickness, TexRef filmIor);
 
 	virtual MaterialType GetType() const { return ROUGHGLASS; }
 	virtual BSDFEvent GetEventTypes() const { return GLOSSY | REFLECT | TRANSMIT; };
@@ -51,31 +53,33 @@ public:
 		const luxrays::Vector &localLightDir, const luxrays::Vector &localEyeDir,
 		float *directPdfW, float *reversePdfW) const;
 
-	virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const;
-	virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex);
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexsreferencedTexs) const;
+	virtual void UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex);
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
-	const Texture *GetKr() const { return Kr; }
-	const Texture *GetKt() const { return Kt; }
-	const Texture *GetExteriorIOR() const { return exteriorIor; }
-	const Texture *GetInteriorIOR() const { return interiorIor; }
-	const Texture *GetNu() const { return nu; }
-	const Texture *GetNv() const { return nv; }
-	const Texture *GetFilmThickness() const { return filmThickness; }
-	const Texture *GetFilmIOR() const { return filmIor; }
+
+	TexRef GetKr() const { return Kr; }
+	TexRef GetKt() const { return Kt; }
+	TexRef GetExteriorIOR() const { return exteriorIor; }
+	TexRef GetInteriorIOR() const { return interiorIor; }
+	TexRef GetNu() const { return nu; }
+	TexRef GetNv() const { return nv; }
+	TexRef GetFilmThickness() const { return filmThickness; }
+	TexRef GetFilmIOR() const { return filmIor; }
 
 private:
-	const Texture *Kr;
-	const Texture *Kt;
-	const Texture *exteriorIor;
-	const Texture *interiorIor;
-	const Texture *nu;
-	const Texture *nv;
-	const Texture *filmThickness;
-	const Texture *filmIor;
+	TexRef Kr;
+	TexRef Kt;
+	TexRef exteriorIor;
+	TexRef interiorIor;
+	TexRef nu;
+	TexRef nv;
+	TexRef filmThickness;
+	TexRef filmIor;
 };
 
 }
 
 #endif	/* _SLG_ROUGHGLASSMAT_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

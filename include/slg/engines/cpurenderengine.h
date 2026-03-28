@@ -19,6 +19,7 @@
 #ifndef _SLG_CPURENDERENGINE_H
 #define	_SLG_CPURENDERENGINE_H
 
+#include "luxrays/core/intersectiondevice.h"
 #include "luxrays/utils/utils.h"
 
 #include "slg/slg.h"
@@ -49,39 +50,46 @@ public:
 	virtual bool HasDone() const;
 	virtual void WaitForDone() const;
 
+	luxrays::IntersectionDevice& GetIntersectionDevice() {
+		return *device;
+	}
+	const luxrays::IntersectionDevice& GetIntersectionDevice() const {
+		return *device;
+	}
+
 	friend class CPURenderEngine;
 
 protected:
-	virtual boost::thread *AllocRenderThread() = 0;
+	virtual luxrays::JThreadUPtr AllocRenderThread() = 0;
 
 	virtual void StartRenderThread();
 	virtual void StopRenderThread();
 
 	u_int threadIndex;
-	CPURenderEngine *renderEngine;
+	CPURenderEngine *renderEngine;  // Back link
 
-	boost::thread *renderThread;
+	luxrays::JThreadUPtr renderThread;
 	luxrays::IntersectionDevice *device;
 
-	bool started, editMode, threadDone;
+	std::atomic<bool> started, editMode, threadDone;
 };
 
 class CPURenderEngine : public RenderEngine {
 public:
-	CPURenderEngine(const RenderConfig *cfg);
+	CPURenderEngine(RenderConfigRef cfg);
 	virtual ~CPURenderEngine();
 
 	virtual bool HasDone() const;
 	virtual void WaitForDone() const;
 
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
 
 	friend class CPURenderThread;
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
-	virtual CPURenderThread *NewRenderThread(const u_int index,
+	virtual CPURenderThreadUPtr NewRenderThread(const u_int index,
 			luxrays::IntersectionDevice *device) = 0;
 
 	virtual void StartLockLess();
@@ -93,7 +101,7 @@ protected:
 	virtual void UpdateFilmLockLess() = 0;
 	virtual void UpdateCounters() = 0;
 
-	std::vector<CPURenderThread *> renderThreads;
+	std::vector<CPURenderThreadUPtr> renderThreads;
 };
 
 //------------------------------------------------------------------------------
@@ -113,24 +121,24 @@ public:
 
 class CPUNoTileRenderEngine : public CPURenderEngine {
 public:
-	CPUNoTileRenderEngine(const RenderConfig *cfg);
+	CPUNoTileRenderEngine(RenderConfigRef cfg);
 	virtual ~CPUNoTileRenderEngine();
 
 	virtual void StartLockLess();
 	virtual void StopLockLess();
 
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
 
 	friend class CPUNoTileRenderThread;
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	virtual void EndSceneEditLockLess(const EditActionList &editActions);
 	virtual void UpdateFilmLockLess();
 	virtual void UpdateCounters();
 
-	SamplerSharedData *samplerSharedData;
+	std::shared_ptr<SamplerSharedData> samplerSharedData;
 };
 
 //------------------------------------------------------------------------------
@@ -150,12 +158,12 @@ public:
 protected:
 	virtual void StartRenderThread();
 
-	Film *tileFilm;
+	FilmUPtr tileFilm;  // RenderThread owns the film
 };
 
 class CPUTileRenderEngine : public CPURenderEngine {
 public:
-	CPUTileRenderEngine(const RenderConfig *cfg);
+	CPUTileRenderEngine(RenderConfigRef cfg);
 	virtual ~CPUTileRenderEngine();
 
 	void GetPendingTiles(std::deque<const Tile *> &tiles) { return tileRepository->GetPendingTiles(tiles); }
@@ -164,12 +172,12 @@ public:
 	u_int GetTileWidth() const { return tileRepository->tileWidth; }
 	u_int GetTileHeight() const { return tileRepository->tileHeight; }
 
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
 
 	friend class CPUTileRenderThread;
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	// I don't implement StartLockLess() here because the step of initializing
 	// the tile repository is left to the sub-class (so some TileRepository
@@ -188,3 +196,4 @@ protected:
 }
 
 #endif	/* _SLG_CPURENDERENGINE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

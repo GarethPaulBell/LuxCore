@@ -31,21 +31,21 @@ void CompiledScene::CompileSceneObjects() {
 	// Translate mesh material indices
 	//--------------------------------------------------------------------------
 
-	const u_int objCount = scene->objDefs.GetSize();
+	const u_int objCount = scene.GetObjects().GetSize();
 	sceneObjs.resize(objCount);
 	for (u_int i = 0; i < objCount; ++i) {
 		slg::ocl::SceneObject &oclScnObj = sceneObjs[i];
-		const SceneObject *scnObj = scene->objDefs.GetSceneObject(i);
+		auto& scnObj = scene.GetObjects().GetSceneObject(i);
 
-		oclScnObj.objectID = scnObj->GetID();
+		oclScnObj.objectID = scnObj.GetID();
 
-		const Material *m = scnObj->GetMaterial();
-		oclScnObj.materialIndex = scene->matDefs.GetMaterialIndex(m);
+		auto& m = scnObj.GetMaterial();
+		oclScnObj.materialIndex = scene.GetMaterials().GetMaterialIndex(m);
 
-		const ImageMap *bakeMap = scnObj->GetBakeMap();
+		auto bakeMap = scnObj.GetBakeMap();
 		if (bakeMap) {
-			oclScnObj.bakeMapIndex = scene->imgMapCache.GetImageMapIndex(bakeMap);
-			switch (scnObj->GetBakeMapType()) {
+			oclScnObj.bakeMapIndex = scene.GetImageMaps().GetImageMapIndex(*bakeMap);
+			switch (scnObj.GetBakeMapType()) {
 				case COMBINED:
 					oclScnObj.bakeMapType = slg::ocl::COMBINED;
 					break;
@@ -53,16 +53,17 @@ void CompiledScene::CompileSceneObjects() {
 					oclScnObj.bakeMapType = slg::ocl::LIGHTMAP;
 					break;
 				default:
-					throw runtime_error("Unknown bake map type in CompiledScene::CompileSceneObjects(): " + ToString(scnObj->GetBakeMapType()));
+					throw runtime_error("Unknown bake map type in CompiledScene::CompileSceneObjects(): " + ToString(scnObj.GetBakeMapType()));
 			}
-			oclScnObj.bakeMapUVIndex = scnObj->GetBakeMapUVIndex();
+			oclScnObj.bakeMapUVIndex = scnObj.GetBakeMapUVIndex();
 		} else {
 			oclScnObj.bakeMapIndex = NULL_INDEX;
 			oclScnObj.bakeMapUVIndex = NULL_INDEX;
 		}
 
-		oclScnObj.cameraInvisible = scnObj->IsCameraInvisible();
+		oclScnObj.cameraInvisible = scnObj.IsCameraInvisible();
 	}
 }
 
 #endif
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -24,11 +24,11 @@
 #include <sstream>
 #include <stdexcept>
 
-#include <boost/filesystem.hpp>
+#include <filesystem>
 #include <boost/lexical_cast.hpp>
 #include <boost/format.hpp>
-#include <boost/thread.hpp>
-#include <boost/filesystem.hpp>
+#include <thread>
+#include <filesystem>
 #include <boost/algorithm/string/case_conv.hpp>
 
 #include "luxrays/utils/oclerror.h"
@@ -39,12 +39,18 @@ using namespace luxrays;
 using namespace luxcore;
 
 static string GetFileNameExt(const string &fileName) {
-	return boost::algorithm::to_lower_copy(boost::filesystem::path(fileName).extension().string());
+	return boost::algorithm::to_lower_copy(std::filesystem::path(fileName).extension().string());
 }
 
-static void BatchRendering(RenderConfig *config, RenderState *startState, Film *startFilm,
-		const bool showDevicesStats) {
-	RenderSession *session = RenderSession::Create(config, startState, startFilm);
+static void BatchRendering(
+	const RenderConfigRPtr & config,
+	RenderStateRPtr startState,
+	const std::unique_ptr<Film>& startFilm,
+	const bool showDevicesStats
+) {
+	auto session = startFilm ?
+		RenderSession::Create(config, startState, *startFilm) :
+		RenderSession::Create(config);
 
 	const unsigned int haltTime = config->GetProperty("batch.halttime").Get<unsigned int>();
 	const unsigned int haltSpp = config->GetProperty("batch.haltspp").Get<unsigned int>(0);
@@ -52,9 +58,9 @@ static void BatchRendering(RenderConfig *config, RenderState *startState, Film *
 	// Start the rendering
 	session->Start();
 
-	const Properties &stats = session->GetStats();
+	const Properties &stats = *session->GetStats();
 	while (!session->HasDone()) {
-		boost::this_thread::sleep(boost::posix_time::millisec(1000));
+		std::this_thread::sleep_for(1000ms);
 		session->UpdateStats();
 
 		const double elapsedTime = stats.Get("stats.renderengine.time").Get<double>();
@@ -107,7 +113,7 @@ static void BatchRendering(RenderConfig *config, RenderState *startState, Film *
 		session->GetFilm().SaveOutputs();
 	}
 
-	delete session;
+	session.reset();
 }
 
 int main(int argc, char *argv[]) {
@@ -157,7 +163,7 @@ int main(int argc, char *argv[]) {
 					i += 2;
 				}
 
-				else if (argv[i][1] == 'd') boost::filesystem::current_path(boost::filesystem::path(argv[++i]));
+				else if (argv[i][1] == 'd') std::filesystem::current_path(std::filesystem::path(argv[++i]));
 
 				else if (argv[i][1] == 'c') removeUnused = true;
 				
@@ -187,48 +193,54 @@ int main(int argc, char *argv[]) {
 			throw runtime_error("You must specify a file to render");
 
 		// Check if we have to parse a LuxCore SDL file or a LuxRender SDL file
-		Scene *scene = NULL;
-		RenderConfig *config;
-		RenderState *startRenderState = NULL;
-		Film *startFilm = NULL;
-		
+		std::unique_ptr<Scene> scene;
+		RenderConfigRPtr config;
+		RenderStateRPtr startRenderState;
+		FilmUPtr startFilm;
+
 		if (configFileName.compare("") != 0) {
 			// Clear the file name resolver list
 			luxcore::ClearFileNameResolverPaths();
 			// Add the current directory to the list of place where to look for files
 			luxcore::AddFileNameResolverPath(".");
 			// Add the .cfg directory to the list of place where to look for files
-			boost::filesystem::path path(configFileName);
+			std::filesystem::path path(configFileName);
 			luxcore::AddFileNameResolverPath(path.parent_path().generic_string());
 		}
-		
+
 		const string configFileNameExt = GetFileNameExt(configFileName);
 		if (configFileNameExt == ".lxs") {
 			// It is a LuxRender SDL file
 			LC_LOG("Parsing LuxRender SDL file...");
-			Properties renderConfigProps, sceneProps;
+			auto renderConfigProps = std::make_unique<Properties>();
+			auto sceneProps = std::make_unique<Properties>();
 			luxcore::ParseLXS(configFileName, renderConfigProps, sceneProps);
 
 			// For debugging
 			//LC_LOG("RenderConfig: \n" << renderConfigProps);
 			//LC_LOG("Scene: \n" << sceneProps);
 
-			renderConfigProps.Set(cmdLineProp);
+			renderConfigProps->Set(cmdLineProp);
 
-			scene = Scene::Create();
+			scene = luxcore::Scene::Create();
 			scene->Parse(sceneProps);
-			config = RenderConfig::Create(renderConfigProps.Set(cmdLineProp), scene);
+			renderConfigProps->Set(cmdLineProp);
+			config = RenderConfig::Create(std::move(renderConfigProps), std::move(scene));
 		} else if (configFileNameExt == ".cfg") {
 			// It is a LuxCore SDL file
-			config = RenderConfig::Create(Properties(configFileName).Set(cmdLineProp));
+			auto props = std::make_unique<Properties>(std::move(configFileName));
+			props->Set(cmdLineProp);
+			config = RenderConfig::Create(std::move(props));
 		} else if (configFileNameExt == ".bcf") {
 			// It is a LuxCore RenderConfig binary archive
 			config = RenderConfig::Create(configFileName);
-			config->Parse(cmdLineProp);
+			auto props = std::make_unique<Properties>(std::move(cmdLineProp));
+			config->Parse(props);
 		} else if (configFileNameExt == ".rsm") {
 			// It is a rendering resume file
-			config = RenderConfig::Create(configFileName, &startRenderState, &startFilm);
-			config->Parse(cmdLineProp);
+			config = RenderConfig::Create(configFileName, startRenderState, startFilm);
+			auto props = std::make_unique<Properties>(std::move(cmdLineProp));
+			config->Parse(props);
 		} else
 			throw runtime_error("Unknown file extension: " + configFileName);
 
@@ -243,13 +255,13 @@ int main(int argc, char *argv[]) {
 		const bool fileSaverRenderEngine = (config->GetProperty("renderengine.type").Get<string>() == "FILESAVER");
 		if (!fileSaverRenderEngine) {
 			// Force the film update at 2.5secs (mostly used by PathOCL)
-			config->Parse(Properties().Set(Property("screen.refresh.interval")(2500)));
+			auto props = std::make_unique<Properties>();
+			props->Set(Property("screen.refresh.interval")(2500));
+			config->Parse(props);
 		}
-		
+
 		BatchRendering(config, startRenderState, startFilm, showDevicesStats);
 
-		delete config;
-		delete scene;
 
 		LC_LOG("Done.");
 	} catch (runtime_error &err) {
@@ -262,3 +274,4 @@ int main(int argc, char *argv[]) {
 
 	return EXIT_SUCCESS;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

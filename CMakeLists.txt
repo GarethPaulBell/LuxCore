@@ -18,7 +18,6 @@
 
 MESSAGE(STATUS "CMake version " ${CMAKE_VERSION} " detected")
 
-
 ################################################################################
 #
 # Check and configure cmake
@@ -33,6 +32,11 @@ MESSAGE(STATUS "Building LuxCore ${LUXCORE_VERSION}")
 
 project(LuxCore)
 
+MESSAGE(STATUS "C++ compiler identifier is ${CMAKE_CXX_COMPILER_ID}")
+MESSAGE(STATUS "C++ compiler version is ${CMAKE_CXX_COMPILER_VERSION}")
+MESSAGE(STATUS "C compiler identifier is ${CMAKE_C_COMPILER_ID}")
+MESSAGE(STATUS "C compiler version is ${CMAKE_C_COMPILER_VERSION}")
+
 # Version computation
 #
 # Version number can be set by external caller (for instance, Github action)
@@ -42,7 +46,7 @@ project(LuxCore)
 #
 # Versioning should comply to semver standard: https://semver.org
 #
-FILE(READ "${CMAKE_CURRENT_LIST_DIR}/build-helpers/build-settings.json" settings_json)
+FILE(READ "${CMAKE_CURRENT_LIST_DIR}/build-system/build-settings.json" settings_json)
 STRING(JSON _DEFAULT_VERSION_MAJOR GET "${settings_json}" DefaultVersion major)
 STRING(JSON _DEFAULT_VERSION_MINOR GET "${settings_json}" DefaultVersion minor)
 STRING(JSON _DEFAULT_VERSION_PATCH GET "${settings_json}" DefaultVersion patch)
@@ -79,6 +83,21 @@ OPTION(LUXCORE_TESTS "Enable to build tests" OFF)
 OPTION(LUXRAYS_ENABLE_OPENCL "Enable to use OpenCL" ON)
 OPTION(LUXRAYS_ENABLE_CUDA "Enable to use CUDA" ON)
 OPTION(LUXRAYS_ENABLE_OPTIX "Enable to use Optix" ON)
+
+# Sanitization (optional)
+IF(DEFINED ENV{LUX_SANITIZE})
+  MESSAGE(STATUS "Compiling with sanitizer (ASAN)")
+  add_compile_options(-fsanitize=address)
+  add_link_options(-fsanitize=address)
+  IF(UNIX)
+    add_compile_options(-fsanitize=undefined -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=undefined)
+  ENDIF()
+  IF(MSVC)
+      add_compile_definitions(_DISABLE_VECTOR_ANNOTATION)
+      add_compile_definitions(_DISABLE_STRING_ANNOTATION)
+  ENDIF()
+ENDIF()
 
 # Fundamental settings
 # This boots up the generator:
@@ -145,7 +164,7 @@ endif()
 include(GNUInstallDirs)
 
 # Set path to modules (keep it after project declaration)
-set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/build-helpers/cmake")
+set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/build-system/cmake")
 
 ################################################################################
 #
@@ -153,9 +172,11 @@ set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/build-helpers/cmake")
 #
 ################################################################################
 
+# Ensure compiler version meets minimum requirements
+INCLUDE(CheckCompilerVersion)
+
 # Nota: please keep all 'find_package' gathered here (for maintenance reasons)
 message(STATUS "LuxCore - Add dependency targets")
-find_package(OpenMP REQUIRED)
 find_package(TBB REQUIRED)
 find_package(minizip REQUIRED)
 find_package(spdlog REQUIRED)
@@ -173,6 +194,9 @@ find_package(Eigen3 REQUIRED)
 find_package(OpenSubdiv REQUIRED)
 find_package(nlohmann_json REQUIRED)
 find_package(robin_hood REQUIRED)
+find_package(OpenMP REQUIRED)
+find_package(OpenJPEG REQUIRED)
+find_package(openjph REQUIRED)
 if (WIN32 OR LINUX)
   find_package(nvrtc REQUIRED)
 endif()
@@ -183,7 +207,6 @@ find_package(FLEX REQUIRED)
 
 # Additional dependencies for pyluxcore
 find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
-find_package(blender-types REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
 
 # Additional dependencies for luxcoreui
@@ -235,7 +258,7 @@ if(MSVC)
   # Enable SSE2/SSE/MMX
   ADD_DEFINITIONS(-D__SSE2__ -D__SSE__ -D__MMX__)
   # Add compile and link options
-  add_compile_options("/arch:AVX" "/DWIN32" "/D_WINDOWS" "/EHsc")
+  add_compile_options("/arch:AVX" "/DWIN32" "/D_WINDOWS" "/EHsc" "/bigobj")
   add_link_options("/INCREMENTAL:NO" "/PDBALTPATH:%_PDB%")
 
   # Debug information format (embedded)
@@ -247,11 +270,10 @@ endif(MSVC)
 
 if(APPLE)
   # OpenMP
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Xclang -fopenmp -Wno-register")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Xclang -fopenmp=libomp -Wno-register")
   # Debug
   add_compile_options("$<$<CONFIG:Debug,RelWithDebInfo>:-gfull>")
   add_link_options("$<$<CONFIG:Debug,RelWithDebInfo>:-gfull>")
-
 
 endif(APPLE)
 
@@ -297,7 +319,6 @@ add_subdirectory(src/luxrays)
 add_subdirectory(src/slg)
 add_subdirectory(src/luxcore)
 add_subdirectory(src/pyluxcore)
-add_subdirectory(src/pyluxcoretools)
 
 ################################################################################
 #

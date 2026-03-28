@@ -27,9 +27,9 @@ using namespace slg;
 //------------------------------------------------------------------------------
 
 float BrightContrastTexture::GetFloatValue(const HitPoint &hitPoint) const {
-	const float value = tex->GetSpectrumValue(hitPoint).Y();
-	const float contrast = contrastTex->GetFloatValue(hitPoint);
-	const float brightness = brightnessTex->GetFloatValue(hitPoint);
+	const float value = GetTex().GetSpectrumValue(hitPoint).Y();
+	const float contrast = GetContrastTex().GetFloatValue(hitPoint);
+	const float brightness = GetBrightnessTex().GetFloatValue(hitPoint);
 
 	const float a = 1.f + contrast;
 	const float b = brightness - contrast * 0.5f;
@@ -38,23 +38,24 @@ float BrightContrastTexture::GetFloatValue(const HitPoint &hitPoint) const {
 }
 
 Spectrum BrightContrastTexture::GetSpectrumValue(const HitPoint &hitPoint) const {
-	const float contrast = contrastTex->GetFloatValue(hitPoint);
-	const float brightness = brightnessTex->GetFloatValue(hitPoint);
+	const float contrast = GetContrastTex().GetFloatValue(hitPoint);
+	const float brightness = GetBrightnessTex().GetFloatValue(hitPoint);
 
 	const float a = 1.f + contrast;
 	const float b = brightness - contrast * 0.5f;
 
-	return (tex->GetSpectrumValue(hitPoint) * a + Spectrum(b)).Clamp();
+	return (GetTex().GetSpectrumValue(hitPoint) * a + Spectrum(b)).Clamp();
 }
 
-Properties BrightContrastTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
-	Properties props;
+PropertiesUPtr BrightContrastTexture::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.textures." + name + ".type")("brightcontrast"));
-	props.Set(Property("scene.textures." + name + ".texture")(tex->GetName()));
-	props.Set(Property("scene.textures." + name + ".brightness")(brightnessTex->GetSDLValue()));
-	props.Set(Property("scene.textures." + name + ".contrast")(contrastTex->GetSDLValue()));
+	props->Set(Property("scene.textures." + name + ".type")("brightcontrast"));
+	props->Set(Property("scene.textures." + name + ".texture")(GetTex().GetName()));
+	props->Set(Property("scene.textures." + name + ".brightness")(GetBrightnessTex().GetSDLValue()));
+	props->Set(Property("scene.textures." + name + ".contrast")(GetContrastTex().GetSDLValue()));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

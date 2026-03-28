@@ -26,10 +26,10 @@ using namespace slg;
 // Velvet material
 //------------------------------------------------------------------------------
 
-VelvetMaterial::VelvetMaterial(const Texture *frontTransp, const Texture *backTransp,
-		const Texture *emitted, const Texture *bump,
-		const Texture *kd, const Texture *p1, const Texture *p2, const Texture *p3,
-		const Texture *thickness) :
+VelvetMaterial::VelvetMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
+		TextureConstPtr emitted, TextureConstPtr bump,
+		TextureConstPtr kd, TextureConstPtr p1, TextureConstPtr p2, TextureConstPtr p3,
+		TextureConstPtr thickness) :
 			Material(frontTransp, backTransp, emitted, bump), Kd(kd),
 			P1(p1), P2(p2), P3(p3), Thickness(thickness) {
 	glossiness = 1.f;
@@ -125,7 +125,7 @@ void VelvetMaterial::Pdf(const HitPoint &hitPoint,
 		*reversePdfW = fabsf((hitPoint.fromLight ? localLightDir.z : localEyeDir.z) * INV_PI);
 }
 
-void VelvetMaterial::AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+void VelvetMaterial::AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 	Material::AddReferencedTextures(referencedTexs);
 
 	Kd->AddReferencedTextures(referencedTexs);
@@ -135,32 +135,33 @@ void VelvetMaterial::AddReferencedTextures(boost::unordered_set<const Texture *>
 	Thickness->AddReferencedTextures(referencedTexs);
 }
 
-void VelvetMaterial::UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
+void VelvetMaterial::UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
 	Material::UpdateTextureReferences(oldTex, newTex);
 
-	if (Kd == oldTex)
-		Kd = newTex;
-	if (P1 == oldTex)
-		P1 = newTex;
-	if (P2 == oldTex)
-		P2 = newTex;
-	if (P3 == oldTex)
-		P3 = newTex;
-	if (Thickness == oldTex)
-		Thickness = newTex;
+	if (Kd == &oldTex)
+		Kd = &newTex;
+	if (P1 == &oldTex)
+		P1 = &newTex;
+	if (P2 == &oldTex)
+		P2 = &newTex;
+	if (P3 == &oldTex)
+		P3 = &newTex;
+	if (Thickness == &oldTex)
+		Thickness = &newTex;
 }
 
-Properties VelvetMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
-	Properties props;
+PropertiesUPtr VelvetMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
+	auto props = std::make_unique<Properties>();
 
 	const std::string name = GetName();
-	props.Set(Property("scene.materials." + name + ".type")("velvet"));
-	props.Set(Property("scene.materials." + name + ".kd")(Kd->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".p1")(P1->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".p2")(P2->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".p3")(P3->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".thickness")(Thickness->GetSDLValue()));
-	props.Set(Material::ToProperties(imgMapCache, useRealFileName));
+	props->Set(Property("scene.materials." + name + ".type")("velvet"));
+	props->Set(Property("scene.materials." + name + ".kd")(Kd->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".p1")(P1->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".p2")(P2->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".p3")(P3->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".thickness")(Thickness->GetSDLValue()));
+	props->Set(Material::ToProperties(imgMapCache, useRealFileName));
 
 	return props;
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

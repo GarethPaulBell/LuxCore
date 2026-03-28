@@ -19,7 +19,9 @@
 #ifndef _SLG_DISTORTTEXTURE_H
 #define	_SLG_DISTORTTEXTURE_H
 
+#include "slg/imagemap/imagemap.h"
 #include "slg/textures/texture.h"
+#include <functional>
 
 namespace slg {
 
@@ -29,7 +31,7 @@ namespace slg {
 
 class DistortTexture : public Texture {
 public:
-	DistortTexture(const Texture *tex, const Texture *offset, const float strength) :
+	DistortTexture(TextureRef tex, TextureRef offset, const float strength) :
 		tex(tex), offset(offset), strength(strength) { }
 	virtual ~DistortTexture() { }
 
@@ -37,44 +39,45 @@ public:
 	virtual float GetFloatValue(const HitPoint &hitPoint) const;
 	virtual luxrays::Spectrum GetSpectrumValue(const HitPoint &hitPoint) const;
 	virtual float Y() const {
-		return tex->Y();
+		return GetTex().Y();
 	}
 	virtual float Filter() const {
-		return tex->Filter();
+		return GetTex().Filter();
 	}
 
-	virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 		Texture::AddReferencedTextures(referencedTexs);
 
-		tex->AddReferencedTextures(referencedTexs);
-		offset->AddReferencedTextures(referencedTexs);
+		GetTex().AddReferencedTextures(referencedTexs);
+		GetOffset().AddReferencedTextures(referencedTexs);
 	}
-	virtual void AddReferencedImageMaps(boost::unordered_set<const ImageMap *> &referencedImgMaps) const {
-		tex->AddReferencedImageMaps(referencedImgMaps);
-		offset->AddReferencedImageMaps(referencedImgMaps);
+	virtual void AddReferencedImageMaps(std::unordered_set<const ImageMap *> &referencedImgMaps) const {
+		GetTex().AddReferencedImageMaps(referencedImgMaps);
+		GetOffset().AddReferencedImageMaps(referencedImgMaps);
 	}
 
-	virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
-		if (tex == oldTex)
+	virtual void UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
+		if (&GetTex() == &oldTex)
 			tex = newTex;
-		if (offset == oldTex)
+		if (&offset.get() == &oldTex)
 			offset = newTex;
 	}
 
-	const Texture *GetTex() const { return tex; }
-	const Texture *GetOffset() const { return offset; }
+	TextureConstRef GetTex() const { return tex; }
+	TextureConstRef GetOffset() const { return offset; }
 	const float GetStrength() const { return strength; }
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
 	void GetTmpHitPoint(const HitPoint &hitPoint, HitPoint &tmpHitPoint) const;
 
-	const Texture *tex;
-	const Texture *offset;
+	std::reference_wrapper<Texture> tex;
+	std::reference_wrapper<Texture> offset;
 	const float strength;
 };
 
 }
 
 #endif	/* _SLG_DISTORTTEXTURE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

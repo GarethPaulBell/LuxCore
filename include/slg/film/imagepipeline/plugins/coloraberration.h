@@ -82,3 +82,4 @@ BOOST_CLASS_VERSION(slg::ColorAberrationPlugin, 2)
 BOOST_CLASS_EXPORT_KEY(slg::ColorAberrationPlugin)
 
 #endif	/*  _SLG_COLORABERRATION_PLUGIN_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

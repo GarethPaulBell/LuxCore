@@ -19,7 +19,9 @@
 #ifndef _SLG_CLEARVOL_H
 #define	_SLG_CLEARVOL_H
 
+#include "luxrays/usings.h"
 #include "slg/volumes/volume.h"
+#include <functional>
 
 namespace slg {
 
@@ -29,7 +31,11 @@ namespace slg {
 
 class ClearVolume : public Volume {
 public:
-	ClearVolume(const Texture *iorTex, const Texture *emiTex, const Texture *a);
+	ClearVolume(
+		TextureConstRef iorTex,
+		TextureConstPtr emiTex,
+		TextureConstRef a
+	);
 
 	virtual float Scatter(const luxrays::Ray &ray, const float u, const bool scatteredStart,
 		luxrays::Spectrum *connectionThroughput, luxrays::Spectrum *connectionEmission) const;
@@ -52,21 +58,22 @@ public:
 		const luxrays::Vector &localLightDir, const luxrays::Vector &localEyeDir,
 		float *directPdfW, float *reversePdfW) const;
 
-	virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const;
-	virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex);
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexsreferencedTexs) const;
+	virtual void UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex);
 
-	virtual luxrays::Properties ToProperties() const;
+	virtual luxrays::PropertiesUPtr ToProperties() const;
 
-	const Texture *GetSigmaA() const { return sigmaA; }
+	TextureConstRef GetSigmaA() const { return sigmaA; }
 
 protected:
 	virtual luxrays::Spectrum SigmaA(const HitPoint &hitPoint) const;
 	virtual luxrays::Spectrum SigmaS(const HitPoint &hitPoint) const;
 
 private:
-	const Texture *sigmaA;
+	std::reference_wrapper<const Texture> sigmaA;
 };
 
 }
 
 #endif	/* _SLG_CLEARVOL_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -156,3 +156,4 @@ BOOST_CLASS_IMPLEMENTATION(luxrays::UV, boost::serialization::object_serializabl
 BOOST_CLASS_EXPORT_KEY(luxrays::UV)
 
 #endif	/* _LUXRAYS_UV_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

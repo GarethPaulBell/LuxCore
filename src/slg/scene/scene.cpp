@@ -21,28 +21,34 @@
 #include <stdexcept>
 #include <sstream>
 #include <set>
+#include <typeinfo>
 #include <vector>
 #include <memory>
 
-#include <boost/detail/container_fwd.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/format.hpp>
-#include <boost/unordered_set.hpp>
 
+#include "luxrays/core/exttrianglemesh.h"
+#include "luxrays/core/namedobjectvector.h"
 #include "luxrays/core/randomgen.h"
+#include "luxrays/usings.h"
 #include "luxrays/utils/properties.h"
+#include "luxrays/utils/utils.h"
 #include "slg/core/sphericalfunction/sphericalfunction.h"
 #include "slg/editaction.h"
+#include "slg/imagemap/imagemap.h"
 #include "slg/samplers/sampler.h"
 #include "slg/core/sdl.h"
 #include "slg/scene/scene.h"
 #include "slg/textures/constfloat.h"
 #include "slg/textures/constfloat3.h"
 #include "slg/textures/imagemaptex.h"
+#include "slg/usings.h"
 #include "slg/utils/pathinfo.h"
+#include "slg/cameras/camera.h"
 
 using namespace std;
 using namespace luxrays;
@@ -52,145 +58,163 @@ using namespace slg;
 // Scene
 //------------------------------------------------------------------------------
 
-Scene::Scene(const luxrays::Properties *resizePolicyProps) {
+Scene::Scene(luxrays::PropertiesRPtr resizePolicyProps) {
 	Init(resizePolicyProps);
 }
 
-Scene::Scene(const Properties &scnProps, const luxrays::Properties *resizePolicyProps) {
+Scene::Scene(
+	PropertiesRPtr scnProps,
+	PropertiesRPtr resizePolicyProps
+) {
 	Init(resizePolicyProps);
 
 	Parse(scnProps);
 }
 
-void Scene::Init(const luxrays::Properties *resizePolicyProps) {
-	defaultWorldVolume = NULL;
+void Scene::Init(luxrays::PropertiesRPtr resizePolicyProps) {
+	defaultWorldVolume = nullptr;
 	// Just in case there is an unexpected exception during the scene loading
-    camera = NULL;
+    camera = nullptr;
 
-	dataSet = NULL;
+	dataSet = nullptr;
 
 	editActions.AddAllAction();
 	if (resizePolicyProps)
 		imgMapCache.SetImageResizePolicy(ImageMapResizePolicy::FromProperties(*resizePolicyProps));
-	// Add random image map to imgMapCache 
-	imgMapCache.DefineImageMap(ImageMapTexture::randomImageMap.get());
+	// Add random image map to imgMapCache and specify its resize policy
+	imgMapCache.DefineImageMap(ImageMapTexture::randomImageMap);
+	imgMapCache.resizePolicyToApply.push_back(false);
 
-	enableParsePrint = false;
+	enableParsePrint = true;
 }
 
 Scene::~Scene() {
-	delete camera;
-
-	delete dataSet;
+#ifndef NDEBUG
+	std::cerr << "Deleting scene\n";
+#endif
+	dataSet.reset();
 }
 
-Properties Scene::ToProperties(const bool useRealFileName) const {
-		Properties props;
+PropertiesUPtr Scene::ToProperties(const bool useRealFileName) const {
+	auto props = std::make_unique<Properties>();
 
-		// Write the camera information
-		if (camera)
-			props.Set(camera->ToProperties(imgMapCache, useRealFileName));
+	// Write the camera information
+	if (camera)
+		props->Set(camera->ToProperties(imgMapCache, useRealFileName));
 
-		// Save all not intersectable light sources
-		vector<string> lightNames = lightDefs.GetLightSourceNames();
-		for (u_int i = 0; i < lightNames.size(); ++i) {
-			const LightSource *l = lightDefs.GetLightSource(lightNames[i]);
-			if (dynamic_cast<const NotIntersectableLightSource *>(l))
-				props.Set(((const NotIntersectableLightSource *)l)->ToProperties(imgMapCache, useRealFileName));
+	// Save all not intersectable light sources
+	vector<string> lightNames = lightDefs.GetLightSourceNames();
+	for (u_int i = 0; i < lightNames.size(); ++i) {
+		auto& l = lightDefs.GetLightSource(lightNames[i]);
+		try {
+			dynamic_cast<const NotIntersectableLightSource &>(l);
+			props->Set((static_cast<const NotIntersectableLightSource &>(l))
+				.ToProperties(imgMapCache, useRealFileName));
 		}
+		catch(std::bad_cast&) {}
+	}
 
-		// Get the sorted list of texture names according their dependencies
-		vector<string> texNames;
-		texDefs.GetTextureSortedNames(texNames);
+	// Get the sorted list of texture names according their dependencies
+	auto texNames = texDefs.GetTextureSortedNames();
 
-		// Write the textures information
-		for (auto const &texName : texNames) {
-			// I can skip all textures starting with Implicit-ConstFloatTexture(3)
-			// because they are expanded inline
-			if (boost::starts_with(texName, "Implicit-ConstFloatTexture"))
-				continue;
+	// Write the textures information
+	for (auto const &texName : texNames) {
+		// I can skip all textures starting with Implicit-ConstFloatTexture(3)
+		// because they are expanded inline
+		if (texName.starts_with("Implicit-ConstFloatTexture"))
+			continue;
 
-			const Texture *tex = texDefs.GetTexture(texName);
-			props.Set(tex->ToProperties(imgMapCache, useRealFileName));
+		TextureConstRef tex = texDefs.GetTexture(texName);
+		props->Set(tex.ToProperties(imgMapCache, useRealFileName));
+	}
+
+	// Get the sorted list of material names according their dependencies
+	vector<string> matNames;
+	matDefs.GetMaterialSortedNames(matNames);
+
+	// Write the volumes information
+	for (auto const &matName : matNames) {
+		MaterialConstRef mat = matDefs.GetMaterial(matName);
+		// Check if it is a volume
+		try {
+			VolumeConstRef vol = dynamic_cast<const Volume &>(mat);
+			props->Set(*vol.ToProperties());
 		}
+		catch (std::bad_cast&) {}
+	}
 
-		// Get the sorted list of material names according their dependencies
-		vector<string> matNames;
-		matDefs.GetMaterialSortedNames(matNames);
+	// Set the default world interior/exterior volume if required
+	if (defaultWorldVolume) {
+		const u_int index = matDefs.GetMaterialIndex(*defaultWorldVolume);
+		props->Set(Property("scene.world.volume.default")(matDefs.GetMaterial(index).GetName()));
+	}
 
-		// Write the volumes information
-		for (auto const &matName : matNames) {
-			const Material *mat = matDefs.GetMaterial(matName);
-			// Check if it is a volume
-			const Volume *vol = dynamic_cast<const Volume *>(mat);
-			if (vol)
-				props.Set(vol->ToProperties());
+	// Write the materials information
+	for (auto const &matName : matNames) {
+		MaterialConstRef mat = matDefs.GetMaterial(matName);
+		// Check if it is not a volume
+		try {
+			VolumeConstRef vol = dynamic_cast<const Volume &>(mat);
+		} catch (std::bad_cast&) {
+			props->Set(mat.ToProperties(imgMapCache, useRealFileName));
 		}
+	}
 
-		// Set the default world interior/exterior volume if required
-		if (defaultWorldVolume) {
-			const u_int index = matDefs.GetMaterialIndex(defaultWorldVolume);
-			props.Set(Property("scene.world.volume.default")(matDefs.GetMaterial(index)->GetName()));
-		}
+	// Write the object information
+	for (u_int i = 0; i < objDefs.GetSize(); ++i) {
+		auto& obj = objDefs.GetSceneObject(i);
+		props->Set(obj.ToProperties(extMeshCache, useRealFileName));
+	}
 
-		// Write the materials information
-		for (auto const &matName : matNames) {
-			const Material *mat = matDefs.GetMaterial(matName);
-			// Check if it is not a volume
-			const Volume *vol = dynamic_cast<const Volume *>(mat);
-			if (!vol)
-				props.Set(mat->ToProperties(imgMapCache, useRealFileName));
-		}
-
-		// Write the object information
-		for (u_int i = 0; i < objDefs.GetSize(); ++i) {
-			const SceneObject *obj = objDefs.GetSceneObject(i);
-			props.Set(obj->ToProperties(extMeshCache, useRealFileName));
-		}
-
-		return props;
+	return props;
 }
 
 //--------------------------------------------------------------------------
 // Methods to build and edit a scene
 //--------------------------------------------------------------------------
 
-void Scene::DefineImageMap(ImageMap *im) {
-	imgMapCache.DefineImageMap(im);
+ImageMapRef Scene::DefineImageMap(ImageMapUPtr&& im) {
+	ImageMapRef ref = imgMapCache.DefineImageMap(std::move(im));
 
 	editActions.AddAction(IMAGEMAPS_EDIT);
+	return ref;
 }
-void Scene::DefineImageMap(const string &name, void *pixels,
+ImageMapRef Scene::DefineImageMap(const string &name, void *pixels,
 		const u_int channels, const u_int width, const u_int height,
 		const ImageMapConfig &cfg) {
-	ImageMap *imgMap = ImageMap::AllocImageMap(pixels, channels, width, height, cfg);
+	auto imgMap = ImageMap::AllocImageMap(pixels, channels, width, height, cfg);
 	imgMap->SetName(name);
 
-	DefineImageMap(imgMap);
+	ImageMapRef ref = DefineImageMap(std::move(imgMap));
 
 	editActions.AddAction(IMAGEMAPS_EDIT);
+	return ref;
 }
 
 bool Scene::IsImageMapDefined(const string &imgMapName) const {
 	return imgMapCache.IsImageMapDefined(imgMapName);
 }
 
-void Scene::DefineMesh(ExtMesh *mesh) {
+
+// DefineMesh methods
+
+
+Scene::ReturnType<ExtMesh> Scene::DefineMesh(ExtMeshUPtr&& mesh) {
 	const string &shapeName = mesh->GetName();
 
 	if (extMeshCache.IsExtMeshDefined(shapeName)) {
 		// A replacement for an existing mesh
-		const ExtMesh *oldMesh = extMeshCache.GetExtMesh(shapeName);
+		auto& oldMesh = extMeshCache.GetExtMesh(shapeName);
 
 		// Replace old mesh direct references with new one and get the list
 		// of scene objects referencing the old mesh
-		boost::unordered_set<SceneObject *> modifiedObjsList;
-		objDefs.UpdateMeshReferences(oldMesh, mesh, modifiedObjsList);
+		std::unordered_set<const SceneObject *> modifiedObjsList;
+		objDefs.UpdateMeshReferences(oldMesh, *mesh, modifiedObjsList);
 
 		// For each scene object
-		BOOST_FOREACH(SceneObject *o, modifiedObjsList) {
+		for(auto* o: modifiedObjsList) {
 			// Check if is a light source
-			if (o->GetMaterial()->IsLightSource()) {
+			if (o->GetMaterial().IsLightSource()) {
 				const string objName = o->GetName();
 
 				// Delete all old triangle lights
@@ -198,41 +222,135 @@ void Scene::DefineMesh(ExtMesh *mesh) {
 
 				// Add all new triangle lights
 				SDL_LOG("The " << objName << " object is a light sources with " << mesh->GetTotalTriangleCount() << " triangles");
-				objDefs.DefineIntersectableLights(lightDefs, o);
+				objDefs.DefineIntersectableLights(lightDefs, *o);
 
 				editActions.AddActions(LIGHTS_EDIT | LIGHT_TYPES_EDIT);
 			}
 		}
 	}
-	
+
 	// This is the only place where it is safe to call extMeshCache.DefineExtMesh()
-	extMeshCache.DefineExtMesh(mesh);
+	auto [newMeshRef, oldMeshPtr] = extMeshCache.DefineExtMesh(std::move(mesh));
 
 	editActions.AddAction(GEOMETRY_EDIT);
+
+	return std::make_tuple(
+		std::ref(newMeshRef),
+		oldMeshPtr ? std::move(oldMeshPtr) : nullptr
+	);
 }
 
-void Scene::DefineMesh(const string &shapeName,
-		const long plyNbVerts, const long plyNbTris,
-		Point *p, Triangle *vi, Normal *n,
-		UV *uvs, Spectrum *cols, float *alphas) {
-	ExtTriangleMesh *mesh = new ExtTriangleMesh(plyNbVerts, plyNbTris, p, vi, n,
-			uvs, cols, alphas);
-	mesh->SetName(shapeName);
-	
-	DefineMesh(mesh);
+Scene::ReturnType<ExtTriangleMesh> Scene::DefineMesh(ExtTriangleMeshUPtr&& mesh) {
+	ExtMeshUPtr extmesh = std::move(mesh);
+	auto [newMeshRef, oldMeshPtr] = DefineMesh(std::move(extmesh));
+
+	auto& newDerivedRef = dynamic_cast<ExtTriangleMesh&>(newMeshRef);
+	auto oldDerivedPtr = dynamic_uptr_cast<ExtTriangleMesh>(std::move(oldMeshPtr));
+
+	return std::make_tuple(std::ref(newDerivedRef), std::move(oldDerivedPtr));
 }
 
-void Scene::DefineMeshExt(const string &shapeName,
-		const long plyNbVerts, const long plyNbTris,
-		Point *p, Triangle *vi, Normal *n,
-		array<UV *, EXTMESH_MAX_DATA_COUNT> *uvs,
-		array<Spectrum *, EXTMESH_MAX_DATA_COUNT> *cols,
-		array<float *, EXTMESH_MAX_DATA_COUNT> *alphas) {
-	ExtTriangleMesh *mesh = new ExtTriangleMesh(plyNbVerts, plyNbTris, p, vi, n,
+Scene::ReturnType<ExtInstanceTriangleMesh>
+Scene::DefineMesh(ExtInstanceTriangleMeshUPtr&& mesh) {
+	ExtMeshUPtr extmesh = std::move(mesh);
+	auto [newMeshRef, oldMeshPtr] = DefineMesh(std::move(extmesh));
+
+	auto& newDerivedRef = dynamic_cast<ExtInstanceTriangleMesh&>(newMeshRef);
+	auto oldDerivedPtr = dynamic_uptr_cast<ExtInstanceTriangleMesh>(std::move(oldMeshPtr));
+
+	return std::make_tuple(std::ref(newDerivedRef), std::move(oldDerivedPtr));
+}
+
+
+Scene::ReturnType<ExtMotionTriangleMesh>
+Scene::DefineMesh(ExtMotionTriangleMeshUPtr&& mesh) {
+	ExtMeshUPtr extmesh = std::move(mesh);
+	auto [newMeshRef, oldMeshPtr] = DefineMesh(std::move(extmesh));
+
+	auto& newDerivedRef = dynamic_cast<ExtMotionTriangleMesh&>(newMeshRef);
+	auto oldDerivedPtr = dynamic_uptr_cast<ExtMotionTriangleMesh>(std::move(oldMeshPtr));
+
+	return std::make_tuple(std::ref(newDerivedRef), std::move(oldDerivedPtr));
+}
+
+
+Scene::ReturnType<ExtTriangleMesh> Scene::DefineMesh(
+	const string &shapeName,
+	const long plyNbVerts,
+	const long plyNbTris,
+	Point *p,
+	Triangle *vi,
+	Normal *n,
+	UV *uvs,
+	Spectrum *cols,
+	float *alphas
+) {
+	auto mesh = std::make_unique<ExtTriangleMesh>(plyNbVerts, plyNbTris, p, vi, n,
 			uvs, cols, alphas);
 	mesh->SetName(shapeName);
-	
-	DefineMesh(mesh);
+
+	return DefineMesh(std::move(mesh));
+}
+
+Scene::ReturnType<ExtTriangleMesh> Scene::DefineMeshExt(
+	const string &shapeName,
+	const long plyNbVerts,
+	const long plyNbTris,
+	Point *p, Triangle *vi, Normal *n,
+	array<UV *, EXTMESH_MAX_DATA_COUNT> *uvs,
+	array<Spectrum *, EXTMESH_MAX_DATA_COUNT> *cols,
+	array<float *, EXTMESH_MAX_DATA_COUNT> *alphas)
+{
+	auto mesh = std::make_unique<ExtTriangleMesh>(
+			plyNbVerts, plyNbTris, p, vi, n,
+			uvs, cols, alphas
+	);
+	mesh->SetName(shapeName);
+
+	return DefineMesh(std::move(mesh));
+}
+
+Scene::ReturnType<ExtInstanceTriangleMesh> Scene::DefineMesh(
+	const string &instMeshName,
+	const string &meshName,
+	const Transform &trans
+) {
+	auto& mesh = extMeshCache.GetExtMesh(meshName);
+	//TODO
+	//if (!mesh)
+		//throw runtime_error("Unknown mesh in Scene::DefineMesh(): " + meshName);
+
+	try {
+		auto& etMesh = dynamic_cast<ExtTriangleMesh&>(mesh);
+		auto iMesh = std::make_unique<ExtInstanceTriangleMesh>(etMesh, trans);
+		iMesh->SetName(instMeshName);
+		return DefineMesh(std::move(iMesh));
+	}
+	catch (std::bad_cast&) {
+		throw runtime_error("Wrong mesh type in Scene::DefineMesh(): " + meshName);
+	}
+
+}
+
+Scene::ReturnType<ExtMotionTriangleMesh> Scene::DefineMesh(
+	const string &motMeshName,
+	const string &meshName,
+	const MotionSystem &ms
+) {
+	auto& mesh = extMeshCache.GetExtMesh(meshName);
+	//TODO
+	//if (!mesh)
+		//throw runtime_error("Unknown mesh in Scene::DefineExtMesh(): " + meshName);
+
+	try {
+		auto& etMesh = dynamic_cast<ExtTriangleMesh&>(mesh);
+		auto motMesh = std::make_unique<ExtMotionTriangleMesh>(etMesh, ms);
+		motMesh->SetName(motMeshName);
+		return DefineMesh(std::move(motMesh));
+	} catch (std::bad_cast&) {
+		throw runtime_error("Wrong mesh type in Scene::DefineMesh(): " + meshName);
+	}
+
 }
 
 void Scene::SetMeshVertexAOV(const string &meshName,
@@ -245,52 +363,24 @@ void Scene::SetMeshTriangleAOV(const string &meshName,
 	extMeshCache.SetMeshTriangleAOV(meshName, index, data);
 }
 
-void Scene::DefineMesh(const string &instMeshName, const string &meshName,
-		const Transform &trans) {
-	ExtMesh *mesh = extMeshCache.GetExtMesh(meshName);
-	if (!mesh)
-		throw runtime_error("Unknown mesh in Scene::DefineMesh(): " + meshName);
-
-	ExtTriangleMesh *etMesh = dynamic_cast<ExtTriangleMesh *>(mesh);
-	if (!etMesh)
-		throw runtime_error("Wrong mesh type in Scene::DefineMesh(): " + meshName);
-
-	ExtInstanceTriangleMesh *iMesh = new ExtInstanceTriangleMesh(etMesh, trans);
-	iMesh->SetName(instMeshName);
-	DefineMesh(iMesh);
-}
-
-void Scene::DefineMesh(const string &motMeshName, const string &meshName,
-		const MotionSystem &ms) {
-	ExtMesh *mesh = extMeshCache.GetExtMesh(meshName);
-	if (!mesh)
-		throw runtime_error("Unknown mesh in Scene::DefineExtMesh(): " + meshName);
-
-	ExtTriangleMesh *etMesh = dynamic_cast<ExtTriangleMesh *>(mesh);
-	if (!etMesh)
-		throw runtime_error("Wrong mesh type in Scene::DefineMesh(): " + meshName);
-	
-	ExtMotionTriangleMesh *motMesh = new ExtMotionTriangleMesh(etMesh, ms);
-	motMesh->SetName(motMeshName);
-	DefineMesh(motMesh);
-}
-
-void Scene::DefineStrands(const string &shapeName, const cyHairFile &strandsFile,
+Scene::ReturnType<ExtTriangleMesh>
+Scene::DefineStrands(const string &shapeName, const slg::cyHairFile &strandsFile,
 		const StrendsShape::TessellationType tesselType,
 		const u_int adaptiveMaxDepth, const float adaptiveError,
 		const u_int solidSideCount, const bool solidCapBottom, const bool solidCapTop,
 		const bool useCameraPosition) {
-	StrendsShape shape(this,
+	StrendsShape shape(*this,
 			&strandsFile, tesselType,
 			adaptiveMaxDepth, adaptiveError,
 			solidSideCount, solidCapBottom, solidCapTop,
 			useCameraPosition);
 
-	ExtMesh *mesh = shape.Refine(this);
+	auto mesh = shape.Refine(*this);
 	mesh->SetName(shapeName);
-	DefineMesh(mesh);
 
 	editActions.AddAction(GEOMETRY_EDIT);
+
+	return DefineMesh(std::move(mesh));
 }
 
 bool Scene::IsTextureDefined(const string &texName) const {
@@ -305,10 +395,10 @@ bool Scene::IsMeshDefined(const string &meshName) const {
 	return extMeshCache.IsExtMeshDefined(meshName);
 }
 
-void Scene::Parse(const Properties &props) {
+void Scene::Parse(PropertiesRPtr props) {
 	if (enableParsePrint) {
-		SDL_LOG("========================Scene::Parse()=========================" << endl <<
-				props);
+		SDL_LOG("========================Scene::Parse()========================="
+		<< endl << *props);
 		SDL_LOG("===============================================================");
 	}
 
@@ -316,19 +406,22 @@ void Scene::Parse(const Properties &props) {
 	// Read all textures
 	//--------------------------------------------------------------------------
 
-	ParseTextures(props);
+	SDL_LOG("Parsing textures");
+	ParseTextures(*props);
 
 	//--------------------------------------------------------------------------
 	// Read all volumes
 	//--------------------------------------------------------------------------
 
-	ParseVolumes(props);
+	SDL_LOG("Parsing volumes");
+	ParseVolumes(*props);
 
 	//--------------------------------------------------------------------------
 	// Read all materials
 	//--------------------------------------------------------------------------
 
-	ParseMaterials(props);
+	SDL_LOG("Parsing materials");
+	ParseMaterials(*props);
 
 	//--------------------------------------------------------------------------
 	// Read camera position and target
@@ -336,58 +429,75 @@ void Scene::Parse(const Properties &props) {
 	// note: doing the parsing after volumes because it may reference a volume
 	//--------------------------------------------------------------------------
 
-	ParseCamera(props);
+	SDL_LOG("Parsing cameras");
+	ParseCamera(*props);
 
 	//--------------------------------------------------------------------------
 	// Read all shapes
 	//--------------------------------------------------------------------------
 
-	ParseShapes(props);
+	SDL_LOG("Parsing shapes");
+	ParseShapes(*props);
 
 	//--------------------------------------------------------------------------
 	// Read all objects
 	//--------------------------------------------------------------------------
 
-	ParseObjects(props);
+	SDL_LOG("Parsing objects");
+	ParseObjects(*props);
 
 	//--------------------------------------------------------------------------
 	// Read all env. lights
 	//--------------------------------------------------------------------------
 
-	ParseLights(props);
+	SDL_LOG("Parsing lights");
+	ParseLights(*props);
 }
+
+
+void Scene::moveToTrash(NamedObjectUPtr&& oldObj) {
+	if (!oldObj) return;
+	std::lock_guard lk(trashMtx);
+	trashBin.push_back(std::move(oldObj));
+	SDL_LOG("Moving object to trash: " << trashBin.back()->GetName());
+}
+
+
+void Scene::emptyTrash() {
+	std::lock_guard lk(trashMtx);
+	trashBin.clear();
+}
+
 
 void Scene::RemoveUnusedImageMaps() {
 	// Build a list of all referenced image maps
-	boost::unordered_set<const ImageMap *> referencedImgMaps;
+	std::unordered_set<const ImageMap *> referencedImgMaps;
 	for (u_int i = 0; i < texDefs.GetSize(); ++i)
-		texDefs.GetTexture(i)->AddReferencedImageMaps(referencedImgMaps);
+		texDefs.GetTexture(i).AddReferencedImageMaps(referencedImgMaps);
 	for (u_int i = 0; i < objDefs.GetSize(); ++i)
-		objDefs.GetSceneObject(i)->AddReferencedImageMaps(referencedImgMaps);
+		objDefs.GetSceneObject(i).AddReferencedImageMaps(referencedImgMaps);
 
 	// Add the light image maps
 
 	// I can not use lightDefs.GetLightSources() here because the
 	// scene may have been not preprocessed
-	BOOST_FOREACH(const string &lightName, lightDefs.GetLightSourceNames()) {
-		const LightSource *l = lightDefs.GetLightSource(lightName);
-		l->AddReferencedImageMaps(referencedImgMaps);
+	for(const string &lightName: lightDefs.GetLightSourceNames()) {
+		auto& l = lightDefs.GetLightSource(lightName);
+		l.AddReferencedImageMaps(referencedImgMaps);
 	}
 
 	// Add the material image maps
 	for (u_int i = 0; i < matDefs.GetSize(); ++i)
-		matDefs.GetMaterial(i)->AddReferencedImageMaps(referencedImgMaps);
+		matDefs.GetMaterial(i).AddReferencedImageMaps(referencedImgMaps);
 
 	// Avoid to remove random image map from imgMapCache 
 	referencedImgMaps.insert(ImageMapTexture::randomImageMap.get());
 	
 	// Get the list of all defined image maps
-	vector<const ImageMap *> ims;
-	imgMapCache.GetImageMaps(ims);
 	bool deleted = false;
-	BOOST_FOREACH(const ImageMap *im, ims) {
-		if (referencedImgMaps.count(im) == 0) {
-			SDL_LOG("Deleting unreferenced image map: " << im->GetName());
+	for(ImageMapConstRef im: imgMapCache.GetImageMaps()) {
+		if (referencedImgMaps.count(&im) == 0) {
+			SDL_LOG("Deleting unreferenced image map: " << im.GetName());
 			imgMapCache.DeleteImageMap(im);
 			deleted = true;
 		}
@@ -406,20 +516,20 @@ void Scene::RemoveUnusedImageMaps() {
 
 void Scene::RemoveUnusedTextures() {
 	// Build a list of all referenced textures names
-	boost::unordered_set<const Texture *> referencedTexs;
-	for (u_int i = 0; i < matDefs.GetSize(); ++i)
-		matDefs.GetMaterial(i)->AddReferencedTextures(referencedTexs);
+	std::unordered_set<const Texture *> referencedTexs;
+	for (u_int i = 0; i < matDefs.GetSize(); ++i) {
+		//matDefs.GetMaterial(i)->AddReferencedTextures(referencedTexs, matDefs.GetMaterial(i));
+		matDefs.GetMaterial(i).AddReferencedTextures(referencedTexs);
+	}
 
 	// Get the list of all defined textures
-	vector<string> definedTexs;
-	texDefs.GetTextureNames(definedTexs);
 	bool deleted = false;
-	BOOST_FOREACH(const string  &texName, definedTexs) {
-		const Texture *t = texDefs.GetTexture(texName);
+	for(const auto &texName: texDefs.GetTextureNames()) {
+		TextureConstRef t = texDefs.GetTexture(texName);
 
-		if (referencedTexs.count(t) == 0) {
+		if (referencedTexs.count(&t) == 0) {
 			SDL_LOG("Deleting unreferenced texture: " << texName);
-			texDefs.DeleteTexture(texName);
+			moveToTrash(texDefs.DeleteTexture(texName));
 			deleted = true;
 		}
 	}
@@ -432,29 +542,29 @@ void Scene::RemoveUnusedTextures() {
 
 void Scene::RemoveUnusedMaterials() {
 	// Build a list of all referenced material names
-	boost::unordered_set<const Material *> referencedMats;
+	std::unordered_set<const Material *> referencedMats;
 
 	// Add the camera volume
-	if (camera && camera->volume)
-		referencedMats.insert(camera->volume);
+	if (camera && camera->HasVolume())
+		referencedMats.insert(std::addressof(camera->GetVolume()));
 
 	// Add the default world volume
 	if (defaultWorldVolume)
 		referencedMats.insert(defaultWorldVolume);
 
-	for (u_int i = 0; i < objDefs.GetSize(); ++i)
-		objDefs.GetSceneObject(i)->AddReferencedMaterials(referencedMats);
+	for (u_int i = 0; i < objDefs.GetSize(); ++i) {
+		objDefs.GetSceneObject(i).AddReferencedMaterials(referencedMats);
+	}
 
 	// Get the list of all defined materials
-	vector<string> definedMats;
-	matDefs.GetMaterialNames(definedMats);
 	bool deleted = false;
-	BOOST_FOREACH(const string  &matName, definedMats) {
-		const Material *m = matDefs.GetMaterial(matName);
+	for(const auto& matName: matDefs.GetMaterialNames()) {
+		MaterialConstRef m = matDefs.GetMaterial(matName);
 
-		if (referencedMats.count(m) == 0) {
+		if (referencedMats.count(&m) == 0) {
 			SDL_LOG("Deleting unreferenced material: " << matName);
-			matDefs.DeleteMaterial(matName);
+			auto oldMatPtr = matDefs.DeleteMaterial(matName);
+			moveToTrash(std::move(oldMatPtr));
 			deleted = true;
 		}
 	}
@@ -467,20 +577,18 @@ void Scene::RemoveUnusedMaterials() {
 
 void Scene::RemoveUnusedMeshes() {
 	// Build a list of all referenced meshes
-	boost::unordered_set<const ExtMesh *> referencedMesh;
+	std::unordered_set<const ExtMesh *> referencedMesh;
 	for (u_int i = 0; i < objDefs.GetSize(); ++i)
-		objDefs.GetSceneObject(i)->AddReferencedMeshes(referencedMesh);
+		objDefs.GetSceneObject(i).AddReferencedMeshes(referencedMesh);
 
 	// Get the list of all defined meshes
-	vector<string> definedExtMeshes;
-	extMeshCache.GetExtMeshNames(definedExtMeshes);
 	bool deleted = false;
-	BOOST_FOREACH(const string  &extMeshName, definedExtMeshes) {
-		ExtMesh *mesh = extMeshCache.GetExtMesh(extMeshName);
+	for(const auto &extMeshName: extMeshCache.GetExtMeshNames()) {
+		auto& mesh = extMeshCache.GetExtMesh(extMeshName);
 
-		if (referencedMesh.count(mesh) == 0) {
+		if (referencedMesh.count(&mesh) == 0) {
 			SDL_LOG("Deleting unreferenced mesh: " << extMeshName);
-			extMeshCache.DeleteExtMesh(extMeshName);
+			moveToTrash(extMeshCache.DeleteExtMesh(extMeshName));
 			deleted = true;
 		}
 	}
@@ -491,46 +599,48 @@ void Scene::RemoveUnusedMeshes() {
 
 void Scene::DeleteObject(const string &objName) {
 	if (objDefs.IsSceneObjectDefined(objName)) {
-		const SceneObject *oldObj = objDefs.GetSceneObject(objName);
-		const bool wasLightSource = oldObj->GetMaterial()->IsLightSource();
+		auto& oldObj = objDefs.GetSceneObject(objName);
+		const bool wasLightSource = oldObj.GetMaterial().IsLightSource();
 
 		// Check if the old object was a light source
 		if (wasLightSource) {
 			editActions.AddActions(LIGHTS_EDIT | LIGHT_TYPES_EDIT);
 
 			// Delete all old triangle lights
-			const ExtMesh *mesh = oldObj->GetExtMesh();
-			const string prefix = Scene::EncodeTriangleLightNamePrefix(oldObj->GetName());
-			for (u_int i = 0; i < mesh->GetTotalTriangleCount(); ++i)
+			const auto& mesh = oldObj.GetExtMesh();
+			const string prefix = Scene::EncodeTriangleLightNamePrefix(oldObj.GetName());
+			for (u_int i = 0; i < mesh.GetTotalTriangleCount(); ++i)
 				lightDefs.DeleteLightSource(prefix + ToString(i));
 		}
 
-		objDefs.DeleteSceneObject(objName);
+		moveToTrash(objDefs.DeleteSceneObject(objName));
 
 		editActions.AddAction(GEOMETRY_EDIT);
 	}
 }
 
-void Scene::DeleteObjects(vector<string> &objNames) {
+void Scene::DeleteObjects(std::vector<string> &objNames) {
 	// Delete the light sources
-	BOOST_FOREACH(const string &objName, objNames) {
+	for(const string &objName: objNames) {
 		if (objDefs.IsSceneObjectDefined(objName)) {
-			const SceneObject *oldObj = objDefs.GetSceneObject(objName);
-			const bool wasLightSource = oldObj->GetMaterial()->IsLightSource();
+			auto& oldObj = objDefs.GetSceneObject(objName);
+			const bool wasLightSource = oldObj.GetMaterial().IsLightSource();
 
 			// Check if the old object was a light source
 			if (wasLightSource) {
 				editActions.AddActions(LIGHTS_EDIT | LIGHT_TYPES_EDIT);
 
 				// Delete all old triangle lights
-				const ExtMesh *mesh = oldObj->GetExtMesh();
-				const string prefix = Scene::EncodeTriangleLightNamePrefix(oldObj->GetName());
-				for (u_int i = 0; i < mesh->GetTotalTriangleCount(); ++i)
-					lightDefs.DeleteLightSource(prefix + ToString(i));
+				const auto& mesh = oldObj.GetExtMesh();
+				const string prefix = Scene::EncodeTriangleLightNamePrefix(
+					oldObj.GetName()
+				);
+				for (u_int i = 0; i < mesh.GetTotalTriangleCount(); ++i)
+					moveToTrash(lightDefs.DeleteLightSource(prefix + ToString(i)));
 			}
 		}
 	}
-	
+
 	objDefs.DeleteSceneObjects(objNames);
 
 	editActions.AddAction(GEOMETRY_EDIT);
@@ -538,15 +648,15 @@ void Scene::DeleteObjects(vector<string> &objNames) {
 
 void Scene::DeleteLight(const string &lightName) {
 	if (lightDefs.IsLightSourceDefined(lightName)) {
-		lightDefs.DeleteLightSource(lightName);
+		moveToTrash(lightDefs.DeleteLightSource(lightName));
 
 		editActions.AddActions(LIGHTS_EDIT | LIGHT_TYPES_EDIT);
 	}
 }
 
-void Scene::DeleteLights(vector<string> &lightNames) {
+void Scene::DeleteLights(std::vector<string> &lightNames) {
 	// Separate the objects and send them to delete
-	BOOST_FOREACH(const string &lightName, lightNames) {
+	for(const string &lightName: lightNames) {
 		DeleteLight(lightName);
 	}
 }
@@ -577,21 +687,35 @@ bool Scene::Intersect(IntersectionDevice *device,
 	bsdf->hitPoint.throughShadowTransparency = false;
 
 	for (;;) {
-		bool hit = device ? device->TraceRay(ray, rayHit) : dataSet->GetAccelerator(ACCEL_EMBREE)->Intersect(ray, rayHit);
+		bool hit = device ?
+			device->TraceRay(ray, rayHit) :
+			dataSet->GetAccelerator(ACCEL_EMBREE)->Intersect(ray, rayHit);
 
 		bool bevelContinueToTrace = !hit;
-		const Volume *rayVolume = volInfo->GetCurrentVolume();
-		if (hit) {		
-			bsdf->Init(fromLight, throughShadowTransparency, *this, *ray, *rayHit, passThrough, volInfo);
-			rayVolume = bsdf->hitPoint.intoObject ? bsdf->hitPoint.exteriorVolume : bsdf->hitPoint.interiorVolume;
+		VolumeConstPtr rayVolume =
+			volInfo->HasCurrentVolume() ?
+			VolumeConstPtr(std::addressof(volInfo->GetCurrentVolume())) :
+			VolumeConstPtr();
+		if (hit) {
+			bsdf->Init(
+				fromLight,
+				throughShadowTransparency,
+				*this,
+				*ray,
+				*rayHit,
+				passThrough,
+				volInfo
+			);
+			rayVolume = bsdf->hitPoint.intoObject ?
+				bsdf->hitPoint.exteriorVolume : bsdf->hitPoint.interiorVolume;
 
 			// Check if it a triangle with bevel edges
-			const ExtMesh *mesh = objDefs.GetSceneObject(rayHit->meshIndex)->GetExtMesh();
-			if (mesh->GetBevelRadius() > 0.f) {
+			auto& mesh = objDefs.GetSceneObject(rayHit->meshIndex).GetExtMesh();
+			if (mesh.GetBevelRadius() > 0.f) {
 				float t;
 				Point p;
 				Normal n;
-				if (mesh->IntersectBevel(*ray, *rayHit, bevelContinueToTrace, t, p, n)) {
+				if (mesh.IntersectBevel(*ray, *rayHit, bevelContinueToTrace, t, p, n)) {
 					rayHit->t = t;
 
 					// Update the BSDF with the new intersection point and normal
@@ -632,7 +756,15 @@ bool Scene::Intersect(IntersectionDevice *device,
 				// used (and the bug will be noticed)
 				rayHit->meshIndex = 0xfffffffeu;
 
-				bsdf->Init(fromLight, throughShadowTransparency, *this, *ray, *rayVolume, t, passThrough);
+				bsdf->Init(
+					fromLight,
+					throughShadowTransparency,
+					*this,
+					*ray,
+					*rayVolume,
+					t,
+					passThrough
+				);
 				volInfo->SetScatteredStart(true);
 
 				return true;
@@ -646,7 +778,7 @@ bool Scene::Intersect(IntersectionDevice *device,
 					// Check if the volume priority system tells me to continue to trace the ray
 					volInfo->ContinueToTrace(*bsdf) ||
 					// Check if it is a camera invisible object and we are a tracing a camera ray
-					(cameraRay && objDefs.GetSceneObject(rayHit->meshIndex)->IsCameraInvisible());
+					(cameraRay && objDefs.GetSceneObject(rayHit->meshIndex).IsCameraInvisible());
 
 			// Check if it is a pass through point
 			if (!continueToTrace) {
@@ -699,3 +831,11 @@ string Scene::EncodeTriangleLightNamePrefix(const string &objectName) {
 
 	return (boost::format("TL%0zx_") % robin_hood::hash_bytes(prefix.data(), sizeof(char) * prefix.size())).str();
 }
+
+namespace slg {
+// TODO This is a workaround to initialize references to scenes in default constructors.
+// Correct solution would be to use boost serialization support for references
+Scene NullScene;
+}
+
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

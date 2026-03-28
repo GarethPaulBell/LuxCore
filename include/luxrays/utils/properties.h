@@ -28,8 +28,12 @@
 #include <istream>
 #include <cstdarg>
 #include <stdexcept>
+#include <memory>
+#include <mutex>
+#include <variant>
 
-#include <luxrays/utils/exportdefs.h>
+#include "luxrays/usings.h"
+#include "luxrays/utils/exportdefs.h"
 
 namespace luxrays {
 
@@ -39,20 +43,22 @@ namespace luxrays {
 
 CPP_EXPORT class CPP_API Blob {
 public:
-	Blob(const Blob &blob);
 	Blob(const char *data, const size_t size);
 	Blob(const std::string &base64Data);
-	~Blob();
 
-	const char *GetData() const { return data; }
+	const char *GetData() const { return data.get(); }
 	size_t GetSize() const { return size; }
 
 	std::string ToString() const;
 
-	Blob &operator=(const Blob &blob);
+	// Disable copy, keep moving only
+	Blob(const Blob &) = delete;
+	Blob &operator=(const Blob &) = delete;
+	Blob(Blob&&) = default;
+	Blob &operator=(Blob&&) = default;
 
 private:
-	char *data;
+	std::unique_ptr<char[]> data;
 	size_t size;
 };
 
@@ -83,7 +89,7 @@ CPP_EXPORT CPP_API std::ostream &operator<<(std::ostream &os, const Blob &blob);
 CPP_EXPORT class CPP_API PropertyValue {
 public:
 	typedef enum {
-		NONE_VAL,
+		NONE_VAL=0,
 		BOOL_VAL,
 		INT_VAL,
 		UINT_VAL,
@@ -105,8 +111,8 @@ public:
 	PropertyValue(const long long val);
 	PropertyValue(const unsigned long long val);
 	PropertyValue(const std::string &val);
-	PropertyValue(const Blob &val);
-	~PropertyValue();
+	PropertyValue(BlobSPtr val);  // Manage blobs as shared objects, to avoid copy
+	~PropertyValue() noexcept(false);
 
 	template<class T> T Get() const;
 
@@ -114,22 +120,38 @@ public:
 	
 	PropertyValue &operator=(const PropertyValue &propVal);
 
+	using VariantType = std::variant<
+		bool,
+		int,
+		unsigned int,
+		float,
+		double,
+		long long,
+		unsigned long long,
+		std::string,
+		BlobSPtr
+	>;
+
 private:
 	static void Copy(const PropertyValue &prop0Val, PropertyValue &prop1Val);
 
 	DataType dataType;
 
-	union {
-		bool boolVal;
-		int intVal;
-		unsigned int uintVal;
-		float floatVal;
-		double doubleVal;
-		long long longlongVal;
-		unsigned long long ulonglongVal;
-		std::string *stringVal;
-		Blob *blobVal;
-	} data;
+	VariantType data;
+
+
+	// TODO
+	//union {
+		//bool boolVal;
+		//int intVal;
+		//unsigned int uintVal;
+		//float floatVal;
+		//double doubleVal;
+		//long long longlongVal;
+		//unsigned long long ulonglongVal;
+		//std::string *stringVal;
+		//BlobSPtr blobVal;
+	//} data;
 };
 
 // Get<>() basic types specializations
@@ -172,7 +194,7 @@ public:
 	 *
 	 * \param propName is the name of the new property.
 	 */
-	Property(const std::string &propName);
+	explicit Property(const std::string &propName);
 	/*!
 	 * \brief Constructs a new property with a given name and value.
 	 *
@@ -223,12 +245,7 @@ public:
 	 *
 	 * \return a new property.
 	 */
-	Property Renamed(const std::string &newName) const {
-		Property newProp(newName);
-		newProp.values.insert(newProp.values.begin(), values.begin(), values.end());
-
-		return newProp;
-	}
+	PropertyUPtr Renamed(const std::string &newName) const;
 	/*!
 	 * \brief Returns the number of values associated to this property.
 	 *
@@ -333,7 +350,7 @@ public:
 	/*!
 	 * \brief Initialize the property from a string (ex. "a.b.c = 1 2")
 	 */
-	void FromString(std::string &s);
+	static Property FromString(std::string &s);
 	/*!
 	 * \brief Returns a string with the name of the property followed by " = "
 	 * and by all values associated to the property.
@@ -352,8 +369,9 @@ public:
 	 * 
 	 * \return a reference to the modified property.
 	 */
-	template<class T0> Property &operator()(const T0 &val0) {
-		return Add(val0);
+	template<class T0>
+	Property&& operator()(const T0 &val0) {
+		return std::move(Add(val0));
 	}
 	/*!
 	 * \brief Adds a value to a property.
@@ -421,7 +439,8 @@ public:
 	 * 
 	 * \return a reference to the modified property.
 	 */
-	template<class T> Property &operator=(const T &val) {
+	template<class T>
+	Property &operator=(const T &val) {
 		values.clear();
 		return Add(val);
 	}
@@ -477,7 +496,7 @@ public:
 private:
 	std::string name;
 	PropertyValues values;
-};	
+};
 
 // Get<>() basic types specializations
 template<> CPP_API bool Property::Get<bool>() const;
@@ -507,13 +526,20 @@ inline std::ostream &operator<<(std::ostream &os, const Property &p) {
  */
 CPP_EXPORT class CPP_API Properties {
 public:
+	// No copy, move only
+	Properties(const Properties &) = delete;
+	Properties& operator=(const Properties &) = delete;
+	Properties(Properties &&) noexcept;
+	Properties& operator=(Properties &&) noexcept;
+
 	Properties() { }
+
 	/*!
 	 * \brief Sets the list of Property from a text file .
 	 * 
 	 * \param fileName is the name of the file to read.
 	 */
-	Properties(const std::string &fileName);
+	explicit Properties(const std::string &fileName);
 	~Properties() { }
 
 	/*!
@@ -533,6 +559,8 @@ public:
 	 * \return a reference to the modified properties.
 	 */
 	Properties &Set(const Property &prop);
+	Properties &Set(Property&& prop);
+	Properties &Set(luxrays::PropertyRPtr prop);
 	/*!
 	 * \brief Sets a single Property.
 	 * 
@@ -541,6 +569,7 @@ public:
 	 * \return a reference to the modified properties.
 	 */
 	Properties &operator<<(const Property &prop);
+	Properties &operator<<(Property&& prop);
 	/*!
 	 * \brief Sets the list of Property.
 	 * 
@@ -552,11 +581,27 @@ public:
 	/*!
 	 * \brief Sets the list of Property.
 	 * 
+	 * \param prop is the list of Property to set.
+	 * 
+	 * \return a reference to the modified properties.
+	 */
+	Properties &Set(const PropertiesUPtr & prop);
+	/*!
+	 * \brief Sets the list of Property.
+	 * 
 	 * \param props is the list of Property to set.
 	 * 
 	 * \return a reference to the modified properties.
 	 */
 	Properties &operator<<(const Properties &props);
+	/*!
+	 * \brief Sets the list of Property.
+	 * 
+	 * \param props is the list of Property to set.
+	 * 
+	 * \return a reference to the modified properties.
+	 */
+	Properties &operator<<(const std::unique_ptr<Properties> &props);
 	/*!
 	 * \brief Sets the list of Property while adding a prefix to all names.
 	 * 
@@ -609,7 +654,7 @@ public:
 	 * 
 	 * \return a reference to all Property names defined.
 	 */
-	const std::vector<std::string> &GetAllNames() const;
+	std::vector<std::string> GetAllNames() const;
 	/*!
 	 * \brief Returns all Property names that start with a specific prefix.
 	 *
@@ -646,7 +691,7 @@ public:
 	 *
 	 * \return a vector of Property names.
 	 */
-	std::vector<std::string> GetAllUniqueSubNames(const std::string &prefix, const bool sorted = false) const;
+	std::vector<std::string> GetAllUniqueSubNames(const std::string prefix, const bool sorted = false) const;
 	/*!
 	 * \brief Returns if there are at least a Property starting for specific prefix.
 	 *
@@ -671,7 +716,7 @@ public:
 	 *
 	 * \return a copy of all Property matching the prefix.
 	 */
-	Properties GetAllProperties(const std::string &prefix) const;
+	std::unique_ptr<Properties> GetAllProperties(const std::string &prefix) const;
 	/*!
 	 * \brief Returns a property.
 	 *
@@ -681,29 +726,38 @@ public:
 	 *
 	 * \throws std::runtime_error if the Property doesn't exist.
 	 */
-	const Property &Get(const std::string &propName) const;
+	const Property Get(const std::string &propName) const;
 	/*!
 	 * \brief Returns a Property with the same name of the passed Property if
 	 * it has been defined or the passed Property itself (i.e. the default values).
+	 *
+	 * We return an object rather than a reference to avoid issues in concurrent
+	 * accesses
 	 *
 	 * \param defaultProp has the Property to look for and the default values in
 	 * case it has not been defined.
 	 *
 	 * \return a Property.
 	 */
-	const Property &Get(const Property &defaultProp) const;
+	const Property Get(const Property &defaultProp) const;
 	/*!
 	 * \brief Returns a Property with the same name of the passed Property if
 	 * it has been defined or the passed Property itself (i.e. the default values).
 	 *
+	 * We return an object rather than a reference to avoid issues in concurrent
+	 * accesses
+	 *
+	 *
 	 * \param defaultProp has the Property to look for and the default values in
 	 * case it has not been defined.
-	 * \parma alternativeName alternative property name. It can be used to maintain
+	 * \param alternativeName alternative property name. It can be used to maintain
 	 * the compatibility with a different property name.
 	 *
 	 * \return a Property.
 	 */
-	const Property Get(const Property &defaultProp, const std::string alternativeName) const;
+	PropertyUPtr Get(
+		Property&& defaultProp, const std::string alternativeName
+	) const;
 
 	/*!
 	 * \brief Returns if a Property with the given name has been defined.
@@ -734,14 +788,30 @@ public:
 	 */
 	std::string ToString() const;
 
+	/*!
+	 * \brief Make a (deep) copy of current Properties
+	 *
+	 * Copy constructors are deleted, as there is no trivial copy construction
+	 * but this method allows to make a deep copy.
+	 *
+	 * \return A unique pointer on cloned Properties
+	 */
+	PropertiesUPtr Clone() const;
+
 private:
 	// This vector is used, among other things, to keep track of the insertion order
 	std::vector<std::string> names;
-	std::map<std::string, Property> props;
+	std::map<std::string, PropertyUPtr> props;
+
+	// For concurrent access (bake engine, for instance)
+	mutable std::recursive_mutex mtx;
+
 };
 
-CPP_EXPORT CPP_API Properties operator<<(const Property &prop0, const Property &prop1);
-CPP_EXPORT CPP_API Properties operator<<(const Property &prop0, const Properties &props);
+
+
+CPP_EXPORT CPP_API Properties &operator<<(const Property &prop0, const Property &prop1);
+CPP_EXPORT CPP_API Properties &operator<<(const Property &prop0, const Properties &props);
 
 inline std::ostream &operator<<(std::ostream &os, const Properties &p) {
 	os << p.ToString();
@@ -752,3 +822,4 @@ inline std::ostream &operator<<(std::ostream &os, const Properties &p) {
 }
 
 #endif	/* _LUXRAYS_PROPERTIES_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

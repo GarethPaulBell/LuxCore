@@ -29,12 +29,13 @@ using namespace slg;
 // LuxRender carpaint material porting.
 //------------------------------------------------------------------------------
 
-CarPaintMaterial::CarPaintMaterial(const Texture *frontTransp, const Texture *backTransp,
-		const Texture *emitted, const Texture *bump,
-		const Texture *kd, const Texture *ks1, const Texture *ks2, const Texture *ks3, const Texture *m1, const Texture *m2, const Texture *m3,
-		const Texture *r1, const Texture *r2, const Texture *r3, const Texture *ka, const Texture *d) :
-			Material(frontTransp, backTransp, emitted, bump), Kd(kd), Ks1(ks1), Ks2(ks2), Ks3(ks3), M1(m1), M2(m2), M3(m3),
-			R1(r1), R2(r2), R3(r3),	Ka(ka), depth(d) {
+CarPaintMaterial::CarPaintMaterial(
+	TextureConstPtr frontTransp, TextureConstPtr backTransp,
+	TextureConstPtr emitted, TextureConstPtr bump,
+	TextureConstPtr kd, TextureConstPtr ks1, TextureConstPtr ks2, TextureConstPtr ks3, TextureConstPtr m1, TextureConstPtr m2, TextureConstPtr m3,
+	TextureConstPtr r1, TextureConstPtr r2, TextureConstPtr r3, TextureConstPtr ka, TextureConstPtr d) :
+	Material(frontTransp, backTransp, emitted, bump), Kd(kd), Ks1(ks1), Ks2(ks2), Ks3(ks3), M1(m1), M2(m2), M3(m3),
+	R1(r1), R2(r2), R3(r3),	Ka(ka), depth(d) {
 	ComputeGlossiness(M1, M2, M3);
 }
 
@@ -382,7 +383,7 @@ void CarPaintMaterial::Pdf(const HitPoint &hitPoint,
 		*reversePdfW = (pdf + fabsf(localFixedDir.z) * INV_PI) / n;
 }
 
-void CarPaintMaterial::AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const {
+void CarPaintMaterial::AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 	Material::AddReferencedTextures(referencedTexs);
 
 	Kd->AddReferencedTextures(referencedTexs);
@@ -399,63 +400,65 @@ void CarPaintMaterial::AddReferencedTextures(boost::unordered_set<const Texture 
 	depth->AddReferencedTextures(referencedTexs);
 }
 
-void CarPaintMaterial::UpdateTextureReferences(const Texture *oldTex, const Texture *newTex) {
+void CarPaintMaterial::UpdateTextureReferences(
+	TextureConstRef oldTex,
+	TextureRef newTex) {
 	Material::UpdateTextureReferences(oldTex, newTex);
 
 	bool updateGlossiness = false;
-	if (Kd == oldTex)
-		Kd = newTex;
-	if (Ks1 == oldTex)
-		Ks1 = newTex;
-	if (Ks2 == oldTex)
-		Ks2 = newTex;
-	if (Ks3 == oldTex)
-		Ks3 = newTex;
-	if (M1 == oldTex) {
-		M1 = newTex;
+	if (Kd == &oldTex)
+		Kd = &newTex;
+	if (Ks1 == &oldTex)
+		Ks1 = &newTex;
+	if (Ks2 == &oldTex)
+		Ks2 = &newTex;
+	if (Ks3 == &oldTex)
+		Ks3 = &newTex;
+	if (M1 == &oldTex) {
+		M1 = &newTex;
 		updateGlossiness = true;
 	}
-	if (M2 == oldTex) {
-		M2 = newTex;
+	if (M2 == &oldTex) {
+		M2 = &newTex;
 		updateGlossiness = true;
 	}
-	if (M3 == oldTex) {
-		M3 = newTex;
+	if (M3 == &oldTex) {
+		M3 = &newTex;
 		updateGlossiness = true;
 	}
-	if (R1 == oldTex)
-		R1 = newTex;
-	if (R2 == oldTex)
-		R2 = newTex;
-	if (R3 == oldTex)
-		R3 = newTex;
-	if (Ka == oldTex)
-		Ka = newTex;
-	if (depth == oldTex)
-		depth = newTex;
+	if (R1 == &oldTex)
+		R1 = &newTex;
+	if (R2 == &oldTex)
+		R2 = &newTex;
+	if (R3 == &oldTex)
+		R3 = &newTex;
+	if (Ka == &oldTex)
+		Ka = &newTex;
+	if (depth == &oldTex)
+		depth = &newTex;
 	
 	if (updateGlossiness)
 		ComputeGlossiness(M1, M2, M3);
 }
 
-Properties CarPaintMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
-	Properties props;
+PropertiesUPtr CarPaintMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.materials." + name + ".type")("carpaint"));
-	props.Set(Property("scene.materials." + name + ".kd")(Kd->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".ks1")(Ks1->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".ks2")(Ks2->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".ks3")(Ks3->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".m1")(M1->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".m2")(M2->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".m3")(M3->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".r1")(R1->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".r2")(R2->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".r3")(R3->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".ka")(Ka->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".d")(depth->GetSDLValue()));
-	props.Set(Material::ToProperties(imgMapCache, useRealFileName));
+	props->Set(Property("scene.materials." + name + ".type")("carpaint"));
+	props->Set(Property("scene.materials." + name + ".kd")(Kd->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".ks1")(Ks1->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".ks2")(Ks2->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".ks3")(Ks3->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".m1")(M1->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".m2")(M2->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".m3")(M3->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".r1")(R1->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".r2")(R2->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".r3")(R3->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".ka")(Ka->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".d")(depth->GetSDLValue()));
+	props->Set(Material::ToProperties(imgMapCache, useRealFileName));
 
 	return props;
 }
@@ -518,3 +521,4 @@ const struct CarPaintMaterial::CarPaintData CarPaintMaterial::data[8] = {
     1.0000f, 0.0460f, 0.1700f,
     0.1600f, 0.0750f, 0.0340f}
 };
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

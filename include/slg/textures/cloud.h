@@ -36,7 +36,7 @@ typedef struct {
 
 class CloudTexture : public Texture {
 public:
-	CloudTexture(const TextureMapping3D *mp,
+	CloudTexture(TextureMapping3DUPtr&& mp,
 		const float r, const float noiseScale, const float t,
 		const float sharp, const float v, const float baseflatness,
 		const u_int octaves, const float o, const float offset,
@@ -49,7 +49,7 @@ public:
 	virtual float Y() const { return .5f; }
 	virtual float Filter() const { return .5f; }
 
-	const TextureMapping3D *GetTextureMapping() const { return mapping; }
+	TextureMapping3DConstRef GetTextureMapping() const { return *mapping; }
 	const float GetRadius() const { return radius; }
 	const u_int GetNumSpheres() const { return numSpheres; }
 	const u_int GetSphereSize() const { return sphereSize; }
@@ -63,7 +63,7 @@ public:
 	const float GetTurbulenceAmount() const { return turbulenceAmount; }
 	const u_int GetNumOctaves() const { return numOctaves; }
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
 	inline float CloudRand(luxrays::RandomGenerator &rng, const int resolution) const {
@@ -93,9 +93,10 @@ private:
 	const float omega, firstNoiseScale, noiseOffset, turbulenceAmount;
 	const u_int numOctaves;
 
-	const TextureMapping3D *mapping;
+	TextureMapping3DUPtr mapping;
 };
 
 }
 
 #endif	/* _SLG_CLOUD_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

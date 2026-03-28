@@ -195,3 +195,4 @@ BOOST_CLASS_IMPLEMENTATION(luxrays::Point, boost::serialization::object_serializ
 BOOST_CLASS_EXPORT_KEY(luxrays::Point)
 
 #endif	/* _LUXRAYS_POINT_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

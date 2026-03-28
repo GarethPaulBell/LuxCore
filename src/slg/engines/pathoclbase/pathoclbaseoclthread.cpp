@@ -167,7 +167,7 @@ void PathOCLBaseOCLRenderThread::Start() {
 
 void PathOCLBaseOCLRenderThread::Interrupt() {
 	if (renderThread)
-		renderThread->interrupt();
+		renderThread->request_stop();
 }
 
 void PathOCLBaseOCLRenderThread::Stop() {
@@ -248,15 +248,17 @@ void PathOCLBaseOCLRenderThread::StartRenderThread() {
 	threadDone = false;
 
 	// Create the thread for the rendering
-	renderThread = new boost::thread(&PathOCLBaseOCLRenderThread::RenderThreadImpl, this);
+	renderThread = std::make_unique<luxrays::JThread>(
+		std::bind_front(&PathOCLBaseOCLRenderThread::RenderThreadImpl, this)
+	);
+
+	SetThreadName(renderThread, "LxPathOCL_OCL");
 }
 
 void PathOCLBaseOCLRenderThread::StopRenderThread() {
 	if (renderThread) {
-		renderThread->interrupt();
+		renderThread->request_stop();
 		renderThread->join();
-		delete renderThread;
-		renderThread = nullptr;
 	}
 }
 
@@ -350,37 +352,36 @@ void PathOCLBaseOCLRenderThread::WaitForDone() const {
 }
 
 void PathOCLBaseOCLRenderThread::IncThreadFilms() {
-	threadFilms.push_back(new ThreadFilm(this));
+	threadFilms.push_back(std::make_shared<ThreadFilm>(this));
 
 	// Initialize the new thread film
 	u_int threadFilmWidth, threadFilmHeight, threadFilmSubRegion[4];
 	GetThreadFilmSize(&threadFilmWidth, &threadFilmHeight, threadFilmSubRegion);
 
-	threadFilms.back()->Init(renderEngine->film, threadFilmWidth, threadFilmHeight,
+	threadFilms.back()->Init(renderEngine->GetFilm(), threadFilmWidth, threadFilmHeight,
 			threadFilmSubRegion);
 }
 
 void PathOCLBaseOCLRenderThread::ClearThreadFilms() {
 	// Clear all thread films
-	BOOST_FOREACH(ThreadFilm *threadFilm, threadFilms)
+	for(ThreadFilmRPtr threadFilm: threadFilms)
 		threadFilm->ClearFilm(intersectionDevice, filmClearKernel, filmClearWorkGroupSize);
 }
 
 void PathOCLBaseOCLRenderThread::TransferThreadFilms(HardwareIntersectionDevice *intersectionDevice) {
 	// Clear all thread films
-	BOOST_FOREACH(ThreadFilm *threadFilm, threadFilms)
+	for(ThreadFilmRPtr threadFilm: threadFilms)
 		threadFilm->RecvFilm(intersectionDevice);
 }
 
 void PathOCLBaseOCLRenderThread::FreeThreadFilmsOCLBuffers() {
-	BOOST_FOREACH(ThreadFilm *threadFilm, threadFilms)
+	for(ThreadFilmRPtr threadFilm: threadFilms)
 		threadFilm->FreeAllOCLBuffers();
 }
 
 void PathOCLBaseOCLRenderThread::FreeThreadFilms() {
-	BOOST_FOREACH(ThreadFilm *threadFilm, threadFilms)
-		delete threadFilm;
 	threadFilms.clear();
 }
 
 #endif
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

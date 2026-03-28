@@ -54,6 +54,7 @@ private:
 	template<class Archive> void serialize(Archive &ar, const u_int version) {
 		ar & BOOST_SERIALIZATION_BASE_OBJECT_NVP(IndexBvh);
 		ar & entryNormalCosAngle;
+		ar & photonTracedCount;
 	}
 
 	float entryNormalCosAngle;
@@ -100,3 +101,4 @@ BOOST_CLASS_EXPORT_KEY(slg::PGICPhotonBvh)
 BOOST_CLASS_EXPORT_KEY(slg::PGICRadiancePhotonBvh)
 
 #endif	/* _SLG_PGICBVH_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

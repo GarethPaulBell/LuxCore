@@ -163,7 +163,7 @@ protected:
 
 class CUDADevice : virtual public HardwareDevice {
 public:
-	CUDADevice(const Context *context,
+	CUDADevice(const Context & context,
 		CUDADeviceDescription *desc, const size_t devIndex);
 	virtual ~CUDADevice();
 
@@ -239,3 +239,4 @@ protected:
 #endif
 
 #endif	/* _LUXRAYS_CUDADEVICE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -29,15 +29,14 @@ namespace slg {
 
 class BombingTexture : public Texture {
 public:
-	BombingTexture(const TextureMapping2D *mp, const Texture *backgroundTx,
-			const Texture *bulletTx, const Texture *bulletMaskTx,
+	BombingTexture(TextureMapping2DUPtr&& mp, TextureConstRef backgroundTx,
+			TextureConstRef bulletTx, TextureConstRef bulletMaskTx,
 			const float randomScaleFctr, const bool useRandomRot,
 			const u_int multiBulletCnt) :
-			mapping(mp), backgroundTex(backgroundTx), bulletTex(bulletTx),
+			mapping(std::move(mp)), backgroundTex(backgroundTx), bulletTex(bulletTx),
 			bulletMaskTex(bulletMaskTx),
 			randomScaleFactor(randomScaleFctr), useRandomRotation(useRandomRot),
 			multiBulletCount(multiBulletCnt) { }
-	virtual ~BombingTexture() { delete mapping; }
 
 	virtual TextureType GetType() const { return BOMBING_TEX; }
 	virtual float GetFloatValue(const HitPoint &hitPoint) const;
@@ -45,27 +44,30 @@ public:
 	virtual float Y() const;
 	virtual float Filter() const;
 
-	virtual void AddReferencedTextures(boost::unordered_set<const Texture *> &referencedTexs) const;
-	virtual void AddReferencedImageMaps(boost::unordered_set<const ImageMap *> &referencedImgMaps) const;
-	virtual void UpdateTextureReferences(const Texture *oldTex, const Texture *newTex);
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexsreferencedTexs) const;
+	virtual void AddReferencedImageMaps(std::unordered_set<const ImageMap * > &referencedImgMaps) const;
+	virtual void UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex);
 
-	const TextureMapping2D *GetTextureMapping() const { return mapping; }
-	const Texture *GetBackgroundTex() const { return backgroundTex; }
-	const Texture *GetBulletTex() const { return bulletTex; }
-	const Texture *GetBulletMaskTex() const { return bulletMaskTex; }
+	TextureMapping2DConstRef GetTextureMapping() const { return *mapping; }
+	TextureConstRef GetBackgroundTex() const { return backgroundTex; }
+	TextureConstRef GetBulletTex() const { return bulletTex; }
+	TextureConstRef GetBulletMaskTex() const { return bulletMaskTex; }
 	
 	const float GetRandomScaleFactor() const { return randomScaleFactor; }
 	const bool GetUseRandomRotation() const { return useRandomRotation; }
 	const u_int GetMultiBulletCount() const { return multiBulletCount; }
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
 private:
 
-	const TextureMapping2D *mapping;
-	const Texture *backgroundTex;
-	const Texture *bulletTex;
-	const Texture *bulletMaskTex;
+	TextureMapping2DUPtr mapping;
+
+	// Underlying textures. reference_wrapper is necessary in order to be able
+	// rebind ref despite constness.
+	std::reference_wrapper<const Texture> backgroundTex;
+	std::reference_wrapper<const Texture> bulletTex;
+	std::reference_wrapper<const Texture> bulletMaskTex;
 
 	const float randomScaleFactor;
 	const bool useRandomRotation;
@@ -75,3 +77,4 @@ private:
 }
 
 #endif	/* _SLG_BOMBINGTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

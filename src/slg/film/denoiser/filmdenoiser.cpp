@@ -19,9 +19,10 @@
 #include <limits>
 #include <algorithm>
 #include <exception>
+#include <mutex>
 
 #include <boost/lexical_cast.hpp>
-#include <boost/foreach.hpp>
+#include <boost/serialization/shared_ptr.hpp>
 
 #include "slg/film/film.h"
 #include "slg/film/sampleresult.h"
@@ -43,21 +44,21 @@ FilmDenoiser::FilmDenoiser() {
 	Init();
 }
 
-FilmDenoiser::FilmDenoiser(const Film *f) {
+FilmDenoiser::FilmDenoiser(FilmPtr f) {
 	Init();
 
 	film = f;
 }
 
 void FilmDenoiser::Init() {
-	film = NULL;
-	samplesAccumulatorPixelNormalized = NULL;
-	samplesAccumulatorScreenNormalized = NULL;
+	film = nullptr;
+	samplesAccumulatorPixelNormalized = nullptr;
+	samplesAccumulatorScreenNormalized = nullptr;
 	sampleScale = 1.f;
 	warmUpSPP = -1.f;
 	warmUpDone = false;
 
-	referenceFilm = NULL;
+	referenceFilm = nullptr;
 	referenceFilmWidth = 0;
 	referenceFilmHeight = 0;
 	referenceFilmOffsetX = 0;
@@ -118,19 +119,19 @@ float *FilmDenoiser::GetHistoImage() {
 }
 
 void FilmDenoiser::CheckReferenceFilm() {
-	if (referenceFilm->filmDenoiser.warmUpDone) {
-		boost::unique_lock<boost::mutex> lock(warmUpDoneMutex);
+	if (referenceFilm->filmDenoiser->warmUpDone) {
+		std::unique_lock<std::mutex> lock(warmUpDoneMutex);
 
-		sampleScale = referenceFilm->filmDenoiser.sampleScale;
-		radianceChannelScales = referenceFilm->filmDenoiser.radianceChannelScales;
-		samplesAccumulatorPixelNormalized = referenceFilm->filmDenoiser.samplesAccumulatorPixelNormalized;
-		samplesAccumulatorScreenNormalized = referenceFilm->filmDenoiser.samplesAccumulatorScreenNormalized;
+		sampleScale = referenceFilm->filmDenoiser->sampleScale;
+		radianceChannelScales = referenceFilm->filmDenoiser->radianceChannelScales;
+		samplesAccumulatorPixelNormalized = referenceFilm->filmDenoiser->samplesAccumulatorPixelNormalized;
+		samplesAccumulatorScreenNormalized = referenceFilm->filmDenoiser->samplesAccumulatorScreenNormalized;
 
 		warmUpDone = true;
 	}
 }
 
-void FilmDenoiser::SetReferenceFilm(const Film *refFilm,
+void FilmDenoiser::SetReferenceFilm(FilmPtr refFilm,
 		const u_int offsetX, const u_int offsetY) {
 	referenceFilm = refFilm;
 	
@@ -144,12 +145,12 @@ void FilmDenoiser::SetReferenceFilm(const Film *refFilm,
 	}
 }
 
-void FilmDenoiser::CopyReferenceFilm(const Film *refFilm) {
-	if (!warmUpDone && refFilm->filmDenoiser.warmUpDone) {
-		boost::unique_lock<boost::mutex> lock(warmUpDoneMutex);
+void FilmDenoiser::CopyReferenceFilm(FilmPtr refFilm) {
+	if (!warmUpDone && refFilm->filmDenoiser->warmUpDone) {
+		std::unique_lock<std::mutex> lock(warmUpDoneMutex);
 
-		sampleScale = refFilm->filmDenoiser.sampleScale;
-		radianceChannelScales = refFilm->filmDenoiser.radianceChannelScales;
+		sampleScale = refFilm->filmDenoiser->sampleScale;
+		radianceChannelScales = refFilm->filmDenoiser->radianceChannelScales;
 
 		bcd::HistogramParameters histogramParameters;
 		// I use the pipeline of the first BCD plugin
@@ -203,7 +204,7 @@ void FilmDenoiser::CheckIfWarmUpDone() {
 
 // This method must be thread safe
 void FilmDenoiser::WarmUpDone() {
-	boost::unique_lock<boost::mutex> lock(warmUpDoneMutex);
+	std::unique_lock<std::mutex> lock(warmUpDoneMutex);
 
 	if (warmUpDone)
 		return;
@@ -314,3 +315,4 @@ void FilmDenoiser::AddSample(const u_int x, const u_int y,
 		CheckIfWarmUpDone();
 	}
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

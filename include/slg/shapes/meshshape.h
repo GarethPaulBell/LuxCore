@@ -27,21 +27,20 @@ namespace slg {
 
 class MeshShape : public Shape {
 public:
-	MeshShape(luxrays::ExtTriangleMesh *mesh);
+	MeshShape(luxrays::ExtTriangleMeshUPtr&& mesh);
 	MeshShape(const std::string &fileName);
 	virtual ~MeshShape();
 
-	virtual ShapeType GetType() const { return MESH; }
+	virtual ShapeType GetType() const override { return MESH; }
 
 	void SetLocal2World(const luxrays::Transform &trans);
 	void ApplyTransform(const luxrays::Transform &trans);
-	
-protected:
-	virtual luxrays::ExtTriangleMesh *RefineImpl(const Scene *scene);
 
-	luxrays::ExtTriangleMesh *mesh;
+protected:
+	virtual luxrays::ExtTriangleMeshUPtr RefineImpl(SceneConstRef scene) override;
 };
 
 }
 
 #endif	/* _SLG_MESHSHAPE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

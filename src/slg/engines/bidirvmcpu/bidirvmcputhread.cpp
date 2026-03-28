@@ -18,14 +18,18 @@
 
 // NOTE: this is code is heavily based on Tomas Davidovic's SmallVCM
 // (http://www.davidovic.cz) and http://www.smallvcm.com)
+#include <thread>
+#include <cassert>
 
 #include "luxrays/utils/thread.h"
 
 #include "slg/engines/bidirvmcpu/bidirvmcpu.h"
+#include "slg/cameras/camera.h"
 
 using namespace std;
 using namespace luxrays;
 using namespace slg;
+using namespace std::literals::chrono_literals;
 
 //------------------------------------------------------------------------------
 // BiDirVMCPU RenderThread
@@ -36,8 +40,10 @@ BiDirVMCPURenderThread::BiDirVMCPURenderThread(BiDirVMCPURenderEngine *engine,
 		BiDirCPURenderThread(engine, index, device) {
 }
 
-void BiDirVMCPURenderThread::RenderFuncVM() {
-	//SLG_LOG("[BiDirVMCPURenderThread::" << threadIndex << "] Rendering thread started");
+void BiDirVMCPURenderThread::RenderFuncVM(std::stop_token stop_token) {
+#ifndef NDEBUG
+	SLG_LOG("[BiDirVMCPURenderThread::" << threadIndex << "] Rendering thread started");
+#endif
 
 	//--------------------------------------------------------------------------
 	// Initialization
@@ -48,24 +54,32 @@ void BiDirVMCPURenderThread::RenderFuncVM() {
 
 	BiDirVMCPURenderEngine *engine = (BiDirVMCPURenderEngine *)renderEngine;
 	// (engine->seedBase + 1) seed is used for sharedRndGen
-	RandomGenerator *rndGen = new RandomGenerator(engine->seedBase + 1 + threadIndex);
-	Scene *scene = engine->renderConfig->scene;
-	Camera *camera = scene->camera;
+	auto rndGen = std::make_unique<RandomGenerator>(engine->seedBase + 1 + threadIndex);
+	auto& scene = engine->renderConfig.GetScene();
+	auto& camera = scene.GetCamera();
 
 	// Setup the samplers
-	vector<Sampler *> samplers(engine->lightPathsCount, NULL);
+	std::vector<SamplerUPtr> samplers(engine->lightPathsCount);
+#ifndef NDEBUG
+	SLG_LOG("[BiDirVMCPURenderThread::" << threadIndex << "] Setting up " << samplers.size() << " samplers");
+#endif
 	const u_int sampleSize = 
 		sampleBootSizeVM + // To generate the initial light vertex and trace eye ray
 		engine->maxLightPathDepth * sampleLightStepSize + // For each light vertex
 		engine->maxEyePathDepth * sampleEyeStepSize; // For each eye vertex
 
 	for (u_int i = 0; i < samplers.size(); ++i) {
-		Sampler *sampler = engine->renderConfig->AllocSampler(rndGen, engine->film,
-				engine->sampleSplatter,	engine->samplerSharedData, Properties());
+		auto sampler = engine->renderConfig.AllocSampler(
+			rndGen,
+			engine->GetFilm(),
+			engine->GetSampleSplatter(),
+			engine->samplerSharedData,
+			Properties()
+		);
 		sampler->SetThreadIndex(threadIndex);
 		sampler->RequestSamples(PIXEL_NORMALIZED_AND_SCREEN_NORMALIZED, sampleSize);
 
-		samplers[i] = sampler;
+		samplers[i] = std::move(sampler);
 	}
 
 	u_int iteration = 0;
@@ -74,14 +88,15 @@ void BiDirVMCPURenderThread::RenderFuncVM() {
 	vector<Point> lensPoints(samplers.size());
 	HashGrid hashGrid;
 
-	for(u_int steps = 0; !boost::this_thread::interruption_requested(); ++steps) {
+
+	for(u_int steps = 0; !stop_token.stop_requested(); ++steps) {
 		// Check if we are in pause mode
 		if (engine->pauseMode) {
 			// Check every 100ms if I have to continue the rendering
-			while (!boost::this_thread::interruption_requested() && engine->pauseMode)
-				boost::this_thread::sleep(boost::posix_time::millisec(100));
+			while (!stop_token.stop_requested() && engine->pauseMode)
+				std::this_thread::sleep_for(100ms);
 
-			if (boost::this_thread::interruption_requested())
+			if (stop_token.stop_requested())
 				break;
 		}
 
@@ -108,21 +123,21 @@ void BiDirVMCPURenderThread::RenderFuncVM() {
 		// current implementation (i.e. I can not mix paths with different
 		// times). However this is detrimental for the Metropolis sampler.
 		const float timeSample = rndGen->floatValue();
-		const float time = scene->camera->GenerateRayTime(timeSample);
+		const float time = scene.GetCamera().GenerateRayTime(timeSample);
 
 		//----------------------------------------------------------------------
 		// Trace all light paths
 		//----------------------------------------------------------------------
 
 		for (u_int samplerIndex = 0; samplerIndex < samplers.size(); ++samplerIndex) {
-			Sampler *sampler = samplers[samplerIndex];
+			auto& sampler = samplers[samplerIndex];
 
 			// Sample a point on the camera lens
-			if (!camera->SampleLens(time, sampler->GetSample(3), sampler->GetSample(4),
+			if (!camera.SampleLens(time, sampler->GetSample(3), sampler->GetSample(4),
 					&lensPoints[samplerIndex]))
 				continue;
 
-			if (!TraceLightPath(time, sampler, lensPoints[samplerIndex],
+			if (!TraceLightPath(time, sampler, camera, //lensPoints[samplerIndex],
 					lightPathsVertices[samplerIndex], samplesResults[samplerIndex]))
 				continue;
 		}
@@ -141,7 +156,7 @@ void BiDirVMCPURenderThread::RenderFuncVM() {
 		//----------------------------------------------------------------------
 
 		for (u_int samplerIndex = 0; samplerIndex < samplers.size(); ++samplerIndex) {
-			Sampler *sampler = samplers[samplerIndex];
+			auto& sampler = samplers[samplerIndex];
 
 			PathVertexVM eyeVertex;
 			SampleResult &eyeSampleResult = AddResult(samplesResults[samplerIndex], false);
@@ -149,14 +164,14 @@ void BiDirVMCPURenderThread::RenderFuncVM() {
 			eyeSampleResult.filmX = sampler->GetSample(0);
 			eyeSampleResult.filmY = sampler->GetSample(1);
 			Ray eyeRay;
-			camera->GenerateRay(time,
+			camera.GenerateRay(time,
 					eyeSampleResult.filmX, eyeSampleResult.filmY, &eyeRay,
 					&eyeVertex.volInfo, sampler->GetSample(9), sampler->GetSample(10));
 
 			eyeVertex.bsdf.hitPoint.fixedDir = -eyeRay.d;
 			eyeVertex.throughput = Spectrum(1.f);
 			float cameraPdfW;
-			scene->camera->GetPDF(eyeRay, 0.f, eyeSampleResult.filmX, eyeSampleResult.filmY, &cameraPdfW, nullptr);
+			scene.GetCamera().GetPDF(eyeRay, 0.f, eyeSampleResult.filmX, eyeSampleResult.filmY, &cameraPdfW, nullptr);
 			eyeVertex.dVCM = MIS(1.f / cameraPdfW);
 			eyeVertex.dVC = 1.f;
 			eyeVertex.dVM = 1.f;
@@ -173,7 +188,7 @@ void BiDirVMCPURenderThread::RenderFuncVM() {
 				// not in any other place)
 				RayHit eyeRayHit;
 				Spectrum connectionThroughput, connectEmission;
-				const bool hit = scene->Intersect(device,
+				const bool hit = scene.Intersect(device,
 						EYE_RAY | (eyeSampleResult.firstPathVertex ? CAMERA_RAY : GENERIC_RAY),
 						&eyeVertex.volInfo, sampler->GetSample(sampleOffset),
 						&eyeRay, &eyeRayHit, &eyeVertex.bsdf,
@@ -266,21 +281,23 @@ void BiDirVMCPURenderThread::RenderFuncVM() {
 
 #ifdef WIN32
 		// Work around Windows bad scheduling
-		renderThread->yield();
+        std::this_thread::yield();
 #endif
 
 		//hashGrid.PrintStatistics();
 
 		// Check halt conditions
-		if (engine->film->GetConvergence() == 1.f)
+		if (engine->GetFilm().GetConvergence() == 1.f)
 			break;
 	}
 
 	for (u_int samplerIndex = 0; samplerIndex < samplers.size(); ++samplerIndex)
-		delete samplers[samplerIndex];
-	delete rndGen;
+		samplers[samplerIndex].reset();
 
 	threadDone = true;
 
-	//SLG_LOG("[BiDirVMCPURenderThread::" << renderThread->threadIndex << "] Rendering thread halted");
+#ifndef NDEBUG
+	SLG_LOG("[BiDirVMCPURenderThread::" << threadIndex << "] Rendering thread halted");
+#endif
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4
