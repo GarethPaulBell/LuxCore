@@ -340,6 +340,10 @@ void BiDirCPURenderThread::ConnectToEye(const float time,
 	BiDirCPURenderEngine *engine = (BiDirCPURenderEngine *)renderEngine;
 	auto& scene = engine->renderConfig.GetScene();
 
+	// Test if the point-camera connection is valid
+	float filmX, filmY;
+	bool sampleSuccess;
+	Ray eyeRay;
 	Vector eyeDir;
 	float eyeDistance = 0;
     if (scene.GetCamera().GetType() == Camera::ORTHOGRAPHIC){
@@ -351,91 +355,90 @@ void BiDirCPURenderThread::ConnectToEye(const float time,
 		const float D = -eyeDir.x*lensPoint.x - eyeDir.y*lensPoint.y - eyeDir.z*lensPoint.z;
 		eyeDistance = eyeDir.x*p.x + eyeDir.y*p.y + eyeDir.z*p.z + D;
 		eyeDistance = fabsf(eyeDistance);
+		eyeRay = Ray(lightVertex.bsdf.hitPoint.p, eyeDir,
+			0.f,
+			eyeDistance,
+			time);
+		// Do not clamp the ray here because of the check inside ProjectToImage
+		sampleSuccess = scene.GetCamera().ProjectToImage(&eyeRay, &filmX, &filmY);
 	} else {
 		eyeDir = Vector(lightVertex.bsdf.hitPoint.p - lensPoint);
 		eyeDistance = eyeDir.Length();
 		eyeDir /= eyeDistance;
+		eyeRay = Ray(lensPoint, eyeDir,
+			0.f,
+			eyeDistance,
+			time);
+		// Do not clamp the ray here because of the check inside GetSamplePosition
+		sampleSuccess = scene.GetCamera().GetSamplePosition(&eyeRay, &filmX, &filmY);
 	}
 
+	if (!sampleSuccess)
+		return;
+
+	// Test if the bsdf evaluates to black
 	float bsdfPdfW, bsdfRevPdfW;
 	BSDFEvent event;
 	const Spectrum bsdfEval = lightVertex.bsdf.Evaluate(-eyeDir, &event, &bsdfPdfW, &bsdfRevPdfW);
 
-	if (!bsdfEval.Black()) {
-		float filmX, filmY;
-		bool sampleSuccess;
-		Ray eyeRay;
-		
-		if (scene.GetCamera().GetType() == Camera::ORTHOGRAPHIC){
-			eyeRay = Ray(lightVertex.bsdf.hitPoint.p, eyeDir,
-				0.f,
-				eyeDistance,
-				time);
-			// Do not clamp the ray here because of the check inside ProjectToImage
-			sampleSuccess = scene.GetCamera().ProjectToImage(&eyeRay, &filmX, &filmY);
-		} else {
-			eyeRay = Ray(lensPoint, eyeDir,
-				0.f,
-				eyeDistance,
-				time);
-			// Do not clamp the ray here because of the check inside GetSamplePosition
-			sampleSuccess = scene.GetCamera().GetSamplePosition(&eyeRay, &filmX, &filmY);
-		}
-		if (sampleSuccess) {
-			// I have to flip the direction of the traced ray because
-			// the information inside PathVolumeInfo are about the path from
-			// the light toward the camera (i.e. ray.o would be in the wrong
-			// place).
-			scene.GetCamera().ClampRay(&eyeRay); // Clamp the ray here (see comment above)
-			Ray traceRay(lightVertex.bsdf.GetRayOrigin(-eyeRay.d), -eyeRay.d,
-					eyeDistance - eyeRay.maxt,
-					eyeDistance - eyeRay.mint,
-					time);
-			RayHit traceRayHit;
+	if (bsdfEval.Black())
+		return;
 
-			BSDF bsdfConn;
-			Spectrum connectionThroughput;
-			PathVolumeInfo volInfo = lightVertex.volInfo; // I need to use a copy here
-			if (!scene.Intersect(device, LIGHT_RAY | CAMERA_RAY, &volInfo, u0, &traceRay, &traceRayHit, &bsdfConn,
-					&connectionThroughput)) {
-				// Nothing was hit, the light path vertex is visible
+	// Trace a shadow ray
+	scene.GetCamera().ClampRay(&eyeRay); // Clamp the ray here (see comment above)
+	// I have to flip the direction of the traced ray because
+	// the information inside PathVolumeInfo are about the path from
+	// the light toward the camera (i.e. ray.o would be in the wrong
+	// place).
+	Ray traceRay(lightVertex.bsdf.GetRayOrigin(-eyeRay.d), -eyeRay.d,
+			eyeDistance - eyeRay.maxt,
+			eyeDistance - eyeRay.mint,
+			time);
+	traceRay.UpdateMinMaxWithEpsilon();
 
-				if (lightVertex.depth >= engine->rrDepth) {
-					// Russian Roulette
-					const float prob = RenderEngine::RussianRouletteProb(bsdfEval, engine->rrImportanceCap);
-					bsdfRevPdfW *= prob;
-				}
+	RayHit traceRayHit;
+	BSDF bsdfConn;
+	Spectrum connectionThroughput;
+	PathVolumeInfo volInfo = lightVertex.volInfo; // I need to use a copy here
+	const bool shadowIntersection = scene.Intersect(device, LIGHT_RAY | CAMERA_RAY, &volInfo, u0, &traceRay, &traceRayHit, &bsdfConn,
+			&connectionThroughput);
 
-				const float cosToCamera = Dot(lightVertex.bsdf.hitPoint.shadeN, -eyeDir);
-				float cameraPdfW, fluxToRadianceFactor;
-				scene.GetCamera().GetPDF(eyeRay, eyeDistance, filmX, filmY, &cameraPdfW, &fluxToRadianceFactor);
-				const float cameraPdfA = PdfWtoA(cameraPdfW, eyeDistance, cosToCamera);
-				// Was:
-				//  const float fluxToRadianceFactor = cameraPdfA;	
-				//	
-				// but now BSDF::Evaluate() follows LuxRender habit to return the	
-				// result multiplied by cosThetaToLight
-				//
-				// However this is not true for volumes (see bug
-				// report http://forums.luxcorerender.org/viewtopic.php?f=4&t=1146&start=10#p13491)
-				fluxToRadianceFactor *= lightVertex.bsdf.IsVolume() ? fabsf(cosToCamera) : 1.f;
+	if (shadowIntersection)
+		return;
 
-				const float weightLight = MIS(cameraPdfA) *
-					(misVmWeightFactor + lightVertex.dVCM + lightVertex.dVC * MIS(bsdfRevPdfW));
-				const float misWeight = 1.f / (weightLight + 1.f);
-
-				const Spectrum radiance = (misWeight * fluxToRadianceFactor) *
-					connectionThroughput * lightVertex.throughput * bsdfEval;
-
-				SampleResult &sampleResult = AddResult(sampleResults, true);
-				sampleResult.filmX = filmX;
-				sampleResult.filmY = filmY;
-				
-				// Add radiance from the light source
-				sampleResult.radiance[lightVertex.lightID] = radiance;
-			}
-		}
+	if (lightVertex.depth >= engine->rrDepth) {
+		// Russian Roulette
+		const float prob = RenderEngine::RussianRouletteProb(bsdfEval, engine->rrImportanceCap);
+		bsdfRevPdfW *= prob;
 	}
+
+	const float cosToCamera = Dot(lightVertex.bsdf.hitPoint.shadeN, -eyeDir);
+	float cameraPdfW, fluxToRadianceFactor;
+	scene.GetCamera().GetPDF(eyeRay, eyeDistance, filmX, filmY, &cameraPdfW, &fluxToRadianceFactor);
+	const float cameraPdfA = PdfWtoA(cameraPdfW, eyeDistance, cosToCamera);
+	// Was:
+	//  const float fluxToRadianceFactor = cameraPdfA;
+	//
+	// but now BSDF::Evaluate() follows LuxRender habit to return the
+	// result multiplied by cosThetaToLight
+	//
+	// However this is not true for volumes (see bug
+	// report http://forums.luxcorerender.org/viewtopic.php?f=4&t=1146&start=10#p13491)
+	fluxToRadianceFactor *= lightVertex.bsdf.IsVolume() ? fabsf(cosToCamera) : 1.f;
+
+	const float weightLight = MIS(cameraPdfA) *
+		(misVmWeightFactor + lightVertex.dVCM + lightVertex.dVC * MIS(bsdfRevPdfW));
+	const float misWeight = 1.f / (weightLight + 1.f);
+
+	const Spectrum radiance = (misWeight * fluxToRadianceFactor) *
+		connectionThroughput * lightVertex.throughput * bsdfEval;
+
+	SampleResult &sampleResult = AddResult(sampleResults, true);
+	sampleResult.filmX = filmX;
+	sampleResult.filmY = filmY;
+
+	// Add radiance from the light source
+	sampleResult.radiance[lightVertex.lightID] = radiance;
 }
 
 void BiDirCPURenderThread::DirectLightSampling(const float time,

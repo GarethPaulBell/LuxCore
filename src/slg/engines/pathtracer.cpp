@@ -713,23 +713,22 @@ void PathTracer::ConnectToEye(IntersectionDevice *device,
 	if (bsdf.IsCameraInvisible() || bsdf.IsDelta())
 		return;
 
+	// Test if the point-camera connection is valid
 	float filmX, filmY;
 	bool sampleSuccess;
 	Ray eyeRay;
-
 	Vector eyeDir;
 	float eyeDistance = 0;
 	Point lensPoint = pathInfo.lensPoint;
     if (scene.GetCamera().GetType() == Camera::ORTHOGRAPHIC){
-		// Orthographic camera need to be handled separately,
-		// lensPoint can not be pre-calculated in this case
+		// Orthographic camera needs to be handled separately,
+		// lensPoint can not be used as a target here
 		Point p = bsdf.hitPoint.p;
 		eyeDir = scene.GetCamera().GetDir();
 		// calculate distance from vertex to camera plane
 		const float D = -eyeDir.x*lensPoint.x - eyeDir.y*lensPoint.y - eyeDir.z*lensPoint.z;
 		eyeDistance = eyeDir.x*p.x + eyeDir.y*p.y + eyeDir.z*p.z + D;
 		eyeDistance = fabsf(eyeDistance);
-
 		eyeRay = Ray(bsdf.hitPoint.p, eyeDir,
 			0.f,
 			eyeDistance,
@@ -740,7 +739,6 @@ void PathTracer::ConnectToEye(IntersectionDevice *device,
 		eyeDir = Vector(bsdf.hitPoint.p - lensPoint);
 		eyeDistance = eyeDir.Length();
 		eyeDir /= eyeDistance;
-
 		eyeRay = Ray(lensPoint, eyeDir,
 			0.f,
 			eyeDistance,
@@ -749,56 +747,60 @@ void PathTracer::ConnectToEye(IntersectionDevice *device,
 		sampleSuccess = scene.GetCamera().GetSamplePosition(&eyeRay, &filmX, &filmY);
 	}
 
-	if (sampleSuccess) {
-		BSDFEvent event;
-		const Spectrum bsdfEval = bsdf.Evaluate(-eyeDir, &event);
+	if (!sampleSuccess)
+		return;
 
-		if (!bsdfEval.Black()) {
-			// I have to flip the direction of the traced ray because
-			// the information inside PathVolumeInfo are about the path from
-			// the light toward the camera (i.e. ray.o would be in the wrong
-			// place).
-			scene.GetCamera().ClampRay(&eyeRay); // Clamp the ray here (see comment above)
-			Ray traceRay(bsdf.GetRayOrigin(-eyeRay.d), -eyeRay.d,
-					eyeDistance - eyeRay.maxt,
-					eyeDistance - eyeRay.mint,
-					time);
-			traceRay.UpdateMinMaxWithEpsilon();
-			RayHit traceRayHit;
+	// Test if the bsdf evaluates to black
+	BSDFEvent event;
+	const Spectrum bsdfEval = bsdf.Evaluate(-eyeDir, &event);
 
-			BSDF bsdfConn;
-			Spectrum connectionThroughput;
-			// Create a new PathVolumeInfo for the path to the light source
-			PathVolumeInfo volInfo = pathInfo.volume;
-			if (!scene.Intersect(device, LIGHT_RAY | CAMERA_RAY, &volInfo, u0, &traceRay, &traceRayHit, &bsdfConn,
-					&connectionThroughput)) {
-				// Nothing was hit, the light path vertex is visible
+	if (bsdfEval.Black())
+		return;
 
-				float fluxToRadianceFactor;
-				scene.GetCamera().GetPDF(eyeRay, eyeDistance, filmX, filmY, nullptr, &fluxToRadianceFactor);
+	// Trace a shadow ray
+	scene.GetCamera().ClampRay(&eyeRay); // Clamp the ray here (see comment above)
+	// I have to flip the direction of the traced ray because
+	// the information inside PathVolumeInfo are about the path from
+	// the light toward the camera (i.e. ray.o would be in the wrong
+	// place).
+	Ray traceRay(bsdf.GetRayOrigin(-eyeRay.d), -eyeRay.d,
+			eyeDistance - eyeRay.maxt,
+			eyeDistance - eyeRay.mint,
+			time);
+	traceRay.UpdateMinMaxWithEpsilon();
 
-				SampleResult &sampleResult = AddLightSampleResult(sampleResults, film);
-				sampleResult.filmX = filmX;
-				sampleResult.filmY = filmY;
+	RayHit traceRayHit;
+	BSDF bsdfConn;
+	Spectrum connectionThroughput;
+	PathVolumeInfo volInfo = pathInfo.volume; // I need to use a copy here
+	const bool shadowIntersection = scene.Intersect(device, LIGHT_RAY | CAMERA_RAY, &volInfo, u0, &traceRay, &traceRayHit, &bsdfConn,
+			&connectionThroughput);
 
-				sampleResult.pixelX = Floor2UInt(filmX);
-				sampleResult.pixelY = Floor2UInt(filmY);
+	if (shadowIntersection)
+		return;
+
+	float fluxToRadianceFactor;
+	scene.GetCamera().GetPDF(eyeRay, eyeDistance, filmX, filmY, nullptr, &fluxToRadianceFactor);
+
+	SampleResult &sampleResult = AddLightSampleResult(sampleResults, film);
+	sampleResult.filmX = filmX;
+	sampleResult.filmY = filmY;
+
+	sampleResult.pixelX = Floor2UInt(filmX);
+	sampleResult.pixelY = Floor2UInt(filmY);
 
 #if !defined(NDEBUG)
-				const u_int *subRegion = film.GetSubRegion();
+	const u_int *subRegion = film.GetSubRegion();
 #endif
-				assert (sampleResult.pixelX >= subRegion[0]);
-				assert (sampleResult.pixelX <= subRegion[1]);
-				assert (sampleResult.pixelY >= subRegion[2]);
-				assert (sampleResult.pixelY <= subRegion[3]);
+	assert (sampleResult.pixelX >= subRegion[0]);
+	assert (sampleResult.pixelX <= subRegion[1]);
+	assert (sampleResult.pixelY >= subRegion[2]);
+	assert (sampleResult.pixelY <= subRegion[3]);
 
-				sampleResult.isCaustic = pathInfo.IsCausticPath(event, bsdf.GetGlossiness(), hybridBackForwardGlossinessThreshold);
+	sampleResult.isCaustic = pathInfo.IsCausticPath(event, bsdf.GetGlossiness(), hybridBackForwardGlossinessThreshold);
 
-				// Add radiance from the light source
-				sampleResult.radiance[light.GetID()] = connectionThroughput * flux * fluxToRadianceFactor * bsdfEval;
-			}
-		}
-	}
+	// Add radiance from the light source
+	sampleResult.radiance[light.GetID()] = connectionThroughput * flux * fluxToRadianceFactor * bsdfEval;
 }
 
 //------------------------------------------------------------------------------
