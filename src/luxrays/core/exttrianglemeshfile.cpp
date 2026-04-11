@@ -288,7 +288,7 @@ ExtTriangleMeshUPtr ExtTriangleMesh::LoadPly(const string &fileName) {
 	}
 
 	// Check if the file includes triaov information
-	array<float *, EXTMESH_MAX_DATA_COUNT> TriAOVs;
+	ExtMeshProp<float> TriAOVs;
 	array<u_int, EXTMESH_MAX_DATA_COUNT> plyNbTriAOVs;
 	for (u_int i = 0; i < EXTMESH_MAX_DATA_COUNT; ++i) {
 		const string suffix = (i == 0) ? "" : ToString(i);
@@ -315,10 +315,14 @@ ExtTriangleMeshUPtr ExtTriangleMesh::LoadPly(const string &fileName) {
 	// This is our own extension to file PLY format in order to support multiple
 	// UVs, Colors and Alphas for each vertex
 
-	array<UV *, EXTMESH_MAX_DATA_COUNT> uvs;
-	array<Spectrum *, EXTMESH_MAX_DATA_COUNT> cols;
-	array<float *, EXTMESH_MAX_DATA_COUNT> alphas;
-	array<float *, EXTMESH_MAX_DATA_COUNT> vertexAOVs;
+	ExtMeshProp<UV> uvs; // Vertex uvs
+	ExtMeshProp<Spectrum> cols; // Vertex colors
+	ExtMeshProp<float> alphas; // Vertex alphas
+	ExtMeshProp<float> vertexAOVs; // Vertex AOV
+	//array<UV *, EXTMESH_MAX_DATA_COUNT> uvs;
+	//array<Spectrum *, EXTMESH_MAX_DATA_COUNT> cols;
+	//array<float *, EXTMESH_MAX_DATA_COUNT> alphas;
+	//array<float *, EXTMESH_MAX_DATA_COUNT> vertexAOVs;
 
 	array<u_int, EXTMESH_MAX_DATA_COUNT> plyNbUVs;
 	array<u_int, EXTMESH_MAX_DATA_COUNT> plyNbColors;
@@ -369,32 +373,21 @@ ExtTriangleMeshUPtr ExtTriangleMesh::LoadPly(const string &fileName) {
 		n = nullptr;
 	else
 		n = new Normal[plyNbNormals];
-	
+
+	auto setProp = [&]<typename V, typename N>(V values, N numbers, u_int i) {
+		if (numbers[i] == 0) {
+			values[i] = nullptr;
+		} else {
+			values.Allocate(i, numbers[i]);
+		}
+	};
+
 	for (u_int i = 0; i < EXTMESH_MAX_DATA_COUNT; ++i) {
-		if (plyNbUVs[i] == 0)
-			uvs[i] = nullptr;
-		else
-			uvs[i] = new UV[plyNbUVs[i]];
-
-		if (plyNbColors[i] == 0)
-			cols[i] = nullptr;
-		else
-			cols[i] = new Spectrum[plyNbColors[i]];
-
-		if (plyNbAlphas[i] == 0)
-			alphas[i] = nullptr;
-		else
-			alphas[i] = new float[plyNbAlphas[i]];
-
-		if (plyNbVertexAOVs[i] == 0)
-			vertexAOVs[i] = nullptr;
-		else
-			vertexAOVs[i] = new float[plyNbVertexAOVs[i]];
-
-		if (plyNbTriAOVs[i] == 0)
-			TriAOVs[i] = nullptr;
-		else
-			TriAOVs[i] = new float[plyNbTriAOVs[i]];
+		setProp(uvs, plyNbUVs, i);
+		setProp(cols, plyNbColors, i);
+		setProp(alphas, plyNbAlphas, i);
+		setProp(vertexAOVs, plyNbVertexAOVs, i);
+		setProp(TriAOVs, plyNbTriAOVs, i);
 	}
 
 	if (!ply_read(plyfile)) {
@@ -404,14 +397,6 @@ ExtTriangleMeshUPtr ExtTriangleMesh::LoadPly(const string &fileName) {
 		delete[] p;
 		delete[] n;
 		
-		for (u_int i = 0; i < EXTMESH_MAX_DATA_COUNT; ++i) {
-			delete[] uvs[i];
-			delete[] cols[i];
-			delete[] alphas[i];
-			delete[] vertexAOVs[i];
-			delete[] TriAOVs[i];
-		}
-
 		throw runtime_error(ss.str());
 	}
 	
@@ -421,10 +406,10 @@ ExtTriangleMeshUPtr ExtTriangleMesh::LoadPly(const string &fileName) {
 	Triangle *tris = TriangleMesh::AllocTrianglesBuffer(vi.size());
 	copy(vi.begin(), vi.end(), tris);
 
-	auto mesh = std::make_unique<ExtTriangleMesh>(plyNbVerts, vi.size(), p, tris, n, &uvs, &cols, &alphas);
+	auto mesh = std::make_unique<ExtTriangleMesh>(plyNbVerts, vi.size(), p, tris, n, uvs, cols, alphas);
 	for (u_int i = 0; i < EXTMESH_MAX_DATA_COUNT; ++i) {
-		mesh->SetVertexAOV(i, vertexAOVs[i]);
-		mesh->SetTriAOV(i, TriAOVs[i]);
+		mesh->SetVertexAOV(i, vertexAOVs[i], plyNbVerts);
+		mesh->SetTriAOV(i, TriAOVs[i], vi.size());
 	}
 	
 	return mesh;
