@@ -417,7 +417,9 @@ StrendsShape::StrendsShape(SceneConstRef scene,
 
 			newMeshCols = std::make_shared<Spectrum[]>(meshUVs.size());
 			std::copy(
+#if !defined(__clang__)
 				std::execution::par,
+#endif
 				meshCols.begin(),
 				meshCols.end(),
 				newMeshCols.get()

@@ -96,7 +96,14 @@ public:
 		Allocate(dataIndex, layerSize);
 		auto layerSpan = GetSpan(dataIndex);
 
-		std::copy(std::execution::par, in.begin(), in.end(), layerSpan.begin());
+		std::copy(
+#if !defined(__clang__)
+			std::execution::par,
+#endif
+			in.begin(),
+			in.end(),
+			layerSpan.begin()
+		);
 		if (layerSize) _size = layerSize;
 	}
 
@@ -128,7 +135,9 @@ public:
 			auto srcSpan = GetSpan(dataIndex);
 			auto dstSpan = std::span(res.get(), size());
 			std::copy(
+#if !defined(__clang__)
 				std::execution::par,
+#endif
 				srcSpan.begin(),
 				srcSpan.end(),
 				dstSpan.begin()
