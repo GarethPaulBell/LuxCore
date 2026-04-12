@@ -12,7 +12,6 @@ import shutil
 import platform
 import os
 import shlex
-from packaging.version import Version
 from pathlib import Path
 
 from .constants import (
@@ -142,10 +141,10 @@ def make_wheel(args):
         # Export METADATA file
         with open(dist_info / "METADATA", "w", encoding="utf-8") as f:
             nvrtc_version = get_dep_version("nvrtc")
-            major = nvrtc_version.major
+            major = float(nvrtc_version.split('.')[0])
             requirement = (
                 f"nvidia-cuda-nvrtc-cu{major}=={nvrtc_version}"
-                if nvrtc_version.major <= 12
+                if major <= 12
                 else f"nvidia-cuda-nvrtc=={nvrtc_version}"
             )
 

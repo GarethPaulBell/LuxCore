@@ -13,7 +13,6 @@ import tempfile
 import pathlib
 import re
 from dataclasses import dataclass
-from packaging.version import Version
 
 # Logger
 logger = logging.getLogger("LuxCore")
@@ -129,7 +128,7 @@ def get_dep_version(dep):
         raise ValueError(f"No dependency '{dep}' found")
     version, *_ = versions
 
-    return Version(version)
+    return version
 
 
 def unpack(path, dest):
