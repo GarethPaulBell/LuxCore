@@ -69,6 +69,7 @@ def run_cmake(
     cmake_app = ensure_cmake_app()
     args = [cmake_app] + args
     logger.debug(" ".join(args))
+    # print(" ".join(args))  # Debug
     res = subprocess.run(
         args,
         shell=False,
@@ -81,7 +82,7 @@ def run_cmake(
 
 
 _CMAKE_FIND_PACKAGE_SNIPPET = """\
-cmake_minimum_required(VERSION 4.2)
+cmake_minimum_required(VERSION 3.20)
 project(find)
 find_package({0})
 message(STATUS "@@${{{0}_VERSION}}@@")
@@ -94,18 +95,21 @@ _TOOLCHAIN = pathlib.Path(
 
 def _run_find_package(dep):
     """Run a find_package in cmake."""
-    with tempfile.TemporaryDirectory(delete=False) as folder:
+    with tempfile.TemporaryDirectory() as folder:
         folder = pathlib.Path(folder)
         with open(folder / "CMakeLists.txt", "w") as cmakelists:
             cmakelists.write(_CMAKE_FIND_PACKAGE_SNIPPET.format(dep))
             cmakelists.close()
+            statement = [
+                "-S",
+                f'{folder}',
+                "-B",
+                f'{folder / "build"}',
+                f"-DCMAKE_TOOLCHAIN_FILE={str(_TOOLCHAIN.absolute())}",
+                "-DCMAKE_BUILD_TYPE=Debug",
+            ]
             res = run_cmake(
-                [
-                    f"-S {folder}",
-                    f"-B {folder / 'build'}",
-                    f"-DCMAKE_TOOLCHAIN_FILE='{_TOOLCHAIN.absolute()}'",
-                    f"-DCMAKE_BUILD_TYPE='Debug'",
-                ],
+                statement,
                 text=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,

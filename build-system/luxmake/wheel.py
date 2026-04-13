@@ -141,6 +141,7 @@ def make_wheel(args):
         # Export METADATA file
         with open(dist_info / "METADATA", "w", encoding="utf-8") as f:
             nvrtc_version = get_dep_version("nvrtc")
+            logger.info(f"NVRTC version: {nvrtc_version}")
             major = int(nvrtc_version.split('.')[0])
             requirement = (
                 f"nvidia-cuda-nvrtc-cu{major}=={nvrtc_version}"
