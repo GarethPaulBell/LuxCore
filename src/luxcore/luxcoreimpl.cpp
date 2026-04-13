@@ -953,6 +953,7 @@ void SceneImpl::DefineMesh(const std::string &meshName,
 	scenePropertiesCache->Clear();
 
 	auto toSpan = [plyNbVerts]<typename T>(float * data) {
+		if (!plyNbVerts || !data) return std::span<T>();
 		return std::span<T>(reinterpret_cast<T*>(data), plyNbVerts);
 	};
 
